@@ -263,13 +263,7 @@ func drawPosterItem(dst *ebiten.Image, item GridItem, x, y float64, focused bool
 	}
 
 	if item.Image != nil {
-		op := &ebiten.DrawImageOptions{}
-		bounds := item.Image.Bounds()
-		scaleX := float64(PosterWidth) / float64(bounds.Dx())
-		scaleY := float64(PosterHeight) / float64(bounds.Dy())
-		op.GeoM.Scale(scaleX, scaleY)
-		op.GeoM.Translate(x, y)
-		dst.DrawImage(item.Image, op)
+		DrawImageCover(dst, item.Image, x, y, PosterWidth, PosterHeight)
 	} else {
 		DrawFilledRoundRect(dst, float32(x), float32(y),
 			float32(PosterWidth), float32(PosterHeight), 4, ColorSurface)

@@ -93,6 +93,7 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64) {
 
 	g.State = StatePlay
 	g.playbackEnded = false
+	g.osd.ShowControlsOverlay()
 }
 
 // StopPlayback transitions back to browse mode.
@@ -120,16 +121,30 @@ func (g *Game) Update() error {
 			return nil
 		}
 
+		wasShowingControls := g.osd.ShowControls
 		g.osd.Update()
 
 		action := player.PollPlayerInput()
 		if action == player.ActionStop {
+			// Clear OSD before stopping
+			g.Player.SetOSDOverlay(1, "")
 			g.StopPlayback()
 			return nil
 		}
 		if action != player.ActionNone {
 			player.HandleAction(g.Player, action)
 			g.osd.ShowControlsOverlay()
+		}
+
+		// Update OSD overlay
+		if g.osd.ShowControls {
+			seekBar := player.FormatSeekBar(g.Player.Position(), g.Player.Duration(), g.Player.Paused())
+			if seekBar != "" {
+				g.Player.SetOSDOverlay(1, seekBar)
+			}
+		} else if wasShowingControls {
+			// Controls just expired, clear the overlay
+			g.Player.SetOSDOverlay(1, "")
 		}
 	}
 

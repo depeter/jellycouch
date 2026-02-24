@@ -127,13 +127,7 @@ func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 
 		// Poster image or placeholder
 		if item.Image != nil {
-			op := &ebiten.DrawImageOptions{}
-			bounds := item.Image.Bounds()
-			scaleX := float64(PosterWidth) / float64(bounds.Dx())
-			scaleY := float64(PosterHeight) / float64(bounds.Dy())
-			op.GeoM.Scale(scaleX, scaleY)
-			op.GeoM.Translate(ix, iy)
-			dst.DrawImage(item.Image, op)
+			DrawImageCover(dst, item.Image, ix, iy, PosterWidth, PosterHeight)
 		} else {
 			// Placeholder
 			vector.DrawFilledRect(dst, float32(ix), float32(iy),
@@ -218,6 +212,36 @@ func truncateText(s string, maxWidth float64, fontSize float64) string {
 		}
 	}
 	return "…"
+}
+
+// DrawImageCover draws an image scaled to cover the target rect, preserving aspect ratio and center-cropping.
+func DrawImageCover(dst *ebiten.Image, src *ebiten.Image, x, y, w, h float64) {
+	bounds := src.Bounds()
+	srcW := float64(bounds.Dx())
+	srcH := float64(bounds.Dy())
+
+	// Scale uniformly to cover the target area
+	scale := w / srcW
+	if h/srcH > scale {
+		scale = h / srcH
+	}
+
+	scaledW := srcW * scale
+	scaledH := srcH * scale
+
+	// Center offset (crop equally from both sides)
+	offsetX := (scaledW - w) / 2
+	offsetY := (scaledH - h) / 2
+
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Scale(scale, scale)
+	op.GeoM.Translate(x-offsetX, y-offsetY)
+
+	// Clip to target rect using a sub-image of the destination
+	// Since Ebitengine doesn't have clip regions, we use SubImage on dst
+	clipRect := image.Rect(int(x), int(y), int(x+w), int(y+h))
+	sub := dst.SubImage(clipRect).(*ebiten.Image)
+	sub.DrawImage(src, op)
 }
 
 // DrawFilledRoundRect draws a filled rectangle with rounded corners.
