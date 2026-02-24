@@ -99,6 +99,9 @@ func pushHomeScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCac
 	home.OnSearch = func() {
 		pushSearchScreen(game, cfg, imgCache)
 	}
+	home.OnSettings = func() {
+		pushSettingsScreen(game, cfg)
+	}
 	game.Screens.Replace(home)
 }
 
@@ -123,4 +126,11 @@ func pushSearchScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageC
 		pushDetailScreen(game, cfg, imgCache, item)
 	}
 	game.Screens.Push(search)
+}
+
+func pushSettingsScreen(game *app.Game, cfg *config.Config) {
+	settings := ui.NewSettingsScreen(cfg, func() {
+		cfg.Save()
+	})
+	game.Screens.Push(settings)
 }

@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"fmt"
 	"log"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/jellyfin"
@@ -19,12 +21,14 @@ type HomeScreen struct {
 	sectionIndex int
 	loaded       bool
 	loading      bool
+	loadError    string
 	scrollY      float64
 	targetScrollY float64
 
 	// Callbacks
 	OnItemSelected func(item jellyfin.MediaItem)
 	OnSearch       func()
+	OnSettings     func()
 
 	mu sync.Mutex
 }
@@ -49,25 +53,31 @@ func (hs *HomeScreen) OnExit() {}
 
 func (hs *HomeScreen) loadData() {
 	var sections []*PosterGrid
+	var anyError error
 
 	// Continue Watching
 	if items, err := hs.client.GetResumeItems(20); err == nil && len(items) > 0 {
 		grid := NewPosterGrid("Continue Watching")
-		grid.Items = hs.convertItems(items)
+		hs.convertItemsForGrid(grid, items)
 		sections = append(sections, grid)
+	} else if err != nil {
+		anyError = err
 	}
 
 	// Next Up
 	if items, err := hs.client.GetNextUp(20); err == nil && len(items) > 0 {
 		grid := NewPosterGrid("Next Up")
-		grid.Items = hs.convertItems(items)
+		hs.convertItemsForGrid(grid, items)
 		sections = append(sections, grid)
+	} else if err != nil {
+		anyError = err
 	}
 
 	// Libraries
 	views, err := hs.client.GetViews()
 	if err != nil {
 		log.Printf("Failed to load views: %v", err)
+		anyError = err
 	} else {
 		for _, view := range views {
 			items, err := hs.client.GetLatestMedia(view.ID, 20)
@@ -79,7 +89,7 @@ func (hs *HomeScreen) loadData() {
 				continue
 			}
 			grid := NewPosterGrid("Latest " + view.Name)
-			grid.Items = hs.convertItems(items)
+			hs.convertItemsForGrid(grid, items)
 			sections = append(sections, grid)
 		}
 	}
@@ -89,12 +99,15 @@ func (hs *HomeScreen) loadData() {
 	if len(sections) > 0 {
 		sections[0].Active = true
 	}
+	if len(sections) == 0 && anyError != nil {
+		hs.loadError = "Failed to load: " + anyError.Error()
+	}
 	hs.loaded = true
 	hs.loading = false
 	hs.mu.Unlock()
 }
 
-func (hs *HomeScreen) convertItems(items []jellyfin.MediaItem) []GridItem {
+func (hs *HomeScreen) convertItemsForGrid(grid *PosterGrid, items []jellyfin.MediaItem) {
 	result := make([]GridItem, len(items))
 	for i, item := range items {
 		result[i] = GridItem{
@@ -102,22 +115,24 @@ func (hs *HomeScreen) convertItems(items []jellyfin.MediaItem) []GridItem {
 			Title: item.Name,
 		}
 		if item.Year > 0 {
-			result[i].Subtitle = string(rune('0'+item.Year/1000)) +
-				string(rune('0'+(item.Year/100)%10)) +
-				string(rune('0'+(item.Year/10)%10)) +
-				string(rune('0'+item.Year%10))
+			result[i].Subtitle = fmt.Sprintf("%d", item.Year)
 		}
 
-		// Async load poster image
+		// Flow progress and watched state
+		if item.RuntimeTicks > 0 && item.PlaybackPositionTicks > 0 {
+			result[i].Progress = float64(item.PlaybackPositionTicks) / float64(item.RuntimeTicks)
+		}
+		result[i].Watched = item.Played
+
+		// Async load poster image — capture grid pointer and item ID for race-safe callback
 		url := hs.client.GetPosterURL(item.ID)
-		idx := i
+		itemID := item.ID
 		hs.imgCache.LoadAsync(url, func(img *ebiten.Image) {
 			hs.mu.Lock()
 			defer hs.mu.Unlock()
-			// Check bounds since sections may have changed
-			for _, sec := range hs.sections {
-				if idx < len(sec.Items) && sec.Items[idx].ID == items[idx].ID {
-					sec.Items[idx].Image = img
+			for j := range grid.Items {
+				if grid.Items[j].ID == itemID {
+					grid.Items[j].Image = img
 					break
 				}
 			}
@@ -128,26 +143,67 @@ func (hs *HomeScreen) convertItems(items []jellyfin.MediaItem) []GridItem {
 			result[i].Image = img
 		}
 	}
-	return result
+	grid.Items = result
 }
 
 func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
-	if !hs.loaded || len(hs.sections) == 0 {
+	// Settings shortcut
+	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
+		if hs.OnSettings != nil {
+			hs.OnSettings()
+		}
 		return nil, nil
 	}
 
-	dir, enter, _ := InputState()
-
-	// Search shortcut
-	if ebiten.IsKeyPressed(ebiten.KeySlash) {
+	// Search shortcut — just pressed only
+	if inpututil.IsKeyJustPressed(ebiten.KeySlash) {
 		if hs.OnSearch != nil {
 			hs.OnSearch()
 		}
 		return nil, nil
 	}
+
+	// Mouse wheel scroll
+	_, wy := MouseWheelDelta()
+	if wy != 0 {
+		hs.targetScrollY -= wy * 60
+		if hs.targetScrollY < 0 {
+			hs.targetScrollY = 0
+		}
+	}
+
+	// Mouse click handling
+	mx, my, clicked := MouseJustClicked()
+	if clicked && hs.loaded && len(hs.sections) > 0 {
+		for i, section := range hs.sections {
+			if idx, ok := section.HandleClick(mx, my); ok {
+				// Set active section
+				hs.sections[hs.sectionIndex].Active = false
+				hs.sectionIndex = i
+				hs.sections[hs.sectionIndex].Active = true
+				section.Focused = idx
+
+				// Select the item
+				item := section.SelectedItem()
+				if item != nil && hs.OnItemSelected != nil {
+					fullItem, err := hs.client.GetItem(item.ID)
+					if err == nil {
+						hs.OnItemSelected(*fullItem)
+					}
+				}
+				return nil, nil
+			}
+		}
+	}
+
+	if !hs.loaded || len(hs.sections) == 0 {
+		return nil, nil
+	}
+
+	dir, enter, _ := InputState()
 
 	currentSection := hs.sections[hs.sectionIndex]
 
@@ -207,6 +263,14 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 		return
 	}
 
+	if hs.loadError != "" && len(hs.sections) == 0 {
+		DrawTextCentered(dst, hs.loadError, float64(ScreenWidth)/2, float64(ScreenHeight)/2-20,
+			FontSizeBody, ColorError)
+		DrawTextCentered(dst, "Press Enter to retry", float64(ScreenWidth)/2, float64(ScreenHeight)/2+20,
+			FontSizeSmall, ColorTextMuted)
+		return
+	}
+
 	if len(hs.sections) == 0 {
 		DrawTextCentered(dst, "No media found", float64(ScreenWidth)/2, float64(ScreenHeight)/2,
 			FontSizeHeading, ColorTextSecondary)
@@ -215,7 +279,7 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 
 	// Header
 	DrawText(dst, "JellyCouch", SectionPadding, 16, FontSizeTitle, ColorPrimary)
-	DrawText(dst, "/ to search", float64(ScreenWidth)-200, 24, FontSizeSmall, ColorTextMuted)
+	DrawText(dst, "/ search  S settings", float64(ScreenWidth)-300, 24, FontSizeSmall, ColorTextMuted)
 
 	y := float64(NavBarHeight+10) - hs.scrollY
 	for _, section := range hs.sections {

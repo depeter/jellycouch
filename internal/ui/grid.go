@@ -14,6 +14,8 @@ type GridItem struct {
 	Title    string
 	Subtitle string // year, episode info, etc.
 	Image    *ebiten.Image
+	Progress float64 // 0.0 to 1.0, playback progress
+	Watched  bool
 	// Set by the grid during layout
 	X, Y float64
 }
@@ -73,6 +75,17 @@ func (pg *PosterGrid) AnimateScroll() {
 	pg.OffsetX = Lerp(pg.OffsetX, pg.targetOffsetX, ScrollAnimSpeed)
 }
 
+// HandleClick checks if (mx, my) hits any item and returns its index.
+func (pg *PosterGrid) HandleClick(mx, my int) (clickedIndex int, ok bool) {
+	for i := range pg.Items {
+		item := &pg.Items[i]
+		if PointInRect(mx, my, item.X, item.Y, PosterWidth, PosterHeight) {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
 func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 	pg.AnimateScroll()
 
@@ -83,6 +96,9 @@ func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 	// Create a clipping sub-image for the poster row
 	rowHeight := float64(PosterHeight + FontSizeSmall + 16 + PosterFocusPad*2)
 
+	hasLeft := pg.OffsetX > 1
+	hasRight := false
+
 	for i := range pg.Items {
 		item := &pg.Items[i]
 		ix := baseX + float64(i)*(PosterWidth+PosterGap) - pg.OffsetX
@@ -90,6 +106,9 @@ func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 
 		// Skip offscreen items
 		if ix+PosterWidth < baseX-PosterGap || ix > float64(ScreenWidth) {
+			if ix > float64(ScreenWidth) {
+				hasRight = true
+			}
 			continue
 		}
 
@@ -125,6 +144,31 @@ func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 				FontSizeSmall, ColorTextMuted)
 		}
 
+		// Progress bar at bottom of poster
+		if item.Progress > 0 && item.Progress < 1.0 {
+			barH := float32(4)
+			barY := float32(iy + PosterHeight - float64(barH))
+			// Background
+			vector.DrawFilledRect(dst, float32(ix), barY,
+				float32(PosterWidth), barH,
+				color.RGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x80}, false)
+			// Progress fill
+			vector.DrawFilledRect(dst, float32(ix), barY,
+				float32(float64(PosterWidth)*item.Progress), barH,
+				ColorPrimary, false)
+		}
+
+		// Watched checkmark badge (top-right corner)
+		if item.Watched {
+			badgeR := float32(10)
+			badgeCX := float32(ix+PosterWidth) - badgeR - 4
+			badgeCY := float32(iy) + badgeR + 4
+			// Green circle background
+			vector.DrawFilledCircle(dst, badgeCX, badgeCY, badgeR, ColorSuccess, false)
+			// Checkmark (simple "✓" text centered)
+			DrawTextCentered(dst, "✓", float64(badgeCX), float64(badgeCY), FontSizeSmall, ColorText)
+		}
+
 		// Title below poster
 		titleColor := ColorTextSecondary
 		if isFocused {
@@ -132,6 +176,23 @@ func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 		}
 		title := truncateText(item.Title, PosterWidth, FontSizeCaption)
 		DrawText(dst, title, ix, iy+PosterHeight+4, FontSizeCaption, titleColor)
+	}
+
+	// Check if last item extends beyond view
+	if len(pg.Items) > 0 {
+		lastX := baseX + float64(len(pg.Items)-1)*(PosterWidth+PosterGap) - pg.OffsetX
+		if lastX+PosterWidth > float64(ScreenWidth) {
+			hasRight = true
+		}
+	}
+
+	// Scroll edge indicators
+	indicatorY := baseY + PosterFocusPad + PosterHeight/2
+	if hasLeft {
+		DrawTextCentered(dst, "◀", baseX-10, indicatorY, FontSizeBody, ColorTextMuted)
+	}
+	if hasRight {
+		DrawTextCentered(dst, "▶", float64(ScreenWidth)-SectionPadding+10, indicatorY, FontSizeBody, ColorTextMuted)
 	}
 
 	return rowHeight + SectionTitleH

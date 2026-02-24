@@ -7,6 +7,11 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
+// ButtonRect stores the position and size of a drawn button.
+type ButtonRect struct {
+	X, Y, W, H float64
+}
+
 // DetailPanel shows item metadata with a backdrop.
 type DetailPanel struct {
 	Title       string
@@ -17,6 +22,7 @@ type DetailPanel struct {
 	Backdrop    *ebiten.Image
 	ButtonIndex int
 	Buttons     []string
+	ButtonRects []ButtonRect // populated during Draw
 }
 
 func NewDetailPanel() *DetailPanel {
@@ -40,6 +46,16 @@ func (dp *DetailPanel) Update(dir Direction) bool {
 		}
 	}
 	return false
+}
+
+// HandleClick checks if (mx, my) hits any button and returns its index.
+func (dp *DetailPanel) HandleClick(mx, my int) (buttonIndex int, ok bool) {
+	for i, rect := range dp.ButtonRects {
+		if PointInRect(mx, my, rect.X, rect.Y, rect.W, rect.H) {
+			return i, true
+		}
+	}
+	return -1, false
 }
 
 func (dp *DetailPanel) Draw(dst *ebiten.Image) {
@@ -97,13 +113,17 @@ func (dp *DetailPanel) Draw(dst *ebiten.Image) {
 		y += h + 16
 	}
 
-	// Action buttons
+	// Action buttons — measure properly
+	dp.ButtonRects = make([]ButtonRect, len(dp.Buttons))
 	btnX := float64(SectionPadding)
 	for i, label := range dp.Buttons {
-		w := float64(len(label)*10 + 40)
+		tw, _ := MeasureText(label, FontSizeBody)
+		w := tw + 40
 		h := float64(36)
 		bx := float32(btnX)
 		by := float32(y)
+
+		dp.ButtonRects[i] = ButtonRect{X: btnX, Y: y, W: w, H: h}
 
 		if i == dp.ButtonIndex {
 			vector.DrawFilledRect(dst, bx, by, float32(w), float32(h), ColorPrimary, false)

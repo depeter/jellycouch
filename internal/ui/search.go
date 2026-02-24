@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"sync"
 	"unicode/utf8"
 
@@ -17,13 +18,16 @@ type SearchScreen struct {
 	client   *jellyfin.Client
 	imgCache *cache.ImageCache
 
-	query     string
-	results   []jellyfin.MediaItem
-	gridItems []GridItem
-	grid      *FocusGrid
-	focusMode int // 0=search bar, 1=results
+	query       string
+	results     []jellyfin.MediaItem
+	gridItems   []GridItem
+	grid        *FocusGrid
+	focusMode   int // 0=search bar, 1=results
+	searchError string
 
 	searching bool
+	scrollY      float64
+	targetScrollY float64
 
 	OnItemSelected func(item jellyfin.MediaItem)
 
@@ -54,7 +58,65 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 			ss.focusMode = 0
 			return nil, nil
 		}
+		// If in search bar with query, Escape clears query first
+		if ss.focusMode == 0 && ss.query != "" {
+			ss.query = ""
+			ss.results = nil
+			ss.gridItems = nil
+			ss.grid.SetTotal(0)
+			ss.searchError = ""
+			return nil, nil
+		}
 		return &ScreenTransition{Type: TransitionPop}, nil
+	}
+
+	// Mouse wheel scroll
+	_, wy := MouseWheelDelta()
+	if wy != 0 {
+		ss.targetScrollY -= wy * 60
+		if ss.targetScrollY < 0 {
+			ss.targetScrollY = 0
+		}
+	}
+
+	// Mouse click handling
+	mx, my, clicked := MouseJustClicked()
+	if clicked {
+		// Check search bar click
+		barX := float64(SectionPadding)
+		barY := 20.0
+		barW := float64(ScreenWidth - SectionPadding*2)
+		barH := 44.0
+		if PointInRect(mx, my, barX, barY, barW, barH) {
+			// Check clear button click (right edge of search bar)
+			if ss.query != "" && PointInRect(mx, my, barX+barW-40, barY, 40, barH) {
+				ss.query = ""
+				ss.results = nil
+				ss.gridItems = nil
+				ss.grid.SetTotal(0)
+				ss.searchError = ""
+			}
+			ss.focusMode = 0
+			return nil, nil
+		}
+		// Check result items click
+		if len(ss.gridItems) > 0 {
+			resultBaseY := barY + barH + 40 - ss.scrollY // 40 = gap + result count
+			for i := range ss.gridItems {
+				col := i % ss.grid.Cols
+				row := i / ss.grid.Cols
+				x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
+				iy := resultBaseY + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+				if PointInRect(mx, my, x, iy, PosterWidth, PosterHeight) {
+					ss.focusMode = 1
+					ss.grid.Focused = i
+					if i < len(ss.results) && ss.OnItemSelected != nil {
+						ss.OnItemSelected(ss.results[i])
+					}
+					return nil, nil
+				}
+			}
+		}
 	}
 
 	switch ss.focusMode {
@@ -101,6 +163,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 func (ss *SearchScreen) doSearch() {
 	ss.mu.Lock()
 	ss.searching = true
+	ss.searchError = ""
 	query := ss.query
 	ss.mu.Unlock()
 
@@ -111,12 +174,15 @@ func (ss *SearchScreen) doSearch() {
 	ss.searching = false
 
 	if err != nil {
+		ss.searchError = "Search failed: " + err.Error()
 		return
 	}
 
 	ss.results = items
 	ss.grid.SetTotal(len(items))
 	ss.grid.Focused = 0
+	ss.scrollY = 0
+	ss.targetScrollY = 0
 
 	ss.gridItems = make([]GridItem, len(items))
 	for i, item := range items {
@@ -128,12 +194,15 @@ func (ss *SearchScreen) doSearch() {
 		if img := ss.imgCache.Get(url); img != nil {
 			ss.gridItems[i].Image = img
 		} else {
-			idx := i
+			itemID := item.ID
 			ss.imgCache.LoadAsync(url, func(img *ebiten.Image) {
 				ss.mu.Lock()
 				defer ss.mu.Unlock()
-				if idx < len(ss.gridItems) {
-					ss.gridItems[idx].Image = img
+				for j := range ss.gridItems {
+					if ss.gridItems[j].ID == itemID {
+						ss.gridItems[j].Image = img
+						break
+					}
 				}
 			})
 		}
@@ -143,6 +212,9 @@ func (ss *SearchScreen) doSearch() {
 func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
+
+	// Smooth scroll
+	ss.scrollY = Lerp(ss.scrollY, ss.targetScrollY, ScrollAnimSpeed)
 
 	// Search bar
 	barX := float32(SectionPadding)
@@ -168,14 +240,33 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 	}
 	DrawText(dst, displayQuery, float64(barX+12), float64(barY+12), FontSizeBody, ColorText)
 
+	// Clear button
+	if ss.query != "" {
+		clearX := float64(barX+barW) - 32
+		clearY := float64(barY) + 10
+		DrawTextCentered(dst, "✕", clearX, clearY+float64(barH)/2-10, FontSizeBody, ColorTextMuted)
+	}
+
 	if ss.searching {
 		DrawText(dst, "Searching...", float64(barX+barW-120), float64(barY+12), FontSizeSmall, ColorTextSecondary)
 	}
 
+	// Result count / error below search bar
+	y := float64(barY+barH) + 8
+	if ss.searchError != "" {
+		DrawText(dst, ss.searchError, float64(barX), y, FontSizeSmall, ColorError)
+		y += FontSizeSmall + 8
+	} else if len(ss.results) > 0 {
+		countStr := fmt.Sprintf("%d results", len(ss.results))
+		DrawText(dst, countStr, float64(barX), y, FontSizeSmall, ColorTextMuted)
+		y += FontSizeSmall + 8
+	}
+
+	y += 8 // gap before results
+
 	// Results
-	y := float64(barY+barH) + 20
 	if len(ss.gridItems) == 0 && !ss.searching {
-		if ss.query != "" && len(ss.results) == 0 {
+		if ss.query != "" && len(ss.results) == 0 && ss.searchError == "" {
 			DrawTextCentered(dst, "No results found", float64(ScreenWidth)/2, y+100,
 				FontSizeHeading, ColorTextSecondary)
 		}
@@ -187,7 +278,12 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 		row := i / ss.grid.Cols
 
 		x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-		iy := y + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+		iy := y + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8) - ss.scrollY
+
+		// Skip offscreen
+		if iy+PosterHeight < 0 || iy > float64(ScreenHeight) {
+			continue
+		}
 
 		isFocused := ss.focusMode == 1 && i == ss.grid.Focused
 		drawPosterItem(dst, item, x, iy, isFocused)

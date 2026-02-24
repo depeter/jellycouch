@@ -1,6 +1,9 @@
 package ui
 
-import "github.com/hajimehoshi/ebiten/v2"
+import (
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
+)
 
 // Direction represents a navigation direction.
 type Direction int
@@ -24,24 +27,25 @@ func InputState() (dir Direction, enter, back bool) {
 	} else if inputRepeating(ebiten.KeyArrowRight) {
 		dir = DirRight
 	}
-	enter = ebiten.IsKeyPressed(ebiten.KeyEnter) && !prevKeys[ebiten.KeyEnter]
-	back = (ebiten.IsKeyPressed(ebiten.KeyEscape) && !prevKeys[ebiten.KeyEscape]) ||
-		(ebiten.IsKeyPressed(ebiten.KeyBackspace) && !prevKeys[ebiten.KeyBackspace])
+	enter = inpututil.IsKeyJustPressed(ebiten.KeyEnter)
+	back = inpututil.IsKeyJustPressed(ebiten.KeyEscape) ||
+		inpututil.IsKeyJustPressed(ebiten.KeyBackspace)
 	return
 }
 
 // UpdateInputState must be called at the end of each Update() to track key state.
 func UpdateInputState() {
+	// Update per-key hold frames
 	for k := ebiten.Key(0); k <= ebiten.KeyMax; k++ {
-		prevKeys[k] = ebiten.IsKeyPressed(k)
+		if ebiten.IsKeyPressed(k) {
+			keyHoldFrames[k]++
+		} else {
+			delete(keyHoldFrames, k)
+		}
 	}
-	repeatTimer++
 }
 
-var (
-	prevKeys   = make(map[ebiten.Key]bool)
-	repeatTimer int
-)
+var keyHoldFrames = make(map[ebiten.Key]int)
 
 const (
 	repeatDelay    = 18 // frames before repeat starts (~300ms at 60fps)
@@ -52,13 +56,35 @@ func inputRepeating(key ebiten.Key) bool {
 	if !ebiten.IsKeyPressed(key) {
 		return false
 	}
-	if !prevKeys[key] {
-		return true // just pressed
+	frames, held := keyHoldFrames[key]
+	if !held || frames == 0 {
+		return true // just pressed this frame
 	}
 	// Key held — check repeat timing
-	// This is a simplified version; a full impl would track per-key hold duration.
-	// For now, just fire on initial press (no repeat). We can enhance later.
+	if frames >= repeatDelay && (frames-repeatDelay)%repeatInterval == 0 {
+		return true
+	}
 	return false
+}
+
+// MouseJustClicked returns the cursor position and whether the left mouse button was just clicked.
+func MouseJustClicked() (x, y int, clicked bool) {
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		x, y = ebiten.CursorPosition()
+		clicked = true
+	}
+	return
+}
+
+// PointInRect returns true if point (px, py) is inside the rectangle (rx, ry, rw, rh).
+func PointInRect(px, py int, rx, ry, rw, rh float64) bool {
+	return float64(px) >= rx && float64(px) <= rx+rw &&
+		float64(py) >= ry && float64(py) <= ry+rh
+}
+
+// MouseWheelDelta returns the mouse wheel scroll delta.
+func MouseWheelDelta() (dx, dy float64) {
+	return ebiten.Wheel()
 }
 
 // FocusGrid handles 2D grid navigation.
