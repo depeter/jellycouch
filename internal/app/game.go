@@ -127,14 +127,10 @@ func (g *Game) Update() error {
 			return nil
 		}
 
-		wasShowingControls := g.osd.ShowControls
-		wasShowingVolume := g.osd.ShowVolume
 		g.osd.Update()
 
 		action := player.PollPlayerInput()
 		if action == player.ActionStop {
-			// Clear OSD before stopping
-			g.Player.SetOSDOverlay(1, "")
 			g.StopPlayback()
 			return nil
 		}
@@ -147,22 +143,16 @@ func (g *Game) Update() error {
 			}
 		}
 
-		// Update OSD overlays
-		if g.osd.ShowControls {
-			seekBar := player.FormatSeekBar(g.Player.Position(), g.Player.Duration(), g.Player.Paused())
-			if seekBar != "" {
-				g.Player.SetOSDOverlay(1, seekBar)
-			}
-		} else if wasShowingControls {
-			g.Player.SetOSDOverlay(1, "")
-		}
-
+		// Show OSD via mpv show-text (auto-expires, no need to clear)
 		if g.osd.ShowVolume {
 			vol, _ := g.Player.Volume()
 			muted := g.Player.Muted()
-			g.Player.SetOSDOverlay(2, player.FormatVolumeOSD(vol, muted))
-		} else if wasShowingVolume {
-			g.Player.SetOSDOverlay(2, "")
+			g.Player.ShowText(player.FormatVolumeOSD(vol, muted), 2000)
+		} else if g.osd.ShowControls {
+			seekBar := player.FormatSeekBar(g.Player.Position(), g.Player.Duration(), g.Player.Paused())
+			if seekBar != "" {
+				g.Player.ShowText(seekBar, 1000)
+			}
 		}
 	}
 
