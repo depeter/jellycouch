@@ -163,6 +163,24 @@ func (p *Player) Destroy() {
 	p.m.TerminateDestroy()
 }
 
+// Volume returns the current volume level (0-150).
+func (p *Player) Volume() (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	vol := p.m.GetPropertyString("volume")
+	var v int
+	fmt.Sscanf(vol, "%d", &v)
+	return v, nil
+}
+
+// Muted returns whether audio is muted.
+func (p *Player) Muted() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	val := p.m.GetPropertyString("mute")
+	return val == "yes"
+}
+
 // Playing returns whether media is currently loaded.
 func (p *Player) Playing() bool {
 	p.mu.Lock()

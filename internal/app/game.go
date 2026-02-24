@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/config"
@@ -108,6 +109,11 @@ func (g *Game) StopPlayback() {
 }
 
 func (g *Game) Update() error {
+	// Alt+Enter toggles fullscreen (works in all modes)
+	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && ebiten.IsKeyPressed(ebiten.KeyAlt) {
+		ebiten.SetFullscreen(!ebiten.IsFullscreen())
+	}
+
 	switch g.State {
 	case StateBrowse:
 		if err := g.Screens.Update(); err != nil {
@@ -122,6 +128,7 @@ func (g *Game) Update() error {
 		}
 
 		wasShowingControls := g.osd.ShowControls
+		wasShowingVolume := g.osd.ShowVolume
 		g.osd.Update()
 
 		action := player.PollPlayerInput()
@@ -134,17 +141,28 @@ func (g *Game) Update() error {
 		if action != player.ActionNone {
 			player.HandleAction(g.Player, action)
 			g.osd.ShowControlsOverlay()
+			// Show volume overlay on volume/mute actions
+			if action == player.ActionVolumeUp || action == player.ActionVolumeDown || action == player.ActionMute {
+				g.osd.ShowVolumeOverlay()
+			}
 		}
 
-		// Update OSD overlay
+		// Update OSD overlays
 		if g.osd.ShowControls {
 			seekBar := player.FormatSeekBar(g.Player.Position(), g.Player.Duration(), g.Player.Paused())
 			if seekBar != "" {
 				g.Player.SetOSDOverlay(1, seekBar)
 			}
 		} else if wasShowingControls {
-			// Controls just expired, clear the overlay
 			g.Player.SetOSDOverlay(1, "")
+		}
+
+		if g.osd.ShowVolume {
+			vol, _ := g.Player.Volume()
+			muted := g.Player.Muted()
+			g.Player.SetOSDOverlay(2, player.FormatVolumeOSD(vol, muted))
+		} else if wasShowingVolume {
+			g.Player.SetOSDOverlay(2, "")
 		}
 	}
 

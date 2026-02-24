@@ -92,6 +92,8 @@ func HandleAction(p *Player, action KeyAction) {
 		p.CycleSubtitles()
 	case ActionAudioCycle:
 		p.CycleAudio()
+	case ActionFullscreen:
+		ebiten.SetFullscreen(!ebiten.IsFullscreen())
 	case ActionStop:
 		p.Stop()
 	}
