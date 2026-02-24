@@ -30,20 +30,7 @@ func New(cfg *config.Config) (*Player, error) {
 	// Core options — mpv owns the render pipeline
 	must(m.SetOptionString("hwdec", cfg.Playback.HWAccel))
 	must(m.SetOptionString("vo", "gpu"))
-	must(m.SetOptionString("input-vo-keyboard", "no"))
-	must(m.SetOptionString("input-default-bindings", "no"))
-	must(m.SetOptionString("osc", "no"))
-	must(m.SetOptionString("osd-level", "1"))
-	must(m.SetOptionString("osd-font", "Liberation Sans"))
-	must(m.SetOptionString("osd-font-size", "32"))
-	must(m.SetOptionString("osd-color", "#CCFFFFFF"))
-	must(m.SetOptionString("osd-border-color", "#CC000000"))
-	must(m.SetOptionString("osd-border-size", "2"))
-	must(m.SetOptionString("osd-shadow-offset", "1"))
-	must(m.SetOptionString("osd-shadow-color", "#80000000"))
-	must(m.SetOptionString("osd-bar", "no"))
-	must(m.SetOptionString("osd-align-y", "bottom"))
-	must(m.SetOptionString("osd-margin-y", "40"))
+	must(m.SetOptionString("osc", "yes"))
 	must(m.SetOptionString("keep-open", "yes"))
 	must(m.SetOptionString("idle", "yes"))
 
@@ -171,24 +158,6 @@ func (p *Player) Destroy() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.m.TerminateDestroy()
-}
-
-// Volume returns the current volume level (0-150).
-func (p *Player) Volume() (int, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	vol := p.m.GetPropertyString("volume")
-	var v int
-	fmt.Sscanf(vol, "%d", &v)
-	return v, nil
-}
-
-// Muted returns whether audio is muted.
-func (p *Player) Muted() bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	val := p.m.GetPropertyString("mute")
-	return val == "yes"
 }
 
 // Playing returns whether media is currently loaded.

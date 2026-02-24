@@ -9,7 +9,7 @@ import (
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/config"
 	"github.com/depeter/jellycouch/internal/jellyfin"
-	"github.com/depeter/jellycouch/internal/player"
+	"github.com/depeter/jellycouch/internal/player" // used for player.New, player.GetWindowHandle
 	"github.com/depeter/jellycouch/internal/ui"
 )
 
@@ -23,8 +23,6 @@ type Game struct {
 
 	State         AppState
 	Width, Height int
-
-	osd *player.OSDState
 
 	// Set to true when mpv playback ends and we need to return to browse mode
 	playbackEnded bool
@@ -40,7 +38,6 @@ func NewGame(cfg *config.Config, client *jellyfin.Client, imgCache *cache.ImageC
 		State:   StateBrowse,
 		Width:   cfg.UI.Width,
 		Height:  cfg.UI.Height,
-		osd:     player.NewOSDState(),
 	}
 	return g
 }
@@ -94,7 +91,6 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64) {
 
 	g.State = StatePlay
 	g.playbackEnded = false
-	g.osd.ShowControlsOverlay()
 }
 
 // StopPlayback transitions back to browse mode.
@@ -127,32 +123,10 @@ func (g *Game) Update() error {
 			return nil
 		}
 
-		g.osd.Update()
-
-		action := player.PollPlayerInput()
-		if action == player.ActionStop {
+		// Only handle Escape/Backspace to exit playback — mpv handles everything else
+		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) || inpututil.IsKeyJustPressed(ebiten.KeyBackspace) {
 			g.StopPlayback()
 			return nil
-		}
-		if action != player.ActionNone {
-			player.HandleAction(g.Player, action)
-			g.osd.ShowControlsOverlay()
-			// Show volume overlay on volume/mute actions
-			if action == player.ActionVolumeUp || action == player.ActionVolumeDown || action == player.ActionMute {
-				g.osd.ShowVolumeOverlay()
-			}
-		}
-
-		// Show OSD via mpv show-text (auto-expires, no need to clear)
-		if g.osd.ShowVolume {
-			vol, _ := g.Player.Volume()
-			muted := g.Player.Muted()
-			g.Player.ShowText(player.FormatVolumeOSD(vol, muted), 2000)
-		} else if g.osd.ShowControls {
-			seekBar := player.FormatSeekBar(g.Player.Position(), g.Player.Duration(), g.Player.Paused())
-			if seekBar != "" {
-				g.Player.ShowText(seekBar, 1000)
-			}
 		}
 	}
 
