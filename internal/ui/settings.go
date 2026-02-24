@@ -19,7 +19,7 @@ type SettingsScreen struct {
 	sectionIndex int
 	itemIndex    int
 	editing      bool
-	editValue    string
+	editInput    TextInput
 	editError    string
 
 	// Row rects for mouse clicks (flat list across all sections)
@@ -123,19 +123,13 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 	_, enter, back := InputState()
 
 	if ss.editing {
-		runes := ebiten.AppendInputChars(nil)
-		if len(runes) > 0 {
-			ss.editValue += string(runes)
+		if ss.editInput.Update() {
 			ss.editError = "" // clear error as user types
-		}
-		if inpututil.IsKeyJustPressed(ebiten.KeyBackspace) && len(ss.editValue) > 0 {
-			ss.editValue = ss.editValue[:len(ss.editValue)-1]
-			ss.editError = ""
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
 			// Apply edit with validation
 			sec := ss.sections[ss.sectionIndex]
-			if err := sec.Items[ss.itemIndex].OnChange(ss.editValue); err != nil {
+			if err := sec.Items[ss.itemIndex].OnChange(ss.editInput.Text); err != nil {
 				ss.editError = err.Error()
 			} else {
 				ss.editing = false
@@ -162,7 +156,7 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 				ss.itemIndex = rect.ItemIdx
 				// Enter edit mode
 				sec := ss.sections[ss.sectionIndex]
-				ss.editValue = sec.Items[ss.itemIndex].Value()
+				ss.editInput = NewTextInput(sec.Items[ss.itemIndex].Value())
 				ss.editing = true
 				ss.editError = ""
 				return nil, nil
@@ -198,7 +192,7 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 
 	if enter {
 		sec := ss.sections[ss.sectionIndex]
-		ss.editValue = sec.Items[ss.itemIndex].Value()
+		ss.editInput = NewTextInput(sec.Items[ss.itemIndex].Value())
 		ss.editing = true
 		ss.editError = ""
 	}
@@ -242,7 +236,7 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 			value := item.Value()
 			isEditing := ss.editing && isFocused
 			if isEditing {
-				value = ss.editValue + "│"
+				value = ss.editInput.DisplayText()
 				// Blue border around value field when editing
 				valueX := float32(SectionPadding + 296)
 				valueW := float32(rowW) - float32(300) - 8

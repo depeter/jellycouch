@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	jellyfin "github.com/sj14/jellyfin-go/api"
 )
@@ -23,7 +24,16 @@ type Client struct {
 	serverURL string
 }
 
+func normalizeURL(serverURL string) string {
+	serverURL = strings.TrimSpace(serverURL)
+	if !strings.HasPrefix(serverURL, "http://") && !strings.HasPrefix(serverURL, "https://") {
+		serverURL = "https://" + serverURL
+	}
+	return strings.TrimRight(serverURL, "/")
+}
+
 func NewClient(serverURL string) *Client {
+	serverURL = normalizeURL(serverURL)
 	cfg := jellyfin.NewConfiguration()
 	cfg.Servers = jellyfin.ServerConfigurations{
 		{URL: serverURL},

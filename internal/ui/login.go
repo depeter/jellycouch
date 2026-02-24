@@ -3,7 +3,6 @@ package ui
 import (
 	"image/color"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -20,7 +19,7 @@ type LoginScreen struct {
 	Busy      bool
 
 	fieldIndex int // 0=server, 1=user, 2=pass, 3=connect button
-	fields     [3]*string
+	inputs     [3]TextInput
 	labels     [3]string
 
 	OnLogin func(screen *LoginScreen, server, user, pass string)
@@ -31,7 +30,11 @@ func NewLoginScreen(serverURL string, onLogin func(screen *LoginScreen, server, 
 		ServerURL: serverURL,
 		OnLogin:   onLogin,
 	}
-	ls.fields = [3]*string{&ls.ServerURL, &ls.Username, &ls.Password}
+	ls.inputs = [3]TextInput{
+		NewTextInput(serverURL),
+		NewTextInput(""),
+		NewTextInput(""),
+	}
 	ls.labels = [3]string{"Server URL", "Username", "Password"}
 	return ls
 }
@@ -47,7 +50,11 @@ func (ls *LoginScreen) Update() (*ScreenTransition, error) {
 
 	// Handle text input for the focused field
 	if ls.fieldIndex < 3 {
-		ls.handleTextInput(ls.fields[ls.fieldIndex])
+		ls.inputs[ls.fieldIndex].Update()
+		// Sync back to exported fields
+		ls.ServerURL = ls.inputs[0].Text
+		ls.Username = ls.inputs[1].Text
+		ls.Password = ls.inputs[2].Text
 	}
 
 	// Mouse click — check each field and the button
@@ -56,7 +63,7 @@ func (ls *LoginScreen) Update() (*ScreenTransition, error) {
 		ls.handleClick(float64(mx), float64(my))
 	}
 
-	// Navigation: Tab / Shift+Tab / Arrow keys
+	// Navigation: Tab / Shift+Tab / Arrow keys (only Up/Down for field nav)
 	if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
 		if ebiten.IsKeyPressed(ebiten.KeyShift) {
 			ls.fieldIndex--
@@ -104,22 +111,6 @@ func (ls *LoginScreen) submit() {
 	ls.Error = ""
 	if ls.OnLogin != nil {
 		ls.OnLogin(ls, server, user, pass)
-	}
-}
-
-func (ls *LoginScreen) handleTextInput(field *string) {
-	// Get typed characters, filtering out control chars (tab, enter, etc.)
-	runes := ebiten.AppendInputChars(nil)
-	for _, r := range runes {
-		if !unicode.IsControl(r) {
-			*field += string(r)
-		}
-	}
-
-	// Backspace
-	if inpututil.IsKeyJustPressed(ebiten.KeyBackspace) && len(*field) > 0 {
-		_, size := utf8.DecodeLastRuneInString(*field)
-		*field = (*field)[:len(*field)-size]
 	}
 }
 
@@ -185,18 +176,26 @@ func (ls *LoginScreen) Draw(dst *ebiten.Image) {
 		}
 
 		// Field text
-		value := *ls.fields[i]
+		value := ls.inputs[i].Text
 		if i == 2 && value != "" {
-			value = strings.Repeat("•", utf8.RuneCountInString(value))
+			// Password masking — show dots but preserve cursor position
+			masked := strings.Repeat("•", utf8.RuneCountInString(value))
+			if i == ls.fieldIndex {
+				// Insert cursor into masked text at same position
+				before := strings.Repeat("•", ls.inputs[i].Cursor)
+				after := strings.Repeat("•", utf8.RuneCountInString(value)-ls.inputs[i].Cursor)
+				value = before + "│" + after
+			} else {
+				value = masked
+			}
+		} else if i == ls.fieldIndex {
+			value = ls.inputs[i].DisplayText()
 		}
-		if value == "" && i != ls.fieldIndex {
+
+		if ls.inputs[i].Text == "" && i != ls.fieldIndex {
 			DrawText(dst, ls.placeholders()[i], float64(fx+10), float64(fy+12), FontSizeBody, ColorTextMuted)
 		} else {
-			displayVal := value
-			if i == ls.fieldIndex {
-				displayVal += "│" // cursor
-			}
-			DrawText(dst, displayVal, float64(fx+10), float64(fy+12), FontSizeBody, ColorText)
+			DrawText(dst, value, float64(fx+10), float64(fy+12), FontSizeBody, ColorText)
 		}
 	}
 
@@ -230,7 +229,7 @@ func (ls *LoginScreen) Draw(dst *ebiten.Image) {
 	}
 
 	// Hint
-	DrawTextCentered(dst, "Tab / Arrow keys to navigate, Enter to submit",
+	DrawTextCentered(dst, "Tab to navigate, Enter to submit",
 		cx, float64(ScreenHeight)-40, FontSizeSmall, ColorTextMuted)
 }
 

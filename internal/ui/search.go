@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"sync"
-	"unicode/utf8"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -18,7 +17,7 @@ type SearchScreen struct {
 	client   *jellyfin.Client
 	imgCache *cache.ImageCache
 
-	query       string
+	input       TextInput
 	results     []jellyfin.MediaItem
 	gridItems   []GridItem
 	grid        *FocusGrid
@@ -59,8 +58,8 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 			return nil, nil
 		}
 		// If in search bar with query, Escape clears query first
-		if ss.focusMode == 0 && ss.query != "" {
-			ss.query = ""
+		if ss.focusMode == 0 && ss.input.Text != "" {
+			ss.input.Clear()
 			ss.results = nil
 			ss.gridItems = nil
 			ss.grid.SetTotal(0)
@@ -89,8 +88,8 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 		barH := 44.0
 		if PointInRect(mx, my, barX, barY, barW, barH) {
 			// Check clear button click (right edge of search bar)
-			if ss.query != "" && PointInRect(mx, my, barX+barW-40, barY, 40, barH) {
-				ss.query = ""
+			if ss.input.Text != "" && PointInRect(mx, my, barX+barW-40, barY, 40, barH) {
+				ss.input.Clear()
 				ss.results = nil
 				ss.gridItems = nil
 				ss.grid.SetTotal(0)
@@ -121,17 +120,9 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 
 	switch ss.focusMode {
 	case 0: // search bar
-		// Text input
-		runes := ebiten.AppendInputChars(nil)
-		if len(runes) > 0 {
-			ss.query += string(runes)
-		}
-		if inpututil.IsKeyJustPressed(ebiten.KeyBackspace) && len(ss.query) > 0 {
-			_, size := utf8.DecodeLastRuneInString(ss.query)
-			ss.query = ss.query[:len(ss.query)-size]
-		}
+		ss.input.Update()
 
-		if enter && ss.query != "" {
+		if enter && ss.input.Text != "" {
 			go ss.doSearch()
 		}
 
@@ -164,7 +155,7 @@ func (ss *SearchScreen) doSearch() {
 	ss.mu.Lock()
 	ss.searching = true
 	ss.searchError = ""
-	query := ss.query
+	query := ss.input.Text
 	ss.mu.Unlock()
 
 	items, err := ss.client.SearchItems(query, 40)
@@ -231,17 +222,23 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 		vector.StrokeRect(dst, barX, barY, barW, barH, 2, ColorFocusBorder, false)
 	}
 
-	displayQuery := ss.query
+	var displayQuery string
 	if ss.focusMode == 0 {
-		displayQuery += "│"
+		displayQuery = ss.input.DisplayText()
+	} else {
+		displayQuery = ss.input.Text
 	}
-	if displayQuery == "│" || displayQuery == "" {
+	if ss.input.Text == "" && ss.focusMode != 0 {
 		DrawText(dst, "Search...", float64(barX+12), float64(barY+12), FontSizeBody, ColorTextMuted)
+	} else if ss.input.Text == "" && ss.focusMode == 0 {
+		DrawText(dst, "Search...", float64(barX+12), float64(barY+12), FontSizeBody, ColorTextMuted)
+		DrawText(dst, displayQuery, float64(barX+12), float64(barY+12), FontSizeBody, ColorText)
+	} else {
+		DrawText(dst, displayQuery, float64(barX+12), float64(barY+12), FontSizeBody, ColorText)
 	}
-	DrawText(dst, displayQuery, float64(barX+12), float64(barY+12), FontSizeBody, ColorText)
 
 	// Clear button
-	if ss.query != "" {
+	if ss.input.Text != "" {
 		clearX := float64(barX+barW) - 32
 		clearY := float64(barY) + 10
 		DrawTextCentered(dst, "✕", clearX, clearY+float64(barH)/2-10, FontSizeBody, ColorTextMuted)
@@ -266,7 +263,7 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 
 	// Results
 	if len(ss.gridItems) == 0 && !ss.searching {
-		if ss.query != "" && len(ss.results) == 0 && ss.searchError == "" {
+		if ss.input.Text != "" && len(ss.results) == 0 && ss.searchError == "" {
 			DrawTextCentered(dst, "No results found", float64(ScreenWidth)/2, y+100,
 				FontSizeHeading, ColorTextSecondary)
 		}
