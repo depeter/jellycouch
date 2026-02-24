@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"image/color"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -15,15 +17,16 @@ type LoginScreen struct {
 	Username  string
 	Password  string
 	Error     string
+	Busy      bool
 
 	fieldIndex int // 0=server, 1=user, 2=pass, 3=connect button
 	fields     [3]*string
 	labels     [3]string
 
-	OnLogin func(server, user, pass string)
+	OnLogin func(screen *LoginScreen, server, user, pass string)
 }
 
-func NewLoginScreen(serverURL string, onLogin func(server, user, pass string)) *LoginScreen {
+func NewLoginScreen(serverURL string, onLogin func(screen *LoginScreen, server, user, pass string)) *LoginScreen {
 	ls := &LoginScreen{
 		ServerURL: serverURL,
 		OnLogin:   onLogin,
@@ -38,13 +41,33 @@ func (ls *LoginScreen) OnEnter()     {}
 func (ls *LoginScreen) OnExit()      {}
 
 func (ls *LoginScreen) Update() (*ScreenTransition, error) {
+	if ls.Busy {
+		return nil, nil
+	}
+
 	// Handle text input for the focused field
 	if ls.fieldIndex < 3 {
 		ls.handleTextInput(ls.fields[ls.fieldIndex])
 	}
 
-	// Navigation
-	if inpututil.IsKeyJustPressed(ebiten.KeyTab) || inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
+	// Mouse click — check each field and the button
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		mx, my := ebiten.CursorPosition()
+		ls.handleClick(float64(mx), float64(my))
+	}
+
+	// Navigation: Tab / Shift+Tab / Arrow keys
+	if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
+		if ebiten.IsKeyPressed(ebiten.KeyShift) {
+			ls.fieldIndex--
+			if ls.fieldIndex < 0 {
+				ls.fieldIndex = 3
+			}
+		} else {
+			ls.fieldIndex = (ls.fieldIndex + 1) % 4
+		}
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
 		ls.fieldIndex = (ls.fieldIndex + 1) % 4
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
@@ -54,29 +77,76 @@ func (ls *LoginScreen) Update() (*ScreenTransition, error) {
 		}
 	}
 
-	// Submit
+	// Submit — Enter from any field or the button
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-		if ls.fieldIndex == 3 || (ls.ServerURL != "" && ls.Username != "") {
-			if ls.OnLogin != nil {
-				ls.OnLogin(ls.ServerURL, ls.Username, ls.Password)
-			}
-		}
+		ls.submit()
 	}
 
 	return nil, nil
 }
 
+func (ls *LoginScreen) submit() {
+	server := strings.TrimSpace(ls.ServerURL)
+	user := strings.TrimSpace(ls.Username)
+	pass := ls.Password
+
+	if server == "" {
+		ls.Error = "Server URL is required"
+		ls.fieldIndex = 0
+		return
+	}
+	if user == "" {
+		ls.Error = "Username is required"
+		ls.fieldIndex = 1
+		return
+	}
+
+	ls.Error = ""
+	if ls.OnLogin != nil {
+		ls.OnLogin(ls, server, user, pass)
+	}
+}
+
 func (ls *LoginScreen) handleTextInput(field *string) {
-	// Get typed characters
+	// Get typed characters, filtering out control chars (tab, enter, etc.)
 	runes := ebiten.AppendInputChars(nil)
-	if len(runes) > 0 {
-		*field += string(runes)
+	for _, r := range runes {
+		if !unicode.IsControl(r) {
+			*field += string(r)
+		}
 	}
 
 	// Backspace
 	if inpututil.IsKeyJustPressed(ebiten.KeyBackspace) && len(*field) > 0 {
 		_, size := utf8.DecodeLastRuneInString(*field)
 		*field = (*field)[:len(*field)-size]
+	}
+}
+
+func (ls *LoginScreen) handleClick(mx, my float64) {
+	cx := float64(ScreenWidth) / 2
+	cy := float64(ScreenHeight)/2 - 100
+	fieldW := 400.0
+	fieldH := 44.0
+	startY := cy
+
+	// Check text fields
+	for i := 0; i < 3; i++ {
+		fy := startY + float64(i)*70
+		fx := cx - fieldW/2
+		if mx >= fx && mx <= fx+fieldW && my >= fy && my <= fy+fieldH {
+			ls.fieldIndex = i
+			return
+		}
+	}
+
+	// Check connect button
+	btnY := startY + 3*70
+	btnH := 48.0
+	bx := cx - fieldW/2
+	if mx >= bx && mx <= bx+fieldW && my >= btnY && my <= btnY+btnH {
+		ls.fieldIndex = 3
+		ls.submit()
 	}
 }
 
@@ -136,20 +206,32 @@ func (ls *LoginScreen) Draw(dst *ebiten.Image) {
 	btnH := float32(48)
 	bx := float32(cx) - btnW/2
 
-	btnColor := ColorPrimary
+	var btnColor color.Color = ColorPrimary
 	if ls.fieldIndex == 3 {
 		btnColor = ColorPrimaryDark
+	}
+	if ls.Busy {
+		btnColor = ColorSurface
 	}
 	vector.DrawFilledRect(dst, bx, btnY, btnW, btnH, btnColor, false)
 	if ls.fieldIndex == 3 {
 		vector.StrokeRect(dst, bx, btnY, btnW, btnH, 2, ColorFocusBorder, false)
 	}
-	DrawTextCentered(dst, "Connect", cx, float64(btnY+btnH/2), FontSizeBody, ColorText)
+
+	btnLabel := "Connect"
+	if ls.Busy {
+		btnLabel = "Connecting..."
+	}
+	DrawTextCentered(dst, btnLabel, cx, float64(btnY+btnH/2), FontSizeBody, ColorText)
 
 	// Error message
 	if ls.Error != "" {
 		DrawTextCentered(dst, ls.Error, cx, float64(btnY+btnH+30), FontSizeBody, ColorError)
 	}
+
+	// Hint
+	DrawTextCentered(dst, "Tab / Arrow keys to navigate, Enter to submit",
+		cx, float64(ScreenHeight)-40, FontSizeSmall, ColorTextMuted)
 }
 
 func (ls *LoginScreen) placeholders() [3]string {

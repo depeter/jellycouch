@@ -51,21 +51,27 @@ func main() {
 	// Determine initial screen
 	if client == nil || cfg.Server.Token == "" {
 		// Show login screen
-		loginScreen := ui.NewLoginScreen(cfg.Server.URL, func(server, user, pass string) {
-			c := jellyfin.NewClient(server)
-			if err := c.Authenticate(user, pass); err != nil {
-				log.Printf("Auth failed: %v", err)
-				return
-			}
-			// Save credentials
-			cfg.Server.URL = server
-			cfg.Server.Username = user
-			cfg.Server.Token = c.Token()
-			cfg.Server.UserID = c.UserID()
-			cfg.Save()
+		loginScreen := ui.NewLoginScreen(cfg.Server.URL, func(screen *ui.LoginScreen, server, user, pass string) {
+			screen.Busy = true
+			screen.Error = ""
+			go func() {
+				c := jellyfin.NewClient(server)
+				if err := c.Authenticate(user, pass); err != nil {
+					screen.Error = "Login failed: " + err.Error()
+					screen.Busy = false
+					return
+				}
+				// Save credentials
+				cfg.Server.URL = server
+				cfg.Server.Username = user
+				cfg.Server.Token = c.Token()
+				cfg.Server.UserID = c.UserID()
+				cfg.Save()
 
-			game.Client = c
-			pushHomeScreen(game, cfg, imgCache)
+				game.Client = c
+				screen.Busy = false
+				pushHomeScreen(game, cfg, imgCache)
+			}()
 		})
 		game.Screens.Push(loginScreen)
 	} else {
