@@ -1,5 +1,5 @@
-# Binaries
-jellycouch
+# Binaries (root only, not cmd/jellycouch/)
+/jellycouch
 *.exe
 *.dll
 *.so
