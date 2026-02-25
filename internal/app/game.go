@@ -297,7 +297,7 @@ func (g *Game) handlePlaybackInput() {
 		return
 	}
 
-	// === Hidden mode — existing seek behavior + show OSD on action ===
+	// === Hidden mode — seek/volume without showing full overlay ===
 
 	if keyJustPressed(kb.PlayPause) {
 		g.Player.TogglePause()
@@ -305,31 +305,31 @@ func (g *Game) handlePlaybackInput() {
 	}
 	if keyJustPressed(kb.SeekForward) {
 		g.Player.Seek(10)
-		g.overlay.Show()
+		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.SeekBackward) {
 		g.Player.Seek(-10)
-		g.overlay.Show()
+		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.SeekForwardLarge) {
 		g.Player.Seek(60)
-		g.overlay.Show()
+		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.SeekBackwardLarge) {
 		g.Player.Seek(-60)
-		g.overlay.Show()
+		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.VolumeUp) {
 		g.Player.AdjustVolume(5)
-		g.overlay.Show()
+		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.VolumeDown) {
 		g.Player.AdjustVolume(-5)
-		g.overlay.Show()
+		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.Mute) {
 		g.Player.ToggleMute()
-		g.overlay.Show()
+		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.SubCycle) {
 		g.overlay.Show()
