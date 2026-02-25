@@ -7,6 +7,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/jellyfin"
@@ -177,6 +178,30 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 
 	// Mouse click handling
 	mx, my, clicked := MouseJustClicked()
+	if clicked {
+		// Search bar click
+		searchX := float64(ScreenWidth)/2 - 200
+		searchY := 12.0
+		searchW := 400.0
+		searchH := 38.0
+		if PointInRect(mx, my, searchX, searchY, searchW, searchH) {
+			if hs.OnSearch != nil {
+				hs.OnSearch()
+			}
+			return nil, nil
+		}
+		// Settings button click
+		settingsX := float64(ScreenWidth) - SectionPadding - 80
+		settingsY := 14.0
+		settingsW := 80.0
+		settingsH := 34.0
+		if PointInRect(mx, my, settingsX, settingsY, settingsW, settingsH) {
+			if hs.OnSettings != nil {
+				hs.OnSettings()
+			}
+			return nil, nil
+		}
+	}
 	if clicked && hs.loaded && len(hs.sections) > 0 {
 		for i, section := range hs.sections {
 			if idx, ok := section.HandleClick(mx, my); ok {
@@ -279,7 +304,23 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 
 	// Header
 	DrawText(dst, "JellyCouch", SectionPadding, 16, FontSizeTitle, ColorPrimary)
-	DrawText(dst, "/ search  S settings", float64(ScreenWidth)-300, 24, FontSizeSmall, ColorTextMuted)
+
+	// Search bar (clickable)
+	searchX := float64(ScreenWidth)/2 - 200
+	searchY := 12.0
+	searchW := 400.0
+	searchH := 38.0
+	vector.DrawFilledRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), ColorSurface, false)
+	vector.StrokeRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), 1, ColorTextMuted, false)
+	DrawText(dst, "\U0001F50D  Search library...", searchX+14, searchY+10, FontSizeBody, ColorTextMuted)
+
+	// Settings button
+	settingsX := float64(ScreenWidth) - SectionPadding - 80
+	settingsY := 14.0
+	settingsW := 80.0
+	settingsH := 34.0
+	vector.DrawFilledRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), ColorSurface, false)
+	DrawTextCentered(dst, "\u2699 Settings", settingsX+settingsW/2, settingsY+settingsH/2, FontSizeSmall, ColorTextSecondary)
 
 	y := float64(NavBarHeight+10) - hs.scrollY
 	for _, section := range hs.sections {
