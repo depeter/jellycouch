@@ -316,6 +316,64 @@ func (p *Player) CycleAudio() error {
 	})
 }
 
+// GetTracks returns all tracks of the given type from mpv's track list.
+func (p *Player) GetTracks(trackType TrackType) []Track {
+	var tracks []Track
+	p.do(func(m *mpv.Mpv) error {
+		countStr := m.GetPropertyString("track-list/count")
+		count := 0
+		fmt.Sscanf(countStr, "%d", &count)
+
+		for i := 0; i < count; i++ {
+			prefix := fmt.Sprintf("track-list/%d/", i)
+			typ := m.GetPropertyString(prefix + "type")
+
+			wantType := "sub"
+			if trackType == TrackAudio {
+				wantType = "audio"
+			}
+			if typ != wantType {
+				continue
+			}
+
+			id := 0
+			fmt.Sscanf(m.GetPropertyString(prefix+"id"), "%d", &id)
+
+			t := Track{
+				ID:       id,
+				Type:     trackType,
+				Title:    m.GetPropertyString(prefix + "title"),
+				Lang:     m.GetPropertyString(prefix + "lang"),
+				Codec:    m.GetPropertyString(prefix + "codec"),
+				Selected: m.GetPropertyString(prefix+"selected") == "yes",
+				Default:  m.GetPropertyString(prefix+"default") == "yes",
+				Forced:   m.GetPropertyString(prefix+"forced") == "yes",
+				External: m.GetPropertyString(prefix+"external") == "yes",
+			}
+			tracks = append(tracks, t)
+		}
+		return nil
+	})
+	return tracks
+}
+
+// SetSubTrack sets the subtitle track. id=0 disables subtitles.
+func (p *Player) SetSubTrack(id int) error {
+	return p.do(func(m *mpv.Mpv) error {
+		if id == 0 {
+			return m.SetPropertyString("sid", "no")
+		}
+		return m.SetPropertyString("sid", fmt.Sprintf("%d", id))
+	})
+}
+
+// SetAudioTrack sets the audio track by ID.
+func (p *Player) SetAudioTrack(id int) error {
+	return p.do(func(m *mpv.Mpv) error {
+		return m.SetPropertyString("aid", fmt.Sprintf("%d", id))
+	})
+}
+
 // ToggleMute toggles audio mute.
 func (p *Player) ToggleMute() error {
 	return p.do(func(m *mpv.Mpv) error {

@@ -29,6 +29,8 @@ type Game struct {
 
 	// Set to true when mpv playback ends and we need to return to browse mode
 	playbackEnded bool
+
+	overlay *player.PlaybackOverlay
 }
 
 // NewGame creates the Game with all dependencies.
@@ -92,6 +94,9 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64) {
 	// Report playback start
 	go g.Client.ReportPlaybackStart(itemID, resumeTicks)
 
+	g.overlay = player.NewPlaybackOverlay(g.Player)
+	g.overlay.Show()
+
 	g.State = StatePlay
 	g.playbackEnded = false
 }
@@ -119,12 +124,19 @@ func (g *Game) PlayURL(url string) {
 		return
 	}
 
+	g.overlay = player.NewPlaybackOverlay(g.Player)
+	g.overlay.Show()
+
 	g.State = StatePlay
 	g.playbackEnded = false
 }
 
 // StopPlayback transitions back to browse mode.
 func (g *Game) StopPlayback() {
+	if g.overlay != nil {
+		g.overlay.Hide()
+		g.overlay = nil
+	}
 	if g.Player != nil && g.Player.Playing() {
 		itemID := g.Player.ItemID()
 		posTicks := int64(g.Player.Position() * 10_000_000)
@@ -155,9 +167,30 @@ func (g *Game) Update() error {
 			return nil
 		}
 
-		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) ||
+		// Update overlay auto-hide timer
+		if g.overlay != nil {
+			g.overlay.Update()
+		}
+
+		// Esc/Back — context-dependent behavior
+		backPressed := inpututil.IsKeyJustPressed(ebiten.KeyEscape) ||
 			inpututil.IsKeyJustPressed(ebiten.KeyBackspace) ||
-			inpututil.IsMouseButtonJustPressed(ebiten.MouseButton3) {
+			inpututil.IsMouseButtonJustPressed(ebiten.MouseButton3)
+
+		if backPressed && g.overlay != nil {
+			switch g.overlay.Mode {
+			case player.OverlayTrackSelect:
+				g.overlay.HandleTrackInput(player.DirNone, false, true)
+				return nil
+			case player.OverlayBar:
+				g.overlay.Hide()
+				return nil
+			default:
+				// OverlayHidden — fall through to stop playback
+			}
+		}
+
+		if backPressed {
 			g.StopPlayback()
 			return nil
 		}
@@ -189,83 +222,164 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 }
 
 // handlePlaybackInput forwards keybinds, media keys, and mouse input to mpv.
+// Input routing depends on the overlay state: hidden, bar visible, or track select.
 func (g *Game) handlePlaybackInput() {
 	if g.Player == nil {
 		return
 	}
 	kb := &g.Config.Keybinds
 
-	// Configured keybinds
+	// Determine directional input
+	dir := player.DirNone
+	if keyJustPressed(kb.SeekForward) {
+		dir = player.DirRight
+	} else if keyJustPressed(kb.SeekBackward) {
+		dir = player.DirLeft
+	} else if keyJustPressed(kb.SeekForwardLarge) {
+		dir = player.DirUp
+	} else if keyJustPressed(kb.SeekBackwardLarge) {
+		dir = player.DirDown
+	}
+	enterPressed := inpututil.IsKeyJustPressed(ebiten.KeyEnter) && !ebiten.IsKeyPressed(ebiten.KeyAlt)
+
+	// === Track select mode (modal — blocks everything) ===
+	if g.overlay != nil && g.overlay.Mode == player.OverlayTrackSelect {
+		g.overlay.HandleTrackInput(dir, enterPressed, false)
+		return
+	}
+
+	// === Control bar visible mode ===
+	if g.overlay != nil && g.overlay.Mode == player.OverlayBar {
+		// Arrow keys and Enter go to bar navigation
+		if dir == player.DirLeft || dir == player.DirRight || enterPressed {
+			g.overlay.HandleBarInput(dir, enterPressed, false)
+		}
+
+		// Play/pause with Space
+		if keyJustPressed(kb.PlayPause) {
+			g.Player.TogglePause()
+			g.overlay.Show() // re-render and reset timer
+		}
+
+		// Volume controls still work while bar is visible
+		if keyJustPressed(kb.VolumeUp) {
+			g.Player.AdjustVolume(5)
+			g.overlay.Show()
+		}
+		if keyJustPressed(kb.VolumeDown) {
+			g.Player.AdjustVolume(-5)
+			g.overlay.Show()
+		}
+		if keyJustPressed(kb.Mute) {
+			g.Player.ToggleMute()
+			g.overlay.Show()
+		}
+
+		// S/A keys open track panels directly
+		if keyJustPressed(kb.SubCycle) {
+			g.overlay.OpenTrackPanel(player.TrackSub)
+		}
+		if keyJustPressed(kb.AudioCycle) {
+			g.overlay.OpenTrackPanel(player.TrackAudio)
+		}
+
+		if keyJustPressed(kb.Fullscreen) {
+			ebiten.SetFullscreen(!ebiten.IsFullscreen())
+		}
+
+		// I key — just reset the timer
+		if inpututil.IsKeyJustPressed(ebiten.KeyI) {
+			g.overlay.Show()
+		}
+
+		// Mouse input (same as hidden mode)
+		g.handlePlaybackMouse()
+		return
+	}
+
+	// === Hidden mode — existing seek behavior + show OSD on action ===
+
 	if keyJustPressed(kb.PlayPause) {
 		g.Player.TogglePause()
-		g.Player.ShowOSD()
+		g.overlay.Show()
 	}
 	if keyJustPressed(kb.SeekForward) {
 		g.Player.Seek(10)
-		g.Player.ShowOSD()
+		g.overlay.Show()
 	}
 	if keyJustPressed(kb.SeekBackward) {
 		g.Player.Seek(-10)
-		g.Player.ShowOSD()
+		g.overlay.Show()
 	}
 	if keyJustPressed(kb.SeekForwardLarge) {
 		g.Player.Seek(60)
-		g.Player.ShowOSD()
+		g.overlay.Show()
 	}
 	if keyJustPressed(kb.SeekBackwardLarge) {
 		g.Player.Seek(-60)
-		g.Player.ShowOSD()
+		g.overlay.Show()
 	}
 	if keyJustPressed(kb.VolumeUp) {
 		g.Player.AdjustVolume(5)
-		g.Player.ShowOSD()
+		g.overlay.Show()
 	}
 	if keyJustPressed(kb.VolumeDown) {
 		g.Player.AdjustVolume(-5)
-		g.Player.ShowOSD()
+		g.overlay.Show()
 	}
 	if keyJustPressed(kb.Mute) {
 		g.Player.ToggleMute()
-		g.Player.ShowOSD()
+		g.overlay.Show()
 	}
 	if keyJustPressed(kb.SubCycle) {
-		g.Player.CycleSubtitles()
-		g.Player.ShowText("Subtitles changed", 2000)
+		g.overlay.Show()
+		g.overlay.OpenTrackPanel(player.TrackSub)
 	}
 	if keyJustPressed(kb.AudioCycle) {
-		g.Player.CycleAudio()
-		g.Player.ShowText("Audio track changed", 2000)
+		g.overlay.Show()
+		g.overlay.OpenTrackPanel(player.TrackAudio)
 	}
 	if keyJustPressed(kb.Fullscreen) {
 		ebiten.SetFullscreen(!ebiten.IsFullscreen())
 	}
 
-	// Enter/OK — common remote control button for play/pause
-	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && !ebiten.IsKeyPressed(ebiten.KeyAlt) {
-		g.Player.TogglePause()
-		g.Player.ShowOSD()
+	// Enter/OK — show OSD (in hidden mode, Enter shows bar rather than pause)
+	if enterPressed {
+		g.overlay.Show()
 	}
 
 	// I key — show info overlay
 	if inpututil.IsKeyJustPressed(ebiten.KeyI) {
-		g.Player.ShowOSD()
+		g.overlay.Show()
 	}
 
-	// Mouse: left click to toggle pause, right click to show info
+	g.handlePlaybackMouse()
+}
+
+// handlePlaybackMouse handles mouse input during playback (same in all overlay modes).
+func (g *Game) handlePlaybackMouse() {
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		g.Player.TogglePause()
-		g.Player.ShowOSD()
+		if g.overlay != nil {
+			g.overlay.Show()
+		}
 	}
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
-		g.Player.ShowOSD()
+		if g.overlay != nil {
+			g.overlay.Show()
+		}
 	}
 	_, scrollY := ebiten.Wheel()
 	if scrollY > 0 {
 		g.Player.AdjustVolume(5)
-		g.Player.ShowOSD()
+		if g.overlay != nil {
+			g.overlay.Show()
+		}
 	} else if scrollY < 0 {
 		g.Player.AdjustVolume(-5)
-		g.Player.ShowOSD()
+		if g.overlay != nil {
+			g.overlay.Show()
+		}
 	}
 }
 
