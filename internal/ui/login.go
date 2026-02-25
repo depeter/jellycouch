@@ -23,6 +23,8 @@ type LoginScreen struct {
 	labels     [3]string
 
 	OnLogin func(screen *LoginScreen, server, user, pass string)
+
+	errDisplay ErrorDisplay
 }
 
 func NewLoginScreen(serverURL string, onLogin func(screen *LoginScreen, server, user, pass string)) *LoginScreen {
@@ -60,7 +62,9 @@ func (ls *LoginScreen) Update() (*ScreenTransition, error) {
 	// Mouse click — check each field and the button
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		mx, my := ebiten.CursorPosition()
-		ls.handleClick(float64(mx), float64(my))
+		if !ls.errDisplay.HandleClick(mx, my, ls.Error) {
+			ls.handleClick(float64(mx), float64(my))
+		}
 	}
 
 	// Navigation: Tab / Shift+Tab / Arrow keys (only Up/Down for field nav)
@@ -225,7 +229,9 @@ func (ls *LoginScreen) Draw(dst *ebiten.Image) {
 
 	// Error message
 	if ls.Error != "" {
-		DrawTextCentered(dst, ls.Error, cx, float64(btnY+btnH+30), FontSizeBody, ColorError)
+		tw, _ := MeasureText(ls.Error, FontSizeBody)
+		errX := cx - tw/2
+		ls.errDisplay.Draw(dst, ls.Error, errX, float64(btnY+btnH+24), FontSizeBody)
 	}
 
 	// Hint

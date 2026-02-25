@@ -36,7 +36,8 @@ type JellyseerrRequestScreen struct {
 	reqError   string
 	reqSuccess string
 
-	mu sync.Mutex
+	errDisplay ErrorDisplay
+	mu         sync.Mutex
 }
 
 func NewJellyseerrRequestScreen(client *jellyseerr.Client, imgCache *cache.ImageCache, result jellyseerr.SearchResult) *JellyseerrRequestScreen {
@@ -122,8 +123,11 @@ func (jr *JellyseerrRequestScreen) Update() (*ScreenTransition, error) {
 		return &ScreenTransition{Type: TransitionPop}, nil
 	}
 
-	// Mouse click on buttons
+	// Mouse click handling
 	mx, my, clicked := MouseJustClicked()
+	if clicked && jr.errDisplay.HandleClick(mx, my, jr.reqError) {
+		return nil, nil
+	}
 	if clicked {
 		for i, rect := range jr.buttonRects {
 			if PointInRect(mx, my, rect.X, rect.Y, rect.W, rect.H) {
@@ -303,8 +307,7 @@ func (jr *JellyseerrRequestScreen) Draw(dst *ebiten.Image) {
 
 	// Error / success messages
 	if jr.reqError != "" {
-		DrawText(dst, jr.reqError, infoX, infoY, FontSizeSmall, ColorError)
-		infoY += FontSizeSmall + 8
+		infoY += jr.errDisplay.Draw(dst, jr.reqError, infoX, infoY, FontSizeSmall)
 	}
 	if jr.reqSuccess != "" {
 		DrawText(dst, jr.reqSuccess, infoX, infoY, FontSizeSmall, ColorSuccess)

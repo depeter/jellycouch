@@ -30,7 +30,8 @@ type JellyseerrSearchScreen struct {
 
 	OnResultSelected func(result jellyseerr.SearchResult)
 
-	mu sync.Mutex
+	errDisplay ErrorDisplay
+	mu         sync.Mutex
 }
 
 func NewJellyseerrSearchScreen(client *jellyseerr.Client, imgCache *cache.ImageCache) *JellyseerrSearchScreen {
@@ -79,6 +80,9 @@ func (js *JellyseerrSearchScreen) Update() (*ScreenTransition, error) {
 
 	// Mouse click handling
 	mx, my, clicked := MouseJustClicked()
+	if clicked && js.errDisplay.HandleClick(mx, my, js.searchErr) {
+		return nil, nil
+	}
 	if clicked {
 		barX := float64(SectionPadding)
 		barY := 20.0
@@ -263,8 +267,7 @@ func (js *JellyseerrSearchScreen) Draw(dst *ebiten.Image) {
 	// Result count / error
 	y := float64(barY+barH) + 8
 	if js.searchErr != "" {
-		DrawText(dst, js.searchErr, float64(barX), y, FontSizeSmall, ColorError)
-		y += FontSizeSmall + 8
+		y += js.errDisplay.Draw(dst, js.searchErr, float64(barX), y, FontSizeSmall)
 	} else if len(js.results) > 0 {
 		DrawText(dst, fmt.Sprintf("%d results", len(js.results)), float64(barX), y, FontSizeSmall, ColorTextMuted)
 		y += FontSizeSmall + 8

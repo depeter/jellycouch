@@ -34,7 +34,8 @@ type LibraryScreen struct {
 
 	OnItemSelected func(item jellyfin.MediaItem)
 
-	mu sync.Mutex
+	errDisplay ErrorDisplay
+	mu         sync.Mutex
 }
 
 func NewLibraryScreen(client *jellyfin.Client, imgCache *cache.ImageCache, parentID, title string, itemTypes []string) *LibraryScreen {
@@ -144,6 +145,9 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 
 	// Mouse click handling
 	mx, my, clicked := MouseJustClicked()
+	if clicked && ls.errDisplay.HandleClick(mx, my, ls.loadError) {
+		return nil, nil
+	}
 	if clicked && ls.loaded {
 		for i := range ls.gridItems {
 			col := i % ls.grid.Cols
@@ -238,8 +242,9 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 	}
 
 	if ls.loadError != "" && !ls.loaded {
-		DrawTextCentered(dst, ls.loadError, float64(ScreenWidth)/2, float64(ScreenHeight)/2-20,
-			FontSizeBody, ColorError)
+		errX := float64(ScreenWidth)/2 - 300
+		errY := float64(ScreenHeight)/2 - 20
+		ls.errDisplay.Draw(dst, ls.loadError, errX, errY, FontSizeBody)
 		DrawTextCentered(dst, "Press Esc to go back", float64(ScreenWidth)/2, float64(ScreenHeight)/2+20,
 			FontSizeSmall, ColorTextMuted)
 		return

@@ -30,7 +30,8 @@ type SearchScreen struct {
 
 	OnItemSelected func(item jellyfin.MediaItem)
 
-	mu sync.Mutex
+	errDisplay ErrorDisplay
+	mu         sync.Mutex
 }
 
 func NewSearchScreen(client *jellyfin.Client, imgCache *cache.ImageCache) *SearchScreen {
@@ -86,6 +87,9 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 
 	// Mouse click handling
 	mx, my, clicked := MouseJustClicked()
+	if clicked && ss.errDisplay.HandleClick(mx, my, ss.searchError) {
+		return nil, nil
+	}
 	if clicked {
 		// Check search bar click
 		barX := float64(SectionPadding)
@@ -283,8 +287,7 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 	// Result count / error below search bar
 	y := float64(barY+barH) + 8
 	if ss.searchError != "" {
-		DrawText(dst, ss.searchError, float64(barX), y, FontSizeSmall, ColorError)
-		y += FontSizeSmall + 8
+		y += ss.errDisplay.Draw(dst, ss.searchError, float64(barX), y, FontSizeSmall)
 	} else if len(ss.results) > 0 {
 		countStr := fmt.Sprintf("%d results", len(ss.results))
 		DrawText(dst, countStr, float64(barX), y, FontSizeSmall, ColorTextMuted)

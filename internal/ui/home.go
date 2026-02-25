@@ -35,6 +35,8 @@ type HomeScreen struct {
 	OnRequests         func()
 	JellyseerrEnabled  func() bool
 
+	errDisplay ErrorDisplay
+
 	mu sync.Mutex
 }
 
@@ -167,6 +169,9 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 
 	// Mouse click handling
 	mx, my, clicked := MouseJustClicked()
+	if clicked && hs.errDisplay.HandleClick(mx, my, hs.loadError) {
+		return nil, nil
+	}
 	if clicked {
 		// Search bar click — focus the search bar for typing
 		searchX := float64(ScreenWidth)/2 - 200
@@ -371,8 +376,9 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 	}
 
 	if hs.loadError != "" && len(hs.sections) == 0 {
-		DrawTextCentered(dst, hs.loadError, float64(ScreenWidth)/2, float64(ScreenHeight)/2-20,
-			FontSizeBody, ColorError)
+		errX := float64(ScreenWidth)/2 - 300
+		errY := float64(ScreenHeight)/2 - 20
+		hs.errDisplay.Draw(dst, hs.loadError, errX, errY, FontSizeBody)
 		DrawTextCentered(dst, "Press Enter to retry", float64(ScreenWidth)/2, float64(ScreenHeight)/2+20,
 			FontSizeSmall, ColorTextMuted)
 		return

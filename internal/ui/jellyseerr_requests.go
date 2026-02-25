@@ -38,7 +38,8 @@ type JellyseerrRequestsScreen struct {
 	OnItemSelected func(result jellyseerr.SearchResult)
 	OnSearch       func()
 
-	mu sync.Mutex
+	errDisplay ErrorDisplay
+	mu         sync.Mutex
 }
 
 func NewJellyseerrRequestsScreen(client *jellyseerr.Client, imgCache *cache.ImageCache) *JellyseerrRequestsScreen {
@@ -159,6 +160,9 @@ func (jr *JellyseerrRequestsScreen) Update() (*ScreenTransition, error) {
 
 	// Mouse click
 	mx, my, clicked := MouseJustClicked()
+	if clicked && jr.errDisplay.HandleClick(mx, my, jr.loadError) {
+		return nil, nil
+	}
 	if clicked {
 		// Check filter tabs
 		for i, rect := range jr.filterRects {
@@ -309,8 +313,7 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 	}
 
 	if jr.loadError != "" {
-		DrawTextCentered(dst, jr.loadError, float64(ScreenWidth)/2, baseY+100,
-			FontSizeBody, ColorError)
+		jr.errDisplay.Draw(dst, jr.loadError, SectionPadding, baseY+100, FontSizeBody)
 		return
 	}
 
