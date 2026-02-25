@@ -3,11 +3,13 @@ package ui
 import (
 	"fmt"
 	"log"
+	"math"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+	"image/color"
 
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/jellyfin"
@@ -486,42 +488,71 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 		reqY := 12.0
 		reqW := 110.0
 		reqH := 38.0
-		btnBg := ColorSurface
-		btnBorder := ColorTextMuted
-		btnText := ColorTextSecondary
-		borderW := float32(1)
-		if hs.focusMode == 2 && hs.navBtnIndex == 0 {
-			btnBg = ColorSurfaceHover
-			btnBorder = ColorFocusBorder
-			btnText = ColorText
-			borderW = 2
+		focused := hs.focusMode == 2 && hs.navBtnIndex == 0
+		if focused {
+			vector.DrawFilledRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), ColorPrimary, false)
+			DrawTextCentered(dst, "Discovery", reqX+reqW/2+8, reqY+reqH/2, FontSizeBody, ColorBackground)
+			drawCompassIcon(dst, float32(reqX+16), float32(reqY+reqH/2), 7, ColorBackground)
+		} else {
+			vector.DrawFilledRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), ColorSurfaceHover, false)
+			vector.StrokeRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), 1, ColorPrimary, false)
+			DrawTextCentered(dst, "Discovery", reqX+reqW/2+8, reqY+reqH/2, FontSizeBody, ColorText)
+			drawCompassIcon(dst, float32(reqX+16), float32(reqY+reqH/2), 7, ColorPrimary)
 		}
-		vector.DrawFilledRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), btnBg, false)
-		vector.StrokeRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), borderW, btnBorder, false)
-		DrawTextCentered(dst, "\u2728 Discovery", reqX+reqW/2, reqY+reqH/2, FontSizeBody, btnText)
 	}
 
 	// Settings button
 	settingsY := 12.0
 	settingsW := 100.0
 	settingsH := 38.0
-	btnBg := ColorSurface
-	btnBorder := ColorTextMuted
-	btnText := ColorTextSecondary
-	borderW := float32(1)
-	if hs.focusMode == 2 && hs.navBtnIndex == 1 {
-		btnBg = ColorSurfaceHover
-		btnBorder = ColorFocusBorder
-		btnText = ColorText
-		borderW = 2
+	sfocused := hs.focusMode == 2 && hs.navBtnIndex == 1
+	if sfocused {
+		vector.DrawFilledRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), ColorPrimary, false)
+		DrawTextCentered(dst, "Settings", settingsX+settingsW/2+8, settingsY+settingsH/2, FontSizeBody, ColorBackground)
+		drawGearIcon(dst, float32(settingsX+16), float32(settingsY+settingsH/2), 7, ColorBackground)
+	} else {
+		vector.DrawFilledRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), ColorSurfaceHover, false)
+		vector.StrokeRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), 1, ColorTextSecondary, false)
+		DrawTextCentered(dst, "Settings", settingsX+settingsW/2+8, settingsY+settingsH/2, FontSizeBody, ColorText)
+		drawGearIcon(dst, float32(settingsX+16), float32(settingsY+settingsH/2), 7, ColorTextSecondary)
 	}
-	vector.DrawFilledRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), btnBg, false)
-	vector.StrokeRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), borderW, btnBorder, false)
-	DrawTextCentered(dst, "\u2699 Settings", settingsX+settingsW/2, settingsY+settingsH/2, FontSizeBody, btnText)
 
 	y := float64(NavBarHeight+10) - hs.scrollY
 	for _, section := range hs.sections {
 		h := section.Draw(dst, SectionPadding, y)
 		y += h + SectionGap
 	}
+}
+
+// drawCompassIcon draws a compass/discovery icon at (cx, cy) with given radius.
+func drawCompassIcon(dst *ebiten.Image, cx, cy, r float32, clr color.Color) {
+	// Outer ring
+	vector.StrokeCircle(dst, cx, cy, r, 1.5, clr, false)
+	// Cardinal direction dots
+	dotR := float32(1.5)
+	vector.DrawFilledCircle(dst, cx, cy-r+2, dotR, clr, false) // N
+	vector.DrawFilledCircle(dst, cx+r-2, cy, dotR, clr, false) // E
+	vector.DrawFilledCircle(dst, cx, cy+r-2, dotR, clr, false) // S
+	vector.DrawFilledCircle(dst, cx-r+2, cy, dotR, clr, false) // W
+	// Diamond needle in center
+	vector.StrokeLine(dst, cx, cy-3, cx+2, cy, 1.5, clr, false)
+	vector.StrokeLine(dst, cx+2, cy, cx, cy+3, 1.5, clr, false)
+	vector.StrokeLine(dst, cx, cy+3, cx-2, cy, 1.5, clr, false)
+	vector.StrokeLine(dst, cx-2, cy, cx, cy-3, 1.5, clr, false)
+}
+
+// drawGearIcon draws a gear/settings icon at (cx, cy) with given radius.
+func drawGearIcon(dst *ebiten.Image, cx, cy, r float32, clr color.Color) {
+	// Inner hub
+	vector.DrawFilledCircle(dst, cx, cy, r*0.35, clr, false)
+	// Outer teeth — small circles around the perimeter
+	teeth := 8
+	for i := 0; i < teeth; i++ {
+		angle := float64(i) * 2 * math.Pi / float64(teeth)
+		tx := cx + r*0.75*float32(math.Cos(angle))
+		ty := cy + r*0.75*float32(math.Sin(angle))
+		vector.DrawFilledCircle(dst, tx, ty, r*0.25, clr, false)
+	}
+	// Ring connecting teeth
+	vector.StrokeCircle(dst, cx, cy, r*0.55, 1.5, clr, false)
 }
