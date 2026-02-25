@@ -12,6 +12,7 @@ import (
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/config"
 	"github.com/depeter/jellycouch/internal/jellyfin"
+	"github.com/depeter/jellycouch/internal/jellyseerr"
 	"github.com/depeter/jellycouch/internal/ui"
 )
 
@@ -47,6 +48,11 @@ func main() {
 	}
 
 	game := app.NewGame(cfg, client, imgCache)
+
+	// Init Jellyseerr client if configured
+	if cfg.Jellyseerr.URL != "" && cfg.Jellyseerr.APIKey != "" {
+		game.Jellyseerr = jellyseerr.NewClient(cfg.Jellyseerr.URL, cfg.Jellyseerr.APIKey)
+	}
 
 	// Determine initial screen
 	if client == nil || cfg.Server.Token == "" {
@@ -102,6 +108,10 @@ func pushHomeScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCac
 	home.OnSettings = func() {
 		pushSettingsScreen(game, cfg)
 	}
+	home.OnRequests = func() {
+		pushJellyseerrRequestsScreen(game, cfg, imgCache)
+	}
+	home.JellyseerrClient = game.Jellyseerr
 	game.Screens.Replace(home)
 }
 
@@ -134,6 +144,45 @@ func pushSearchScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageC
 func pushSettingsScreen(game *app.Game, cfg *config.Config) {
 	settings := ui.NewSettingsScreen(cfg, func() {
 		cfg.Save()
+		// Reinitialize Jellyseerr client if config changed
+		if cfg.Jellyseerr.URL != "" && cfg.Jellyseerr.APIKey != "" {
+			game.Jellyseerr = jellyseerr.NewClient(cfg.Jellyseerr.URL, cfg.Jellyseerr.APIKey)
+		} else {
+			game.Jellyseerr = nil
+		}
 	})
 	game.Screens.Push(settings)
+}
+
+func pushJellyseerrSearchScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache) {
+	if game.Jellyseerr == nil {
+		return
+	}
+	search := ui.NewJellyseerrSearchScreen(game.Jellyseerr, imgCache)
+	search.OnResultSelected = func(result jellyseerr.SearchResult) {
+		pushJellyseerrRequestScreen(game, cfg, imgCache, result)
+	}
+	game.Screens.Push(search)
+}
+
+func pushJellyseerrRequestScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache, result jellyseerr.SearchResult) {
+	if game.Jellyseerr == nil {
+		return
+	}
+	reqScreen := ui.NewJellyseerrRequestScreen(game.Jellyseerr, imgCache, result)
+	game.Screens.Push(reqScreen)
+}
+
+func pushJellyseerrRequestsScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache) {
+	if game.Jellyseerr == nil {
+		return
+	}
+	reqsScreen := ui.NewJellyseerrRequestsScreen(game.Jellyseerr, imgCache)
+	reqsScreen.OnItemSelected = func(result jellyseerr.SearchResult) {
+		pushJellyseerrRequestScreen(game, cfg, imgCache, result)
+	}
+	reqsScreen.OnSearch = func() {
+		pushJellyseerrSearchScreen(game, cfg, imgCache)
+	}
+	game.Screens.Push(reqsScreen)
 }

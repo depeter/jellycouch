@@ -9,17 +9,19 @@ import (
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/config"
 	"github.com/depeter/jellycouch/internal/jellyfin"
+	"github.com/depeter/jellycouch/internal/jellyseerr"
 	"github.com/depeter/jellycouch/internal/player" // used for player.New, player.GetWindowHandle
 	"github.com/depeter/jellycouch/internal/ui"
 )
 
 // Game implements ebiten.Game and manages the overall application.
 type Game struct {
-	Config  *config.Config
-	Client  *jellyfin.Client
-	Player  *player.Player
-	Cache   *cache.ImageCache
-	Screens *ui.ScreenManager
+	Config     *config.Config
+	Client     *jellyfin.Client
+	Jellyseerr *jellyseerr.Client
+	Player     *player.Player
+	Cache      *cache.ImageCache
+	Screens    *ui.ScreenManager
 
 	State         AppState
 	Width, Height int

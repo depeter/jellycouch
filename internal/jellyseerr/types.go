@@ -1,0 +1,197 @@
+package jellyseerr
+
+// Media status values from Jellyseerr API.
+const (
+	StatusUnknown            = 1
+	StatusPending            = 2
+	StatusPartiallyAvailable = 3
+	StatusProcessing         = 4
+	StatusAvailable          = 5
+)
+
+// Request status values from Jellyseerr API.
+const (
+	RequestPending  = 1
+	RequestApproved = 2
+	RequestDeclined = 3
+)
+
+// SearchResult represents a single search result from Jellyseerr (TMDB data).
+type SearchResult struct {
+	ID           int        `json:"id"`
+	MediaType    string     `json:"mediaType"` // "movie", "tv", "person"
+	Title        string     `json:"title"`     // movies
+	Name         string     `json:"name"`      // tv shows
+	PosterPath   string     `json:"posterPath"`
+	Overview     string     `json:"overview"`
+	ReleaseDate  string     `json:"releaseDate"`  // movies
+	FirstAirDate string     `json:"firstAirDate"` // tv
+	MediaInfo    *MediaInfo `json:"mediaInfo"`
+}
+
+// DisplayTitle returns the appropriate title for the media type.
+func (sr SearchResult) DisplayTitle() string {
+	if sr.Title != "" {
+		return sr.Title
+	}
+	return sr.Name
+}
+
+// Year extracts the year from the release/air date.
+func (sr SearchResult) Year() string {
+	d := sr.ReleaseDate
+	if d == "" {
+		d = sr.FirstAirDate
+	}
+	if len(d) >= 4 {
+		return d[:4]
+	}
+	return ""
+}
+
+// PosterURL returns the full TMDB poster URL.
+func (sr SearchResult) PosterURL() string {
+	if sr.PosterPath == "" {
+		return ""
+	}
+	return "https://image.tmdb.org/t/p/w300" + sr.PosterPath
+}
+
+// MediaInfo contains request/availability status for a media item.
+type MediaInfo struct {
+	ID       int            `json:"id"`
+	Status   int            `json:"status"`
+	Requests []MediaRequest `json:"requests"`
+}
+
+// MediaRequest represents a request in Jellyseerr.
+type MediaRequest struct {
+	ID          int          `json:"id"`
+	Status      int          `json:"status"` // 1=pending, 2=approved, 3=declined
+	Type        string       `json:"type"`   // "movie" or "tv"
+	Media       RequestMedia `json:"media"`
+	CreatedAt   string       `json:"createdAt"`
+	RequestedBy RequestUser  `json:"requestedBy"`
+}
+
+// RequestMedia is the media info embedded in a request.
+type RequestMedia struct {
+	ID         int    `json:"id"`
+	TmdbID     int    `json:"tmdbId"`
+	Status     int    `json:"status"`
+	MediaType  string `json:"mediaType"`
+	PosterPath string `json:"posterPath"`
+}
+
+// RequestUser is the user who made a request.
+type RequestUser struct {
+	ID          int    `json:"id"`
+	DisplayName string `json:"displayName"`
+}
+
+// RequestCount holds aggregate request counts.
+type RequestCount struct {
+	Total      int `json:"total"`
+	Movie      int `json:"movie"`
+	TV         int `json:"tv"`
+	Pending    int `json:"pending"`
+	Approved   int `json:"approved"`
+	Declined   int `json:"declined"`
+	Processing int `json:"processing"`
+	Available  int `json:"available"`
+}
+
+// PagedResponse wraps a paged API response.
+type PagedResponse struct {
+	PageInfo PageInfo `json:"pageInfo"`
+}
+
+// PageInfo contains pagination metadata.
+type PageInfo struct {
+	Pages   int `json:"pages"`
+	Page    int `json:"page"`
+	Results int `json:"results"`
+}
+
+// SearchResponse is the response from the search endpoint.
+type SearchResponse struct {
+	Page         int            `json:"page"`
+	TotalPages   int            `json:"totalPages"`
+	TotalResults int            `json:"totalResults"`
+	Results      []SearchResult `json:"results"`
+}
+
+// RequestsResponse is the response from the requests list endpoint.
+type RequestsResponse struct {
+	PageInfo PageInfo       `json:"pageInfo"`
+	Results  []MediaRequest `json:"results"`
+}
+
+// MovieDetail contains detailed movie info from Jellyseerr.
+type MovieDetail struct {
+	ID          int        `json:"id"`
+	Title       string     `json:"title"`
+	Overview    string     `json:"overview"`
+	PosterPath  string     `json:"posterPath"`
+	ReleaseDate string     `json:"releaseDate"`
+	VoteAverage float64    `json:"voteAverage"`
+	MediaInfo   *MediaInfo `json:"mediaInfo"`
+}
+
+// TVDetail contains detailed TV show info from Jellyseerr.
+type TVDetail struct {
+	ID           int        `json:"id"`
+	Name         string     `json:"name"`
+	Overview     string     `json:"overview"`
+	PosterPath   string     `json:"posterPath"`
+	FirstAirDate string     `json:"firstAirDate"`
+	VoteAverage  float64    `json:"voteAverage"`
+	NumberOfSeasons int     `json:"numberOfSeasons"`
+	Seasons      []Season   `json:"seasons"`
+	MediaInfo    *MediaInfo `json:"mediaInfo"`
+}
+
+// Season represents a TV season.
+type Season struct {
+	ID           int    `json:"id"`
+	SeasonNumber int    `json:"seasonNumber"`
+	Name         string `json:"name"`
+	EpisodeCount int    `json:"episodeCount"`
+}
+
+// CreateRequestBody is the JSON body for creating a new request.
+type CreateRequestBody struct {
+	MediaType string `json:"mediaType"`
+	MediaID   int    `json:"mediaId"`
+	Seasons   []int  `json:"seasons,omitempty"`
+}
+
+// RequestStatusLabel returns a human-readable label for a request status.
+func RequestStatusLabel(status int) string {
+	switch status {
+	case RequestPending:
+		return "Pending"
+	case RequestApproved:
+		return "Approved"
+	case RequestDeclined:
+		return "Declined"
+	default:
+		return "Unknown"
+	}
+}
+
+// MediaStatusLabel returns a human-readable label for a media status.
+func MediaStatusLabel(status int) string {
+	switch status {
+	case StatusPending:
+		return "Pending"
+	case StatusPartiallyAvailable:
+		return "Partial"
+	case StatusProcessing:
+		return "Processing"
+	case StatusAvailable:
+		return "Available"
+	default:
+		return ""
+	}
+}

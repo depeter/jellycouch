@@ -16,6 +16,8 @@ type GridItem struct {
 	Image    *ebiten.Image
 	Progress float64 // 0.0 to 1.0, playback progress
 	Watched  bool
+	// Jellyseerr request status: 0=none, 2=pending, 3=partial, 4=processing, 5=available
+	RequestStatus int
 	// Set by the grid during layout
 	X, Y float64
 }
@@ -261,4 +263,43 @@ func CreatePlaceholderImage(w, h int, clr color.Color) *ebiten.Image {
 // ImageFromRGBA converts a standard image.RGBA to an ebiten image.
 func ImageFromRGBA(rgba *image.RGBA) *ebiten.Image {
 	return ebiten.NewImageFromImage(rgba)
+}
+
+// drawRequestBadge draws a status badge on a poster item (top-left corner).
+func drawRequestBadge(dst *ebiten.Image, status int, x, y float64) {
+	label := ""
+	switch status {
+	case 2: // pending
+		label = "Pending"
+	case 3: // partially available
+		label = "Partial"
+	case 4: // processing
+		label = "Processing"
+	case 5: // available
+		label = "Available"
+	default:
+		return
+	}
+	badgeColor := statusBadgeColor(status)
+	tw, _ := MeasureText(label, FontSizeCaption)
+	bw := float32(tw + 10)
+	bh := float32(FontSizeCaption + 6)
+	vector.DrawFilledRect(dst, float32(x+2), float32(y+2), bw, bh, badgeColor, false)
+	DrawText(dst, label, x+7, y+5, FontSizeCaption, ColorText)
+}
+
+// statusBadgeColor returns the badge background color for a media status.
+func statusBadgeColor(status int) color.RGBA {
+	switch status {
+	case 2: // pending
+		return color.RGBA{R: 0xCC, G: 0xA0, B: 0x00, A: 0xE0} // yellow
+	case 3: // partially available
+		return color.RGBA{R: 0x00, G: 0x80, B: 0xCC, A: 0xE0} // blue
+	case 4: // processing
+		return color.RGBA{R: 0x00, G: 0x80, B: 0xCC, A: 0xE0} // blue
+	case 5: // available
+		return color.RGBA{R: 0x30, G: 0xA0, B: 0x50, A: 0xE0} // green
+	default:
+		return color.RGBA{R: 0x60, G: 0x60, B: 0x60, A: 0xE0} // gray
+	}
 }

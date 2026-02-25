@@ -11,6 +11,7 @@ import (
 
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/jellyfin"
+	"github.com/depeter/jellycouch/internal/jellyseerr"
 )
 
 // HomeScreen displays library sections: Continue Watching, Next Up, and each library's latest items.
@@ -32,6 +33,10 @@ type HomeScreen struct {
 	OnItemSelected func(item jellyfin.MediaItem)
 	OnSearch       func(query string)
 	OnSettings     func()
+	OnRequests     func()
+
+	// Jellyseerr client (nil if not configured)
+	JellyseerrClient *jellyseerr.Client
 
 	mu sync.Mutex
 }
@@ -189,6 +194,19 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 			}
 			return nil, nil
 		}
+		// Requests button click (only when Jellyseerr is configured)
+		if hs.JellyseerrClient != nil {
+			reqX := settingsX - 100
+			reqY := 14.0
+			reqW := 90.0
+			reqH := 34.0
+			if PointInRect(mx, my, reqX, reqY, reqW, reqH) {
+				if hs.OnRequests != nil {
+					hs.OnRequests()
+				}
+				return nil, nil
+			}
+		}
 	}
 	if clicked && hs.loaded && len(hs.sections) > 0 {
 		for i, section := range hs.sections {
@@ -269,6 +287,13 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
 		if hs.OnSettings != nil {
 			hs.OnSettings()
+		}
+		return nil, nil
+	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyR) && hs.JellyseerrClient != nil {
+		if hs.OnRequests != nil {
+			hs.OnRequests()
 		}
 		return nil, nil
 	}
@@ -387,8 +412,18 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 		}
 	}
 
-	// Settings button
+	// Requests button (only when Jellyseerr configured)
 	settingsX := float64(ScreenWidth) - SectionPadding - 80
+	if hs.JellyseerrClient != nil {
+		reqX := settingsX - 100
+		reqY := 14.0
+		reqW := 90.0
+		reqH := 34.0
+		vector.DrawFilledRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), ColorSurface, false)
+		DrawTextCentered(dst, "Requests", reqX+reqW/2, reqY+reqH/2, FontSizeSmall, ColorTextSecondary)
+	}
+
+	// Settings button
 	settingsY := 14.0
 	settingsW := 80.0
 	settingsH := 34.0

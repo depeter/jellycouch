@@ -65,6 +65,13 @@ func NewSettingsScreen(cfg *config.Config, onSave func()) *SettingsScreen {
 			},
 		},
 		{
+			Label: "Jellyseerr",
+			Items: []settingsItem{
+				{Label: "URL", Value: func() string { return cfg.Jellyseerr.URL }, OnChange: func(v string) error { cfg.Jellyseerr.URL = v; return nil }},
+				{Label: "API Key", Value: func() string { return cfg.Jellyseerr.APIKey }, OnChange: func(v string) error { cfg.Jellyseerr.APIKey = v; return nil }},
+			},
+		},
+		{
 			Label: "Subtitles",
 			Items: []settingsItem{
 				{Label: "Font", Value: func() string { return cfg.Subtitles.Font }, OnChange: func(v string) error { cfg.Subtitles.Font = v; return nil }},
