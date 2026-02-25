@@ -352,7 +352,7 @@ func (ds *JellyseerrDiscoverScreen) Update() (*ScreenTransition, error) {
 }
 
 func (ds *JellyseerrDiscoverScreen) ensureSectionVisible() {
-	sectionHeight := float64(PosterHeight + FontSizeSmall + 16 + PosterFocusPad*2 + SectionTitleH + SectionGap)
+	sectionHeight := float64(PosterHeight + FontSizeSmall + FontSizeCaption + 24 + PosterFocusPad*2 + SectionTitleH + SectionGap)
 	targetY := float64(ds.sectionIndex) * sectionHeight
 	maxScroll := targetY - float64(ScreenHeight)/4
 	if maxScroll < 0 {

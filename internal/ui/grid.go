@@ -98,7 +98,7 @@ func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 	baseY += SectionTitleH
 
 	// Create a clipping sub-image for the poster row
-	rowHeight := float64(PosterHeight + FontSizeSmall + 16 + PosterFocusPad*2)
+	rowHeight := float64(PosterHeight + FontSizeSmall + FontSizeCaption + 24 + PosterFocusPad*2)
 
 	hasLeft := pg.OffsetX > 1
 	hasRight := false
@@ -182,8 +182,14 @@ func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 		if isFocused {
 			titleColor = ColorText
 		}
-		title := truncateText(item.Title, PosterWidth, FontSizeCaption)
-		DrawText(dst, title, ix, iy+PosterHeight+4, FontSizeCaption, titleColor)
+		title := truncateText(item.Title, PosterWidth, FontSizeSmall)
+		DrawText(dst, title, ix, iy+PosterHeight+6, FontSizeSmall, titleColor)
+
+		// Subtitle below title
+		if item.Subtitle != "" {
+			sub := truncateText(item.Subtitle, PosterWidth, FontSizeCaption)
+			DrawText(dst, sub, ix, iy+PosterHeight+6+FontSizeSmall+4, FontSizeCaption, ColorTextMuted)
+		}
 	}
 
 	// Check if last item extends beyond view

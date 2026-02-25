@@ -115,7 +115,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 				col := i % ss.grid.Cols
 				row := i / ss.grid.Cols
 				x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-				iy := resultBaseY + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+				iy := resultBaseY + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
 				if PointInRect(mx, my, x, iy, PosterWidth, PosterHeight) {
 					ss.focusMode = 1
 					ss.grid.Focused = i
@@ -138,7 +138,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 			col := i % ss.grid.Cols
 			row := i / ss.grid.Cols
 			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-			iy := resultBaseY + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+			iy := resultBaseY + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
 			if PointInRect(rmx, rmy, x, iy, PosterWidth, PosterHeight) {
 				if i < len(ss.results) {
 					if ss.results[i].Played {
@@ -216,6 +216,16 @@ func (ss *SearchScreen) doSearch() {
 		ss.gridItems[i] = GridItem{
 			ID:    item.ID,
 			Title: item.Name,
+		}
+		if item.Type == "Episode" && item.SeriesName != "" {
+			ss.gridItems[i].Title = item.SeriesName
+			ep := fmt.Sprintf("S%dE%d", item.ParentIndexNumber, item.IndexNumber)
+			if item.Name != "" {
+				ep += " · " + item.Name
+			}
+			ss.gridItems[i].Subtitle = ep
+		} else if item.Year > 0 {
+			ss.gridItems[i].Subtitle = fmt.Sprintf("%d", item.Year)
 		}
 		url := ss.client.GetPosterURL(item.ID)
 		if img := ss.imgCache.Get(url); img != nil {
@@ -310,7 +320,7 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 		row := i / ss.grid.Cols
 
 		x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-		iy := y + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8) - ss.scrollY
+		iy := y + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16) - ss.scrollY
 
 		// Skip offscreen
 		if iy+PosterHeight < 0 || iy > float64(ScreenHeight) {

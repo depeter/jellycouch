@@ -224,7 +224,14 @@ func (ls *LibraryScreen) loadData(start int) {
 			ID:    item.ID,
 			Title: item.Name,
 		}
-		if item.Year > 0 {
+		if item.Type == "Episode" && item.SeriesName != "" {
+			ls.gridItems[i].Title = item.SeriesName
+			ep := fmt.Sprintf("S%dE%d", item.ParentIndexNumber, item.IndexNumber)
+			if item.Name != "" {
+				ep += " · " + item.Name
+			}
+			ls.gridItems[i].Subtitle = ep
+		} else if item.Year > 0 {
 			ls.gridItems[i].Subtitle = fmt.Sprintf("%d", item.Year)
 		}
 
@@ -313,7 +320,7 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 			col := i % ls.grid.Cols
 			row := i / ls.grid.Cols
 			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-			y := gridBase + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+			y := gridBase + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
 			if PointInRect(mx, my, x, y, PosterWidth, PosterHeight) {
 				ls.focusMode = focusGrid
 				ls.filterBar.Active = false
@@ -334,7 +341,7 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 			col := i % ls.grid.Cols
 			row := i / ls.grid.Cols
 			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-			y := gridBase + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+			y := gridBase + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
 			if PointInRect(rmx, rmy, x, y, PosterWidth, PosterHeight) {
 				if i < len(ls.items) {
 					if ls.items[i].Played {
@@ -501,7 +508,7 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 		row := i / ls.grid.Cols
 
 		x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-		y := baseY + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+		y := baseY + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
 
 		// Skip offscreen
 		if y+PosterHeight < 0 || y > float64(ScreenHeight) {
@@ -515,7 +522,7 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 	// Loading more indicator at bottom
 	if ls.loadingMore {
 		totalRows := (len(ls.items) + ls.grid.Cols - 1) / ls.grid.Cols
-		bottomY := baseY + float64(totalRows)*(PosterHeight+PosterGap+FontSizeCaption+8) + 20
+		bottomY := baseY + float64(totalRows)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16) + 20
 		DrawTextCentered(dst, "Loading more...", float64(ScreenWidth)/2, bottomY,
 			FontSizeBody, ColorTextSecondary)
 	}
@@ -564,6 +571,12 @@ func drawPosterItem(dst *ebiten.Image, item GridItem, x, y float64, focused bool
 	if focused {
 		titleColor = ColorText
 	}
-	title := truncateText(item.Title, PosterWidth, FontSizeCaption)
-	DrawText(dst, title, x, y+PosterHeight+4, FontSizeCaption, titleColor)
+	title := truncateText(item.Title, PosterWidth, FontSizeSmall)
+	DrawText(dst, title, x, y+PosterHeight+6, FontSizeSmall, titleColor)
+
+	// Subtitle below title
+	if item.Subtitle != "" {
+		sub := truncateText(item.Subtitle, PosterWidth, FontSizeCaption)
+		DrawText(dst, sub, x, y+PosterHeight+6+FontSizeSmall+4, FontSizeCaption, ColorTextMuted)
+	}
 }

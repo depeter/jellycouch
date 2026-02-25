@@ -21,10 +21,10 @@ var (
 
 // Layout constants
 const (
-	PosterWidth     = 150
-	PosterHeight    = 225
-	PosterGap       = 20
-	PosterFocusPad  = 6
+	PosterWidth     = 220
+	PosterHeight    = 330
+	PosterGap       = 28
+	PosterFocusPad  = 8
 
 	BackdropHeight  = 400
 

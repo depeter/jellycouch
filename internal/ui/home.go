@@ -170,7 +170,15 @@ func (hs *HomeScreen) convertItemsForGrid(grid *PosterGrid, items []jellyfin.Med
 			ID:    item.ID,
 			Title: item.Name,
 		}
-		if item.Year > 0 {
+		// For episodes, show the series name as the title and episode info as subtitle
+		if item.Type == "Episode" && item.SeriesName != "" {
+			result[i].Title = item.SeriesName
+			ep := fmt.Sprintf("S%dE%d", item.ParentIndexNumber, item.IndexNumber)
+			if item.Name != "" {
+				ep += " · " + item.Name
+			}
+			result[i].Subtitle = ep
+		} else if item.Year > 0 {
 			result[i].Subtitle = fmt.Sprintf("%d", item.Year)
 		}
 
@@ -552,7 +560,7 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 }
 
 func (hs *HomeScreen) ensureSectionVisible() {
-	sectionHeight := float64(PosterHeight + FontSizeSmall + 16 + PosterFocusPad*2 + SectionTitleH + SectionGap)
+	sectionHeight := float64(PosterHeight + FontSizeSmall + FontSizeCaption + 24 + PosterFocusPad*2 + SectionTitleH + SectionGap)
 	targetY := float64(hs.sectionIndex) * sectionHeight
 	maxScroll := targetY - float64(ScreenHeight)/4
 	if maxScroll < 0 {

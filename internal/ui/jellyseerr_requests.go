@@ -266,7 +266,7 @@ func (jr *JellyseerrRequestsScreen) Update() (*ScreenTransition, error) {
 				col := i % jr.grid.Cols
 				row := i / jr.grid.Cols
 				x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-				iy := baseY + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+				iy := baseY + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
 				if PointInRect(mx, my, x, iy, PosterWidth, PosterHeight) {
 					jr.focusMode = 1
 					jr.grid.Focused = i
@@ -398,7 +398,7 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 		col := i % jr.grid.Cols
 		row := i / jr.grid.Cols
 		x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-		iy := baseY + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8) - jr.scrollY
+		iy := baseY + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16) - jr.scrollY
 
 		if iy+PosterHeight < 0 || iy > float64(ScreenHeight) {
 			continue

@@ -355,7 +355,7 @@ func (ds *DetailScreen) Draw(dst *ebiten.Image) {
 				col := i % ds.episodeGrid.Cols
 				row := i / ds.episodeGrid.Cols
 				ex := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-				ey := y + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+				ey := y + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
 
 				ds.episodeRects[i] = ButtonRect{X: ex, Y: ey, W: PosterWidth, H: PosterHeight}
 
