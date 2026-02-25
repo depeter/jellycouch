@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/gen2brain/go-mpv"
 
@@ -52,6 +54,27 @@ func must(err error) {
 	if err != nil {
 		log.Printf("mpv option warning: %v", err)
 	}
+}
+
+// mpvCmd builds a quoted command string for mpv_command_string.
+// This avoids go-mpv's Command() which has a missing NULL terminator
+// in its nocgo char** array on Windows.
+func mpvCmd(args ...string) string {
+	var b strings.Builder
+	for i, arg := range args {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteByte('"')
+		for _, c := range arg {
+			if c == '"' || c == '\\' {
+				b.WriteByte('\\')
+			}
+			b.WriteRune(c)
+		}
+		b.WriteByte('"')
+	}
+	return b.String()
 }
 
 // mpvThread runs on a locked OS thread. All mpv API calls happen here.
@@ -106,21 +129,27 @@ func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 
 	initErr <- nil
 
-	// Combined event + command loop
+	// Combined event + command loop.
+	// Use WaitEvent(0) (non-blocking poll) to avoid purego float64
+	// argument issues on Windows, then sleep between iterations.
 	for {
-		// Drain all pending commands before waiting for events
-		drained := false
-		for !drained {
+		// Process any pending command immediately
+		select {
+		case cmd := <-p.cmdCh:
+			cmd.result <- cmd.fn(m)
+			continue
+		default:
+		}
+
+		// Poll for mpv events (non-blocking: timeout=0)
+		ev := m.WaitEvent(0)
+		if ev == nil || ev.EventID == mpv.EventNone {
+			// No events and no commands — wait for a command or poll again shortly
 			select {
 			case cmd := <-p.cmdCh:
 				cmd.result <- cmd.fn(m)
-			default:
-				drained = true
+			case <-time.After(16 * time.Millisecond):
 			}
-		}
-
-		ev := m.WaitEvent(0.1)
-		if ev == nil {
 			continue
 		}
 
@@ -196,28 +225,28 @@ func (p *Player) LoadFile(url string, itemID string) error {
 	p.paused = false
 	p.mu.Unlock()
 	return p.do(func(m *mpv.Mpv) error {
-		return m.Command([]string{"loadfile", url})
+		return m.CommandString(mpvCmd("loadfile", url))
 	})
 }
 
 // Seek seeks relative to current position.
 func (p *Player) Seek(seconds float64) error {
 	return p.do(func(m *mpv.Mpv) error {
-		return m.Command([]string{"seek", fmt.Sprintf("%.1f", seconds), "relative"})
+		return m.CommandString(mpvCmd("seek", fmt.Sprintf("%.1f", seconds), "relative"))
 	})
 }
 
 // SeekAbsolute seeks to an absolute position.
 func (p *Player) SeekAbsolute(seconds float64) error {
 	return p.do(func(m *mpv.Mpv) error {
-		return m.Command([]string{"seek", fmt.Sprintf("%.1f", seconds), "absolute"})
+		return m.CommandString(mpvCmd("seek", fmt.Sprintf("%.1f", seconds), "absolute"))
 	})
 }
 
 // TogglePause toggles pause state.
 func (p *Player) TogglePause() error {
 	return p.do(func(m *mpv.Mpv) error {
-		return m.Command([]string{"cycle", "pause"})
+		return m.CommandString(mpvCmd("cycle", "pause"))
 	})
 }
 
@@ -231,21 +260,21 @@ func (p *Player) SetVolume(vol int) error {
 // CycleSubtitles cycles through subtitle tracks.
 func (p *Player) CycleSubtitles() error {
 	return p.do(func(m *mpv.Mpv) error {
-		return m.Command([]string{"cycle", "sub"})
+		return m.CommandString(mpvCmd("cycle", "sub"))
 	})
 }
 
 // CycleAudio cycles through audio tracks.
 func (p *Player) CycleAudio() error {
 	return p.do(func(m *mpv.Mpv) error {
-		return m.Command([]string{"cycle", "audio"})
+		return m.CommandString(mpvCmd("cycle", "audio"))
 	})
 }
 
 // ToggleMute toggles audio mute.
 func (p *Player) ToggleMute() error {
 	return p.do(func(m *mpv.Mpv) error {
-		return m.Command([]string{"cycle", "mute"})
+		return m.CommandString(mpvCmd("cycle", "mute"))
 	})
 }
 
@@ -255,7 +284,7 @@ func (p *Player) Stop() error {
 	p.playing = false
 	p.mu.Unlock()
 	return p.do(func(m *mpv.Mpv) error {
-		return m.Command([]string{"stop"})
+		return m.CommandString(mpvCmd("stop"))
 	})
 }
 
