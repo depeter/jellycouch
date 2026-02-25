@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"os/exec"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -57,6 +59,14 @@ func (ti *TextInput) Update() bool {
 		ti.Cursor = runeCount
 	}
 
+	// Ctrl+V paste from clipboard
+	if inpututil.IsKeyJustPressed(ebiten.KeyV) && (ebiten.IsKeyPressed(ebiten.KeyControl) || ebiten.IsKeyPressed(ebiten.KeyMeta)) {
+		if clip := readClipboard(); clip != "" {
+			ti.insertAtCursor(clip)
+			changed = true
+		}
+	}
+
 	// Character input
 	runes := ebiten.AppendInputChars(nil)
 	for _, r := range runes {
@@ -107,4 +117,20 @@ func (ti *TextInput) splitAtCursor() (before, after string) {
 		bytePos += size
 	}
 	return ti.Text[:bytePos], ti.Text[bytePos:]
+}
+
+// readClipboard reads text from the system clipboard using xclip or xsel.
+func readClipboard() string {
+	// Try xclip first, then xsel
+	for _, args := range [][]string{
+		{"xclip", "-selection", "clipboard", "-o"},
+		{"xsel", "--clipboard", "--output"},
+		{"wl-paste", "--no-newline"},
+	} {
+		out, err := exec.Command(args[0], args[1:]...).Output()
+		if err == nil {
+			return strings.TrimRight(string(out), "\n\r")
+		}
+	}
+	return ""
 }
