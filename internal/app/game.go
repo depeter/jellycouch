@@ -155,6 +155,33 @@ func (g *Game) PlayURL(url string) {
 	g.playbackEnded = false
 }
 
+// PlayURL plays an arbitrary URL (e.g. YouTube trailer) via mpv without Jellyfin progress reporting.
+func (g *Game) PlayURL(url string) {
+	if g.Player == nil {
+		if err := g.InitPlayer(); err != nil {
+			log.Printf("Failed to init player: %v", err)
+			return
+		}
+	}
+
+	wid, err := player.GetWindowHandle()
+	if err != nil {
+		log.Printf("Failed to get window handle: %v", err)
+		return
+	}
+	if err := g.Player.SetWindowID(wid); err != nil {
+		log.Printf("Failed to set window ID: %v", err)
+	}
+
+	if err := g.Player.LoadFile(url, ""); err != nil {
+		log.Printf("Failed to load URL: %v", err)
+		return
+	}
+
+	g.State = StatePlay
+	g.playbackEnded = false
+}
+
 // StopPlayback transitions back to browse mode.
 func (g *Game) StopPlayback() {
 	if g.overlay != nil {

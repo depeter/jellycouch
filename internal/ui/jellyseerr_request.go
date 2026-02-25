@@ -231,6 +231,7 @@ func (jr *JellyseerrRequestScreen) preselectSonarrDefaults() {
 	}
 }
 
+
 func (jr *JellyseerrRequestScreen) updateButtons() {
 	jr.buttons = nil
 	if jr.status < jellyseerr.StatusPending {
