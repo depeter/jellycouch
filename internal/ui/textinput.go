@@ -117,4 +117,9 @@ func (ti *TextInput) splitAtCursor() (before, after string) {
 	return ti.Text[:bytePos], ti.Text[bytePos:]
 }
 
+// CursorAtEnd reports whether the cursor is at the end of the text.
+func (ti *TextInput) CursorAtEnd() bool {
+	return ti.Cursor >= utf8.RuneCountInString(ti.Text)
+}
+
 // readClipboard is implemented per-platform in clipboard_*.go
