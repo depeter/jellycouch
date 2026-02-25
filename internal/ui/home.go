@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -30,12 +31,14 @@ type HomeScreen struct {
 	targetScrollY float64
 
 	// Callbacks
-	OnItemSelected func(item jellyfin.MediaItem)
-	OnSearch       func(query string)
-	OnSettings     func()
-	OnRequests         func()
-	JellyseerrEnabled  func() bool
+	OnItemSelected    func(item jellyfin.MediaItem)
+	OnSearch          func(query string)
+	OnSettings        func()
+	OnRequests        func()
+	OnAuthError       func()
+	JellyseerrEnabled func() bool
 
+	authFailed bool
 	errDisplay ErrorDisplay
 
 	mu sync.Mutex
@@ -109,7 +112,11 @@ func (hs *HomeScreen) loadData() {
 		sections[0].Active = true
 	}
 	if len(sections) == 0 && anyError != nil {
-		hs.loadError = "Failed to load: " + anyError.Error()
+		errMsg := anyError.Error()
+		hs.loadError = "Failed to load: " + errMsg
+		if strings.Contains(errMsg, "401") || strings.Contains(errMsg, "Unauthorized") {
+			hs.authFailed = true
+		}
 	}
 	hs.loaded = true
 	hs.loading = false
@@ -159,6 +166,11 @@ func (hs *HomeScreen) convertItemsForGrid(grid *PosterGrid, items []jellyfin.Med
 func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
+
+	if hs.authFailed && hs.OnAuthError != nil {
+		hs.OnAuthError()
+		return nil, nil
+	}
 
 	// Mouse wheel scroll (always active)
 	_, wy := MouseWheelDelta()

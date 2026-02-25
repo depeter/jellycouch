@@ -57,32 +57,15 @@ func main() {
 
 	// Determine initial screen
 	if client == nil || cfg.Server.Token == "" {
-		// Show login screen
-		loginScreen := ui.NewLoginScreen(cfg.Server.URL, func(screen *ui.LoginScreen, server, user, pass string) {
-			screen.Busy = true
-			screen.Error = ""
-			go func() {
-				c := jellyfin.NewClient(server)
-				if err := c.Authenticate(user, pass); err != nil {
-					screen.Error = "Login failed: " + err.Error()
-					screen.Busy = false
-					return
-				}
-				// Save credentials
-				cfg.Server.URL = server
-				cfg.Server.Username = user
-				cfg.Server.Token = c.Token()
-				cfg.Server.UserID = c.UserID()
-				cfg.Save()
-
-				game.Client = c
-				screen.Busy = false
-				pushHomeScreen(game, cfg, imgCache)
-			}()
-		})
-		game.Screens.Push(loginScreen)
+		pushLoginScreen(game, cfg, imgCache)
 	} else {
-		pushHomeScreen(game, cfg, imgCache)
+		// Validate token before showing home screen
+		if _, err := client.GetViews(); err != nil {
+			log.Printf("Token invalid, showing login: %v", err)
+			pushLoginScreen(game, cfg, imgCache)
+		} else {
+			pushHomeScreen(game, cfg, imgCache)
+		}
 	}
 
 	// Configure window
@@ -97,6 +80,32 @@ func main() {
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func pushLoginScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache) {
+	loginScreen := ui.NewLoginScreen(cfg.Server.URL, func(screen *ui.LoginScreen, server, user, pass string) {
+		screen.Busy = true
+		screen.Error = ""
+		go func() {
+			c := jellyfin.NewClient(server)
+			if err := c.Authenticate(user, pass); err != nil {
+				screen.Error = "Login failed: " + err.Error()
+				screen.Busy = false
+				return
+			}
+			// Save credentials
+			cfg.Server.URL = server
+			cfg.Server.Username = user
+			cfg.Server.Token = c.Token()
+			cfg.Server.UserID = c.UserID()
+			cfg.Save()
+
+			game.Client = c
+			screen.Busy = false
+			pushHomeScreen(game, cfg, imgCache)
+		}()
+	})
+	game.Screens.Replace(loginScreen)
 }
 
 func pushHomeScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache) {
@@ -115,6 +124,9 @@ func pushHomeScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCac
 	}
 	home.JellyseerrEnabled = func() bool {
 		return game.Jellyseerr != nil
+	}
+	home.OnAuthError = func() {
+		pushLoginScreen(game, cfg, imgCache)
 	}
 	game.Screens.Replace(home)
 }
