@@ -155,7 +155,9 @@ func (g *Game) Update() error {
 			return nil
 		}
 
-		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) || inpututil.IsKeyJustPressed(ebiten.KeyBackspace) {
+		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) ||
+			inpututil.IsKeyJustPressed(ebiten.KeyBackspace) ||
+			inpututil.IsMouseButtonJustPressed(ebiten.MouseButton3) {
 			g.StopPlayback()
 			return nil
 		}
@@ -196,34 +198,43 @@ func (g *Game) handlePlaybackInput() {
 	// Configured keybinds
 	if keyJustPressed(kb.PlayPause) {
 		g.Player.TogglePause()
-		g.Player.ShowProgress()
+		g.Player.ShowOSD()
 	}
 	if keyJustPressed(kb.SeekForward) {
 		g.Player.Seek(10)
+		g.Player.ShowOSD()
 	}
 	if keyJustPressed(kb.SeekBackward) {
 		g.Player.Seek(-10)
+		g.Player.ShowOSD()
 	}
 	if keyJustPressed(kb.SeekForwardLarge) {
 		g.Player.Seek(60)
+		g.Player.ShowOSD()
 	}
 	if keyJustPressed(kb.SeekBackwardLarge) {
 		g.Player.Seek(-60)
+		g.Player.ShowOSD()
 	}
 	if keyJustPressed(kb.VolumeUp) {
 		g.Player.AdjustVolume(5)
+		g.Player.ShowOSD()
 	}
 	if keyJustPressed(kb.VolumeDown) {
 		g.Player.AdjustVolume(-5)
+		g.Player.ShowOSD()
 	}
 	if keyJustPressed(kb.Mute) {
 		g.Player.ToggleMute()
+		g.Player.ShowOSD()
 	}
 	if keyJustPressed(kb.SubCycle) {
 		g.Player.CycleSubtitles()
+		g.Player.ShowText("Subtitles changed", 2000)
 	}
 	if keyJustPressed(kb.AudioCycle) {
 		g.Player.CycleAudio()
+		g.Player.ShowText("Audio track changed", 2000)
 	}
 	if keyJustPressed(kb.Fullscreen) {
 		ebiten.SetFullscreen(!ebiten.IsFullscreen())
@@ -232,19 +243,29 @@ func (g *Game) handlePlaybackInput() {
 	// Enter/OK — common remote control button for play/pause
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && !ebiten.IsKeyPressed(ebiten.KeyAlt) {
 		g.Player.TogglePause()
-		g.Player.ShowProgress()
+		g.Player.ShowOSD()
 	}
 
-	// Mouse: left click to toggle pause, scroll wheel for volume
+	// I key — show info overlay
+	if inpututil.IsKeyJustPressed(ebiten.KeyI) {
+		g.Player.ShowOSD()
+	}
+
+	// Mouse: left click to toggle pause, right click to show info
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		g.Player.TogglePause()
-		g.Player.ShowProgress()
+		g.Player.ShowOSD()
+	}
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+		g.Player.ShowOSD()
 	}
 	_, scrollY := ebiten.Wheel()
 	if scrollY > 0 {
 		g.Player.AdjustVolume(5)
+		g.Player.ShowOSD()
 	} else if scrollY < 0 {
 		g.Player.AdjustVolume(-5)
+		g.Player.ShowOSD()
 	}
 }
 

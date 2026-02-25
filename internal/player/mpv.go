@@ -287,6 +287,21 @@ func (p *Player) ShowText(text string, durationMS int) {
 	})
 }
 
+// ShowOSD displays a status overlay with playback info and key hints.
+// Uses mpv's property expansion to show live values.
+func (p *Player) ShowOSD() {
+	// ${time-pos} and ${duration} are expanded by mpv at display time.
+	// ${?pause==yes:⏸ Paused} is conditional: shown only when paused.
+	osd := "${osd-ass-cc/0}" +
+		"{\\an2\\fs28\\bord2}" +
+		"${time-pos} / ${duration}   Vol: ${volume}%\\N" +
+		"{\\fs22\\alpha&H40&}" +
+		"← → Seek   Space Pause   S Subs   A Audio   Esc Back"
+	p.do(func(m *mpv.Mpv) error {
+		return m.CommandString(mpvCmd("show-text", osd, "4000"))
+	})
+}
+
 // CycleSubtitles cycles through subtitle tracks.
 func (p *Player) CycleSubtitles() error {
 	return p.do(func(m *mpv.Mpv) error {
