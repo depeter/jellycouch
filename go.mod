@@ -7,7 +7,6 @@ require (
 	github.com/gen2brain/go-mpv v0.2.3
 	github.com/hajimehoshi/ebiten/v2 v2.9.8
 	github.com/sj14/jellyfin-go v0.4.2
-	golang.org/x/image v0.36.0
 )
 
 require (
@@ -17,6 +16,7 @@ require (
 	github.com/go-text/typesetting v0.3.0 // indirect
 	github.com/jezek/xgb v1.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	golang.org/x/image v0.36.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
