@@ -15,7 +15,7 @@ import (
 type SettingsScreen struct {
 	cfg *config.Config
 
-	sections []settingsSection
+	sections     []settingsSection
 	sectionIndex int
 	itemIndex    int
 	editing      bool
@@ -43,7 +43,12 @@ type settingsItem struct {
 	Label    string
 	Value    func() string
 	OnChange func(val string) error // returns error if validation fails
+	Options  []string               // when set, Left/Right cycles through these instead of text edit
 }
+
+// Common language codes for mpv audio/subtitle selection.
+var languageOptions = []string{"eng", "fre", "ger", "spa", "ita", "por", "nld", "rus", "jpn", "kor", "zho", "ara", "hin", "swe", "nor", "dan", "fin", "pol", "tur", "cze", "hun", "tha", "vie"}
+var hwAccelOptions = []string{"auto-safe", "auto", "no", "vaapi", "vdpau", "cuda", "videotoolbox", "d3d11va", "dxva2"}
 
 func NewSettingsScreen(cfg *config.Config, onSave func()) *SettingsScreen {
 	ss := &SettingsScreen{
@@ -93,9 +98,9 @@ func NewSettingsScreen(cfg *config.Config, onSave func()) *SettingsScreen {
 		{
 			Label: "Playback",
 			Items: []settingsItem{
-				{Label: "HW Accel", Value: func() string { return cfg.Playback.HWAccel }, OnChange: func(v string) error { cfg.Playback.HWAccel = v; return nil }},
-				{Label: "Audio Language", Value: func() string { return cfg.Playback.AudioLanguage }, OnChange: func(v string) error { cfg.Playback.AudioLanguage = v; return nil }},
-				{Label: "Sub Language", Value: func() string { return cfg.Playback.SubLanguage }, OnChange: func(v string) error { cfg.Playback.SubLanguage = v; return nil }},
+				{Label: "HW Accel", Value: func() string { return cfg.Playback.HWAccel }, OnChange: func(v string) error { cfg.Playback.HWAccel = v; return nil }, Options: hwAccelOptions},
+				{Label: "Audio Language", Value: func() string { return cfg.Playback.AudioLanguage }, OnChange: func(v string) error { cfg.Playback.AudioLanguage = v; return nil }, Options: languageOptions},
+				{Label: "Sub Language", Value: func() string { return cfg.Playback.SubLanguage }, OnChange: func(v string) error { cfg.Playback.SubLanguage = v; return nil }, Options: languageOptions},
 				{Label: "Volume", Value: func() string { return fmt.Sprintf("%d", cfg.Playback.Volume) }, OnChange: func(v string) error {
 					n, err := strconv.Atoi(v)
 					if err != nil {
@@ -119,6 +124,34 @@ func (ss *SettingsScreen) OnExit() {
 	}
 }
 
+// focusedItem returns the currently focused settings item.
+func (ss *SettingsScreen) focusedItem() *settingsItem {
+	return &ss.sections[ss.sectionIndex].Items[ss.itemIndex]
+}
+
+// cycleOption moves to the next or previous option for an Options item.
+func cycleOption(item *settingsItem, delta int) {
+	current := item.Value()
+	idx := -1
+	for i, opt := range item.Options {
+		if opt == current {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		idx = 0
+	} else {
+		idx += delta
+		if idx < 0 {
+			idx = len(item.Options) - 1
+		} else if idx >= len(item.Options) {
+			idx = 0
+		}
+	}
+	item.OnChange(item.Options[idx])
+}
+
 func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 	_, enter, back := InputState()
 
@@ -128,8 +161,8 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
 			// Apply edit with validation
-			sec := ss.sections[ss.sectionIndex]
-			if err := sec.Items[ss.itemIndex].OnChange(ss.editInput.Text); err != nil {
+			item := ss.focusedItem()
+			if err := item.OnChange(ss.editInput.Text); err != nil {
 				ss.editError = err.Error()
 			} else {
 				ss.editing = false
@@ -154,11 +187,15 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 			if PointInRect(mx, my, rect.X, rect.Y, rect.W, rect.H) {
 				ss.sectionIndex = rect.SectionIdx
 				ss.itemIndex = rect.ItemIdx
-				// Enter edit mode
-				sec := ss.sections[ss.sectionIndex]
-				ss.editInput = NewTextInput(sec.Items[ss.itemIndex].Value())
-				ss.editing = true
-				ss.editError = ""
+				item := ss.focusedItem()
+				if item.Options != nil {
+					// Cycle forward on click
+					cycleOption(item, 1)
+				} else {
+					ss.editInput = NewTextInput(item.Value())
+					ss.editing = true
+					ss.editError = ""
+				}
 				return nil, nil
 			}
 		}
@@ -188,13 +225,28 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 				ss.itemIndex = 0
 			}
 		}
+	case DirLeft:
+		item := ss.focusedItem()
+		if item.Options != nil {
+			cycleOption(item, -1)
+		}
+	case DirRight:
+		item := ss.focusedItem()
+		if item.Options != nil {
+			cycleOption(item, 1)
+		}
 	}
 
 	if enter {
-		sec := ss.sections[ss.sectionIndex]
-		ss.editInput = NewTextInput(sec.Items[ss.itemIndex].Value())
-		ss.editing = true
-		ss.editError = ""
+		item := ss.focusedItem()
+		if item.Options != nil {
+			// Cycle forward on Enter for option items
+			cycleOption(item, 1)
+		} else {
+			ss.editInput = NewTextInput(item.Value())
+			ss.editing = true
+			ss.editError = ""
+		}
 	}
 
 	return nil, nil
@@ -233,20 +285,35 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 			}
 			DrawText(dst, item.Label, SectionPadding, y+4, FontSizeBody, labelColor)
 
+			valueX := SectionPadding + 300.0
 			value := item.Value()
 			isEditing := ss.editing && isFocused
+
 			if isEditing {
 				value = ss.editInput.DisplayText()
 				// Blue border around value field when editing
-				valueX := float32(SectionPadding + 296)
-				valueW := float32(rowW) - float32(300) - 8
-				vector.StrokeRect(dst, valueX, float32(y-2), valueW, float32(rowH)-4, 2, ColorFocusBorder, false)
+				vx := float32(valueX - 4)
+				vw := float32(rowW) - float32(300) - 8
+				vector.StrokeRect(dst, vx, float32(y-2), vw, float32(rowH)-4, 2, ColorFocusBorder, false)
 			}
-			DrawText(dst, value, SectionPadding+300, y+4, FontSizeBody, ColorTextSecondary)
+
+			if item.Options != nil && isFocused && !isEditing {
+				// Draw arrows around value for cycle-able items
+				DrawText(dst, "◀", valueX-20, y+4, FontSizeBody, ColorPrimary)
+				DrawText(dst, value, valueX, y+4, FontSizeBody, ColorText)
+				w, _ := MeasureText(value, FontSizeBody)
+				DrawText(dst, "▶", valueX+w+8, y+4, FontSizeBody, ColorPrimary)
+			} else {
+				valueColor := ColorTextSecondary
+				if isFocused && !isEditing {
+					valueColor = ColorText
+				}
+				DrawText(dst, value, valueX, y+4, FontSizeBody, valueColor)
+			}
 
 			// Show edit error below the row
 			if isEditing && ss.editError != "" {
-				DrawText(dst, ss.editError, SectionPadding+300, y+float64(rowH)-4, FontSizeSmall, ColorError)
+				DrawText(dst, ss.editError, valueX, y+float64(rowH)-4, FontSizeSmall, ColorError)
 			}
 
 			y += float64(rowH)
@@ -255,9 +322,16 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 	}
 
 	// Bottom hint
-	hint := "Esc to go back (auto-saves)"
+	var hint string
 	if ss.editing {
-		hint = "Enter to save, Esc to cancel"
+		hint = "Enter to save  ·  Esc to cancel"
+	} else {
+		item := ss.focusedItem()
+		if item.Options != nil {
+			hint = "← → to change  ·  ↑ ↓ to navigate  ·  Esc to go back (auto-saves)"
+		} else {
+			hint = "Enter to edit  ·  ↑ ↓ to navigate  ·  Esc to go back (auto-saves)"
+		}
 	}
 	DrawText(dst, hint, SectionPadding, float64(ScreenHeight)-40,
 		FontSizeSmall, ColorTextMuted)
