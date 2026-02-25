@@ -306,35 +306,35 @@ func (o *PlaybackOverlay) renderBar() {
 	b.WriteString("{\\an2\\bord0\\shad0\\fsp0}")
 
 	// Progress bar line
-	b.WriteString("{\\fs24\\bord2}" + assColorWhite + "}")
+	b.WriteString("{\\fs15\\bord1}" + assColorWhite + "}")
 	b.WriteString(buildProgressBar(50) + "\\N")
 
 	// Time and volume line
-	b.WriteString("{\\fs26\\bord2}" + assColorWhite + "}")
+	b.WriteString("{\\fs17\\bord1}" + assColorWhite + "}")
 	b.WriteString("${time-pos} / ${duration}")
 	b.WriteString("    ")
 	b.WriteString("${?mute==yes:Muted}${!mute:Vol: ${volume}%}")
-	b.WriteString("${?pause==yes:  \\N{\\fs22}" + assColorGray + "}Paused}")
+	b.WriteString("${?pause==yes:  \\N{\\fs14}" + assColorGray + "}Paused}")
 	b.WriteString("\\N")
 
 	// Button row
-	b.WriteString("{\\fs28\\bord2}")
+	b.WriteString("{\\fs18\\bord1}")
 	buttons := []struct {
 		btn   ControlButton
 		label string
 	}{
-		{BtnSeekBack60, "\\u25C0\\u25C060"},
-		{BtnSeekBack10, "\\u25C010"},
-		{BtnPlayPause, "\\u25B6\\u258E\\u258E"},
-		{BtnSeekFwd10, "10\\u25B6"},
-		{BtnSeekFwd60, "60\\u25B6\\u25B6"},
+		{BtnSeekBack60, "\u25C0\u25C060"},
+		{BtnSeekBack10, "\u25C010"},
+		{BtnPlayPause, "\u25B6\u258E\u258E"},
+		{BtnSeekFwd10, "10\u25B6"},
+		{BtnSeekFwd60, "60\u25B6\u25B6"},
 		{BtnSubtitles, "Subs"},
 		{BtnAudio, "Audio"},
 	}
 
 	for i, btn := range buttons {
 		if i > 0 {
-			b.WriteString("{" + assColorDimGray + "}  \\u2502  ")
+			b.WriteString("{" + assColorDimGray + "}  \u2502  ")
 		}
 		if btn.btn == o.focusedBtn {
 			b.WriteString("{" + assColorBlue + "\\b1}[ " + btn.label + " ]{\\b0}")
@@ -346,8 +346,8 @@ func (o *PlaybackOverlay) renderBar() {
 	b.WriteString("\\N")
 
 	// Hint line
-	b.WriteString("{\\fs20\\bord1}" + assColorDimGray + "}")
-	b.WriteString("\\u2190 \\u2192 Navigate   Enter Select   Esc Back")
+	b.WriteString("{\\fs13\\bord1}" + assColorDimGray + "}")
+	b.WriteString("\u2190 \u2192 Navigate   Enter Select   Esc Back")
 
 	o.player.ShowText(b.String(), int(o.hideDelay.Milliseconds()+1000))
 }
@@ -366,7 +366,7 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 	if o.trackType == TrackAudio {
 		title = "Audio Tracks"
 	}
-	b.WriteString("{\\fs32\\bord2}" + assColorBlue + "}" + title + "\\N\\N")
+	b.WriteString("{\\fs20\\bord1}" + assColorBlue + "}" + title + "\\N\\N")
 
 	// Track list
 	totalItems := len(o.tracks)
@@ -395,17 +395,17 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 			isCurrentlyActive = t.Selected
 		}
 
-		b.WriteString("{\\fs26\\bord2}")
+		b.WriteString("{\\fs17\\bord1}")
 
 		if i == o.selectedIndex {
 			// Focused item: blue with arrow
 			b.WriteString("{" + assColorBlue + "\\b1}")
-			b.WriteString("\\u25B8 " + label)
+			b.WriteString("\u25B8 " + label)
 			b.WriteString("{\\b0}")
 		} else if isCurrentlyActive {
 			// Currently active: white with checkmark
 			b.WriteString("{" + assColorWhite + "}")
-			b.WriteString("\\u2713 " + label)
+			b.WriteString("\u2713 " + label)
 		} else {
 			// Normal item: gray
 			b.WriteString("{" + assColorGray + "}")
@@ -416,8 +416,8 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 	}
 
 	// Hint line
-	b.WriteString("\\N{\\fs20\\bord1}" + assColorDimGray + "}")
-	b.WriteString("\\u2191\\u2193 Navigate   Enter Select   Esc Back")
+	b.WriteString("\\N{\\fs13\\bord1}" + assColorDimGray + "}")
+	b.WriteString("\u2191\u2193 Navigate   Enter Select   Esc Back")
 
 	o.player.ShowText(b.String(), 30000) // Long duration; we'll clear it manually
 }
