@@ -25,7 +25,18 @@ type JellyseerrRequestScreen struct {
 	selectedSeasons []bool
 	seasonFocused   int
 
-	// Focus mode: 0=buttons, 1=season selection
+	// Request options (quality, root folder, language, 4K)
+	radarrServers   []jellyseerr.RadarrSettings
+	sonarrServers   []jellyseerr.SonarrSettings
+	selectedServer  int
+	selectedProfile int
+	selectedFolder  int
+	selectedLang    int
+	is4K            bool
+	servicesLoaded  bool
+	optionIndex     int // focused option row
+
+	// Focus mode: 0=buttons, 1=request options, 2=season selection
 	focusMode   int
 	buttonIndex int
 	buttons     []string
@@ -48,9 +59,9 @@ type JellyseerrRequestScreen struct {
 
 func NewJellyseerrRequestScreen(client *jellyseerr.Client, imgCache *cache.ImageCache, result jellyseerr.SearchResult) *JellyseerrRequestScreen {
 	jr := &JellyseerrRequestScreen{
-		client: client,
+		client:   client,
 		imgCache: imgCache,
-		result: result,
+		result:   result,
 	}
 
 	if result.MediaInfo != nil {
@@ -85,6 +96,11 @@ func (jr *JellyseerrRequestScreen) OnEnter() {
 		go jr.loadTVDetail()
 	} else if jr.result.MediaType == "movie" {
 		go jr.loadMovieDetail()
+	}
+
+	// Load service settings for request options
+	if jr.status < jellyseerr.StatusPending {
+		go jr.loadServiceSettings()
 	}
 }
 
@@ -126,6 +142,92 @@ func (jr *JellyseerrRequestScreen) loadMovieDetail() {
 	jr.mu.Unlock()
 }
 
+func (jr *JellyseerrRequestScreen) loadServiceSettings() {
+	if jr.result.MediaType == "movie" {
+		settings, err := jr.client.GetRadarrSettings()
+		if err != nil {
+			log.Printf("Failed to load Radarr settings: %v", err)
+			return
+		}
+		jr.mu.Lock()
+		jr.radarrServers = settings
+		jr.preselectRadarrDefaults()
+		jr.servicesLoaded = true
+		jr.mu.Unlock()
+	} else {
+		settings, err := jr.client.GetSonarrSettings()
+		if err != nil {
+			log.Printf("Failed to load Sonarr settings: %v", err)
+			return
+		}
+		jr.mu.Lock()
+		jr.sonarrServers = settings
+		jr.preselectSonarrDefaults()
+		jr.servicesLoaded = true
+		jr.mu.Unlock()
+	}
+}
+
+func (jr *JellyseerrRequestScreen) preselectRadarrDefaults() {
+	// Find default non-4K server
+	for i, s := range jr.radarrServers {
+		if s.IsDefault && !s.Is4K {
+			jr.selectedServer = i
+			break
+		}
+	}
+	if jr.selectedServer >= len(jr.radarrServers) {
+		return
+	}
+	srv := jr.radarrServers[jr.selectedServer]
+	// Pre-select active profile
+	for i, p := range srv.Profiles {
+		if p.ID == srv.ActiveProfileID {
+			jr.selectedProfile = i
+			break
+		}
+	}
+	// Pre-select active root folder
+	for i, f := range srv.RootFolders {
+		if f.Path == srv.ActiveDirectory {
+			jr.selectedFolder = i
+			break
+		}
+	}
+}
+
+func (jr *JellyseerrRequestScreen) preselectSonarrDefaults() {
+	// Find default non-4K server
+	for i, s := range jr.sonarrServers {
+		if s.IsDefault && !s.Is4K {
+			jr.selectedServer = i
+			break
+		}
+	}
+	if jr.selectedServer >= len(jr.sonarrServers) {
+		return
+	}
+	srv := jr.sonarrServers[jr.selectedServer]
+	for i, p := range srv.Profiles {
+		if p.ID == srv.ActiveProfileID {
+			jr.selectedProfile = i
+			break
+		}
+	}
+	for i, f := range srv.RootFolders {
+		if f.Path == srv.ActiveDirectory {
+			jr.selectedFolder = i
+			break
+		}
+	}
+	for i, l := range srv.LanguageProfiles {
+		if l.ID == srv.ActiveLanguageProfileID {
+			jr.selectedLang = i
+			break
+		}
+	}
+}
+
 func (jr *JellyseerrRequestScreen) updateButtons() {
 	jr.buttons = nil
 	if jr.status < jellyseerr.StatusPending {
@@ -138,6 +240,90 @@ func (jr *JellyseerrRequestScreen) updateButtons() {
 	if jr.buttonIndex >= len(jr.buttons) {
 		jr.buttonIndex = 0
 	}
+}
+
+// optionRowCount returns the number of option rows visible.
+func (jr *JellyseerrRequestScreen) optionRowCount() int {
+	if !jr.servicesLoaded || jr.status >= jellyseerr.StatusPending {
+		return 0
+	}
+	if jr.result.MediaType == "movie" {
+		count := 0
+		srv := jr.activeRadarr()
+		if srv == nil {
+			return 0
+		}
+		if jr.hasMultipleRadarrServers() {
+			count++ // server
+		}
+		if len(srv.Profiles) > 0 {
+			count++ // profile
+		}
+		if len(srv.RootFolders) > 0 {
+			count++ // folder
+		}
+		count++ // 4K toggle
+		return count
+	}
+	// TV
+	count := 0
+	srv := jr.activeSonarr()
+	if srv == nil {
+		return 0
+	}
+	if jr.hasMultipleSonarrServers() {
+		count++
+	}
+	if len(srv.Profiles) > 0 {
+		count++
+	}
+	if len(srv.RootFolders) > 0 {
+		count++
+	}
+	if len(srv.LanguageProfiles) > 0 {
+		count++
+	}
+	count++ // 4K toggle
+	return count
+}
+
+func (jr *JellyseerrRequestScreen) hasMultipleRadarrServers() bool {
+	n := 0
+	for _, s := range jr.radarrServers {
+		if !s.Is4K {
+			n++
+		}
+	}
+	return n > 1
+}
+
+func (jr *JellyseerrRequestScreen) hasMultipleSonarrServers() bool {
+	n := 0
+	for _, s := range jr.sonarrServers {
+		if !s.Is4K {
+			n++
+		}
+	}
+	return n > 1
+}
+
+func (jr *JellyseerrRequestScreen) activeRadarr() *jellyseerr.RadarrSettings {
+	if jr.selectedServer < len(jr.radarrServers) {
+		return &jr.radarrServers[jr.selectedServer]
+	}
+	return nil
+}
+
+func (jr *JellyseerrRequestScreen) activeSonarr() *jellyseerr.SonarrSettings {
+	if jr.selectedServer < len(jr.sonarrServers) {
+		return &jr.sonarrServers[jr.selectedServer]
+	}
+	return nil
+}
+
+// hasSeasonSelection returns true if season selection should be shown.
+func (jr *JellyseerrRequestScreen) hasSeasonSelection() bool {
+	return jr.tvDetail != nil && len(jr.tvDetail.Seasons) > 0 && jr.status < jellyseerr.StatusPending
 }
 
 func (jr *JellyseerrRequestScreen) Update() (*ScreenTransition, error) {
@@ -178,19 +364,46 @@ func (jr *JellyseerrRequestScreen) Update() (*ScreenTransition, error) {
 				jr.buttonIndex++
 			}
 		case DirDown:
-			if jr.tvDetail != nil && len(jr.tvDetail.Seasons) > 0 && jr.status < jellyseerr.StatusPending {
+			if jr.optionRowCount() > 0 {
 				jr.focusMode = 1
+				jr.optionIndex = 0
+			} else if jr.hasSeasonSelection() {
+				jr.focusMode = 2
 			}
 		}
 		if enter {
 			jr.handleButton()
 		}
 
-	case 1: // season selection
+	case 1: // request options
+		switch dir {
+		case DirUp:
+			if jr.optionIndex > 0 {
+				jr.optionIndex--
+			} else {
+				jr.focusMode = 0
+			}
+		case DirDown:
+			if jr.optionIndex < jr.optionRowCount()-1 {
+				jr.optionIndex++
+			} else if jr.hasSeasonSelection() {
+				jr.focusMode = 2
+				jr.seasonFocused = 0
+			}
+		case DirLeft:
+			jr.cycleOption(-1)
+		case DirRight:
+			jr.cycleOption(1)
+		}
+
+	case 2: // season selection
 		switch dir {
 		case DirUp:
 			if jr.seasonFocused > 0 {
 				jr.seasonFocused--
+			} else if jr.optionRowCount() > 0 {
+				jr.focusMode = 1
+				jr.optionIndex = jr.optionRowCount() - 1
 			} else {
 				jr.focusMode = 0
 			}
@@ -205,6 +418,125 @@ func (jr *JellyseerrRequestScreen) Update() (*ScreenTransition, error) {
 	}
 
 	return nil, nil
+}
+
+// optionRowType returns a label identifying what the given row index represents.
+// The order must match the draw order.
+func (jr *JellyseerrRequestScreen) optionRowType(row int) string {
+	cur := 0
+	if jr.result.MediaType == "movie" {
+		srv := jr.activeRadarr()
+		if srv == nil {
+			return ""
+		}
+		if jr.hasMultipleRadarrServers() {
+			if row == cur {
+				return "server"
+			}
+			cur++
+		}
+		if len(srv.Profiles) > 0 {
+			if row == cur {
+				return "profile"
+			}
+			cur++
+		}
+		if len(srv.RootFolders) > 0 {
+			if row == cur {
+				return "folder"
+			}
+			cur++
+		}
+		if row == cur {
+			return "4k"
+		}
+		return ""
+	}
+	// TV
+	srv := jr.activeSonarr()
+	if srv == nil {
+		return ""
+	}
+	if jr.hasMultipleSonarrServers() {
+		if row == cur {
+			return "server"
+		}
+		cur++
+	}
+	if len(srv.Profiles) > 0 {
+		if row == cur {
+			return "profile"
+		}
+		cur++
+	}
+	if len(srv.RootFolders) > 0 {
+		if row == cur {
+			return "folder"
+		}
+		cur++
+	}
+	if len(srv.LanguageProfiles) > 0 {
+		if row == cur {
+			return "language"
+		}
+		cur++
+	}
+	if row == cur {
+		return "4k"
+	}
+	return ""
+}
+
+func (jr *JellyseerrRequestScreen) cycleOption(delta int) {
+	kind := jr.optionRowType(jr.optionIndex)
+	switch kind {
+	case "server":
+		if jr.result.MediaType == "movie" {
+			jr.selectedServer = wrapIndex(jr.selectedServer+delta, len(jr.radarrServers))
+			jr.selectedProfile = 0
+			jr.selectedFolder = 0
+			jr.preselectRadarrDefaults()
+		} else {
+			jr.selectedServer = wrapIndex(jr.selectedServer+delta, len(jr.sonarrServers))
+			jr.selectedProfile = 0
+			jr.selectedFolder = 0
+			jr.selectedLang = 0
+			jr.preselectSonarrDefaults()
+		}
+	case "profile":
+		if jr.result.MediaType == "movie" {
+			if srv := jr.activeRadarr(); srv != nil {
+				jr.selectedProfile = wrapIndex(jr.selectedProfile+delta, len(srv.Profiles))
+			}
+		} else {
+			if srv := jr.activeSonarr(); srv != nil {
+				jr.selectedProfile = wrapIndex(jr.selectedProfile+delta, len(srv.Profiles))
+			}
+		}
+	case "folder":
+		if jr.result.MediaType == "movie" {
+			if srv := jr.activeRadarr(); srv != nil {
+				jr.selectedFolder = wrapIndex(jr.selectedFolder+delta, len(srv.RootFolders))
+			}
+		} else {
+			if srv := jr.activeSonarr(); srv != nil {
+				jr.selectedFolder = wrapIndex(jr.selectedFolder+delta, len(srv.RootFolders))
+			}
+		}
+	case "language":
+		if srv := jr.activeSonarr(); srv != nil {
+			jr.selectedLang = wrapIndex(jr.selectedLang+delta, len(srv.LanguageProfiles))
+		}
+	case "4k":
+		jr.is4K = !jr.is4K
+	}
+}
+
+func wrapIndex(i, n int) int {
+	if n <= 0 {
+		return 0
+	}
+	return ((i % n) + n) % n
 }
 
 func (jr *JellyseerrRequestScreen) handleButton() {
@@ -222,6 +554,44 @@ func (jr *JellyseerrRequestScreen) handleButton() {
 	case "Back":
 		jr.wantBack = true
 	}
+}
+
+func (jr *JellyseerrRequestScreen) buildRequestOptions() *jellyseerr.RequestOptions {
+	if !jr.servicesLoaded {
+		return nil
+	}
+	opts := &jellyseerr.RequestOptions{
+		Is4K: jr.is4K,
+	}
+	if jr.result.MediaType == "movie" {
+		srv := jr.activeRadarr()
+		if srv == nil {
+			return nil
+		}
+		opts.ServerID = srv.ID
+		if jr.selectedProfile < len(srv.Profiles) {
+			opts.ProfileID = srv.Profiles[jr.selectedProfile].ID
+		}
+		if jr.selectedFolder < len(srv.RootFolders) {
+			opts.RootFolder = srv.RootFolders[jr.selectedFolder].Path
+		}
+	} else {
+		srv := jr.activeSonarr()
+		if srv == nil {
+			return nil
+		}
+		opts.ServerID = srv.ID
+		if jr.selectedProfile < len(srv.Profiles) {
+			opts.ProfileID = srv.Profiles[jr.selectedProfile].ID
+		}
+		if jr.selectedFolder < len(srv.RootFolders) {
+			opts.RootFolder = srv.RootFolders[jr.selectedFolder].Path
+		}
+		if jr.selectedLang < len(srv.LanguageProfiles) {
+			opts.LanguageProfileID = srv.LanguageProfiles[jr.selectedLang].ID
+		}
+	}
+	return opts
 }
 
 func (jr *JellyseerrRequestScreen) doRequest() {
@@ -245,9 +615,10 @@ func (jr *JellyseerrRequestScreen) doRequest() {
 			return
 		}
 	}
+	opts := jr.buildRequestOptions()
 	jr.mu.Unlock()
 
-	_, err := jr.client.CreateRequest(jr.result.ID, mediaType, seasons)
+	_, err := jr.client.CreateRequest(jr.result.ID, mediaType, seasons, opts)
 
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
@@ -368,18 +739,27 @@ func (jr *JellyseerrRequestScreen) Draw(dst *ebiten.Image) {
 		DrawText(dst, "Requesting...", btnX+20, btnY+8, FontSizeSmall, ColorTextSecondary)
 	}
 
+	// --- Request options section (below poster area) ---
+	optY := posterY + posterH + 30
+
+	if jr.optionRowCount() > 0 {
+		DrawText(dst, "Request Options:", x, optY, FontSizeHeading, ColorText)
+		optY += FontSizeHeading + 8
+		optY = jr.drawOptions(dst, x, optY)
+		optY += 16
+	}
+
 	// Season selection for TV shows
-	if jr.tvDetail != nil && len(jr.tvDetail.Seasons) > 0 && jr.status < jellyseerr.StatusPending {
-		seasonY := posterY + posterH + 30
-		DrawText(dst, "Select Seasons:", x, seasonY, FontSizeHeading, ColorText)
-		seasonY += FontSizeHeading + 8
+	if jr.hasSeasonSelection() {
+		DrawText(dst, "Select Seasons:", x, optY, FontSizeHeading, ColorText)
+		optY += FontSizeHeading + 8
 
 		for i, season := range jr.tvDetail.Seasons {
-			isFocused := jr.focusMode == 1 && i == jr.seasonFocused
+			isFocused := jr.focusMode == 2 && i == jr.seasonFocused
 			rowH := 32.0
 
 			if isFocused {
-				vector.DrawFilledRect(dst, float32(x-8), float32(seasonY-4),
+				vector.DrawFilledRect(dst, float32(x-8), float32(optY-4),
 					float32(500), float32(rowH+4), ColorSurfaceHover, false)
 			}
 
@@ -400,12 +780,103 @@ func (jr *JellyseerrRequestScreen) Draw(dst *ebiten.Image) {
 			if isFocused {
 				clr = ColorText
 			}
-			DrawText(dst, label, x, seasonY, FontSizeBody, clr)
-			seasonY += rowH
+			DrawText(dst, label, x, optY, FontSizeBody, clr)
+			optY += rowH
 		}
 	}
 
 	// Hint
 	hint := "Enter to select  \u00b7  Esc to go back"
 	DrawText(dst, hint, SectionPadding, float64(ScreenHeight)-40, FontSizeSmall, ColorTextMuted)
+}
+
+// drawOptions draws the option rows and returns the Y position after the last row.
+func (jr *JellyseerrRequestScreen) drawOptions(dst *ebiten.Image, x, y float64) float64 {
+	rowH := 32.0
+	optW := 500.0
+
+	for row := 0; row < jr.optionRowCount(); row++ {
+		isFocused := jr.focusMode == 1 && row == jr.optionIndex
+		kind := jr.optionRowType(row)
+
+		if isFocused {
+			vector.DrawFilledRect(dst, float32(x-8), float32(y-4),
+				float32(optW+16), float32(rowH+4), ColorSurfaceHover, false)
+		}
+
+		label, value := jr.optionLabelValue(kind)
+		labelClr := ColorTextSecondary
+		valueClr := ColorTextSecondary
+		if isFocused {
+			labelClr = ColorText
+			valueClr = ColorText
+		}
+
+		DrawText(dst, label, x, y+4, FontSizeBody, labelClr)
+
+		// Value with arrows
+		valueX := x + 200
+		if isFocused {
+			DrawText(dst, "\u25C0", valueX-20, y+4, FontSizeBody, ColorPrimary)
+		}
+		DrawText(dst, value, valueX, y+4, FontSizeBody, valueClr)
+		if isFocused {
+			tw, _ := MeasureText(value, FontSizeBody)
+			DrawText(dst, "\u25B6", valueX+tw+8, y+4, FontSizeBody, ColorPrimary)
+		}
+
+		y += rowH
+	}
+
+	return y
+}
+
+func (jr *JellyseerrRequestScreen) optionLabelValue(kind string) (string, string) {
+	switch kind {
+	case "server":
+		if jr.result.MediaType == "movie" {
+			if srv := jr.activeRadarr(); srv != nil {
+				return "Server", srv.Name
+			}
+		} else {
+			if srv := jr.activeSonarr(); srv != nil {
+				return "Server", srv.Name
+			}
+		}
+		return "Server", "—"
+	case "profile":
+		if jr.result.MediaType == "movie" {
+			if srv := jr.activeRadarr(); srv != nil && jr.selectedProfile < len(srv.Profiles) {
+				return "Quality", srv.Profiles[jr.selectedProfile].Name
+			}
+		} else {
+			if srv := jr.activeSonarr(); srv != nil && jr.selectedProfile < len(srv.Profiles) {
+				return "Quality", srv.Profiles[jr.selectedProfile].Name
+			}
+		}
+		return "Quality", "—"
+	case "folder":
+		if jr.result.MediaType == "movie" {
+			if srv := jr.activeRadarr(); srv != nil && jr.selectedFolder < len(srv.RootFolders) {
+				return "Root Folder", srv.RootFolders[jr.selectedFolder].Path
+			}
+		} else {
+			if srv := jr.activeSonarr(); srv != nil && jr.selectedFolder < len(srv.RootFolders) {
+				return "Root Folder", srv.RootFolders[jr.selectedFolder].Path
+			}
+		}
+		return "Root Folder", "—"
+	case "language":
+		if srv := jr.activeSonarr(); srv != nil && jr.selectedLang < len(srv.LanguageProfiles) {
+			return "Language", srv.LanguageProfiles[jr.selectedLang].Name
+		}
+		return "Language", "—"
+	case "4k":
+		val := "No"
+		if jr.is4K {
+			val = "Yes"
+		}
+		return "4K", val
+	}
+	return "", ""
 }

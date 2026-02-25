@@ -165,6 +165,11 @@ func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 			DrawTextCentered(dst, "✓", float64(badgeCX), float64(badgeCY), FontSizeSmall, ColorText)
 		}
 
+		// Request status badge (full-width banner at bottom of poster)
+		if item.RequestStatus > 0 && item.Progress == 0 {
+			drawRequestBadge(dst, item.RequestStatus, ix, iy)
+		}
+
 		// Title below poster
 		titleColor := ColorTextSecondary
 		if isFocused {
@@ -265,7 +270,7 @@ func ImageFromRGBA(rgba *image.RGBA) *ebiten.Image {
 	return ebiten.NewImageFromImage(rgba)
 }
 
-// drawRequestBadge draws a status badge on a poster item (top-left corner).
+// drawRequestBadge draws a full-width status banner at the bottom of a poster.
 func drawRequestBadge(dst *ebiten.Image, status int, x, y float64) {
 	label := ""
 	switch status {
@@ -281,11 +286,11 @@ func drawRequestBadge(dst *ebiten.Image, status int, x, y float64) {
 		return
 	}
 	badgeColor := statusBadgeColor(status)
-	tw, _ := MeasureText(label, FontSizeCaption)
-	bw := float32(tw + 10)
-	bh := float32(FontSizeCaption + 6)
-	vector.DrawFilledRect(dst, float32(x+2), float32(y+2), bw, bh, badgeColor, false)
-	DrawText(dst, label, x+7, y+5, FontSizeCaption, ColorText)
+	bh := FontSizeSmall + 8.0
+	bannerY := y + PosterHeight - bh
+	vector.DrawFilledRect(dst, float32(x), float32(bannerY),
+		float32(PosterWidth), float32(bh), badgeColor, false)
+	DrawTextCentered(dst, label, x+PosterWidth/2, bannerY+bh/2, FontSizeSmall, ColorText)
 }
 
 // statusBadgeColor returns the badge background color for a media status.

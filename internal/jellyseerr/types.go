@@ -193,9 +193,67 @@ type Season struct {
 
 // CreateRequestBody is the JSON body for creating a new request.
 type CreateRequestBody struct {
-	MediaType string `json:"mediaType"`
-	MediaID   int    `json:"mediaId"`
-	Seasons   []int  `json:"seasons,omitempty"`
+	MediaType         string `json:"mediaType"`
+	MediaID           int    `json:"mediaId"`
+	Seasons           []int  `json:"seasons,omitempty"`
+	ServerID          int    `json:"serverId,omitempty"`
+	ProfileID         int    `json:"profileId,omitempty"`
+	RootFolder        string `json:"rootFolder,omitempty"`
+	LanguageProfileID int    `json:"languageProfileId,omitempty"`
+	Is4K              bool   `json:"is4k,omitempty"`
+}
+
+// RequestOptions holds optional parameters for creating a request.
+type RequestOptions struct {
+	ServerID          int
+	ProfileID         int
+	RootFolder        string
+	LanguageProfileID int
+	Is4K              bool
+}
+
+// ServiceProfile represents a quality profile from Radarr/Sonarr.
+type ServiceProfile struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// RootFolder represents a root folder from Radarr/Sonarr.
+type RootFolder struct {
+	ID   int    `json:"id"`
+	Path string `json:"path"`
+}
+
+// LanguageProfile represents a language profile from Sonarr.
+type LanguageProfile struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// RadarrSettings represents a Radarr server configuration from Jellyseerr.
+type RadarrSettings struct {
+	ID              int              `json:"id"`
+	Name            string           `json:"name"`
+	IsDefault       bool             `json:"isDefault"`
+	Is4K            bool             `json:"is4k"`
+	ActiveProfileID int              `json:"activeProfileId"`
+	ActiveDirectory string           `json:"activeDirectory"`
+	Profiles        []ServiceProfile `json:"profiles"`
+	RootFolders     []RootFolder     `json:"rootFolders"`
+}
+
+// SonarrSettings represents a Sonarr server configuration from Jellyseerr.
+type SonarrSettings struct {
+	ID                      int              `json:"id"`
+	Name                    string           `json:"name"`
+	IsDefault               bool             `json:"isDefault"`
+	Is4K                    bool             `json:"is4k"`
+	ActiveProfileID         int              `json:"activeProfileId"`
+	ActiveDirectory         string           `json:"activeDirectory"`
+	ActiveLanguageProfileID int              `json:"activeLanguageProfileId"`
+	Profiles                []ServiceProfile `json:"profiles"`
+	RootFolders             []RootFolder     `json:"rootFolders"`
+	LanguageProfiles        []LanguageProfile `json:"languageProfiles"`
 }
 
 // RequestStatusLabel returns a human-readable label for a request status.

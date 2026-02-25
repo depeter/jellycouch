@@ -406,11 +406,6 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 
 		isFocused := jr.focusMode == 1 && i == jr.grid.Focused
 		drawPosterItem(dst, item, x, iy, isFocused)
-
-		// Draw request status badge
-		if item.RequestStatus > 0 {
-			drawRequestBadge(dst, item.RequestStatus, x, iy)
-		}
 	}
 
 	// Hint
