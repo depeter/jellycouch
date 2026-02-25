@@ -11,7 +11,6 @@ import (
 
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/jellyfin"
-	"github.com/depeter/jellycouch/internal/jellyseerr"
 )
 
 // HomeScreen displays library sections: Continue Watching, Next Up, and each library's latest items.
@@ -33,10 +32,8 @@ type HomeScreen struct {
 	OnItemSelected func(item jellyfin.MediaItem)
 	OnSearch       func(query string)
 	OnSettings     func()
-	OnRequests     func()
-
-	// Jellyseerr client (nil if not configured)
-	JellyseerrClient *jellyseerr.Client
+	OnRequests         func()
+	JellyseerrEnabled  func() bool
 
 	mu sync.Mutex
 }
@@ -195,7 +192,7 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 			return nil, nil
 		}
 		// Requests button click (only when Jellyseerr is configured)
-		if hs.JellyseerrClient != nil {
+		if hs.JellyseerrEnabled != nil && hs.JellyseerrEnabled() {
 			reqX := settingsX - 100
 			reqY := 14.0
 			reqW := 90.0
@@ -291,7 +288,7 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 		return nil, nil
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyR) && hs.JellyseerrClient != nil {
+	if inpututil.IsKeyJustPressed(ebiten.KeyR) && hs.JellyseerrEnabled != nil && hs.JellyseerrEnabled() {
 		if hs.OnRequests != nil {
 			hs.OnRequests()
 		}
@@ -414,7 +411,7 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 
 	// Requests button (only when Jellyseerr configured)
 	settingsX := float64(ScreenWidth) - SectionPadding - 80
-	if hs.JellyseerrClient != nil {
+	if hs.JellyseerrEnabled != nil && hs.JellyseerrEnabled() {
 		reqX := settingsX - 100
 		reqY := 14.0
 		reqW := 90.0

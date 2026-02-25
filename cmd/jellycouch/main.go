@@ -111,7 +111,9 @@ func pushHomeScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCac
 	home.OnRequests = func() {
 		pushJellyseerrRequestsScreen(game, cfg, imgCache)
 	}
-	home.JellyseerrClient = game.Jellyseerr
+	home.JellyseerrEnabled = func() bool {
+		return game.Jellyseerr != nil
+	}
 	game.Screens.Replace(home)
 }
 
