@@ -162,7 +162,7 @@ func (g *Game) Update() error {
 
 		// Forward playback controls to mpv (required on Windows where
 		// embedded mpv doesn't receive keyboard input directly)
-		g.handlePlaybackKeys()
+		g.handlePlaybackInput()
 	}
 
 	ui.UpdateInputState()
@@ -186,15 +186,17 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return g.Width, g.Height
 }
 
-// handlePlaybackKeys forwards configured keybinds to the mpv player.
-func (g *Game) handlePlaybackKeys() {
+// handlePlaybackInput forwards keybinds, media keys, and mouse input to mpv.
+func (g *Game) handlePlaybackInput() {
 	if g.Player == nil {
 		return
 	}
 	kb := &g.Config.Keybinds
 
+	// Configured keybinds
 	if keyJustPressed(kb.PlayPause) {
 		g.Player.TogglePause()
+		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.SeekForward) {
 		g.Player.Seek(10)
@@ -225,6 +227,24 @@ func (g *Game) handlePlaybackKeys() {
 	}
 	if keyJustPressed(kb.Fullscreen) {
 		ebiten.SetFullscreen(!ebiten.IsFullscreen())
+	}
+
+	// Enter/OK — common remote control button for play/pause
+	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && !ebiten.IsKeyPressed(ebiten.KeyAlt) {
+		g.Player.TogglePause()
+		g.Player.ShowProgress()
+	}
+
+	// Mouse: left click to toggle pause, scroll wheel for volume
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		g.Player.TogglePause()
+		g.Player.ShowProgress()
+	}
+	_, scrollY := ebiten.Wheel()
+	if scrollY > 0 {
+		g.Player.AdjustVolume(5)
+	} else if scrollY < 0 {
+		g.Player.AdjustVolume(-5)
 	}
 }
 

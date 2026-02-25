@@ -87,9 +87,18 @@ func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 	// Core options — mpv owns the render pipeline
 	must(m.SetOptionString("hwdec", cfg.Playback.HWAccel))
 	must(m.SetOptionString("vo", "gpu"))
-	must(m.SetOptionString("osc", "yes"))
 	must(m.SetOptionString("keep-open", "yes"))
 	must(m.SetOptionString("idle", "yes"))
+
+	// Disable mpv's own key handling — we forward keys from Ebitengine
+	// so they work on all platforms (Windows embedding doesn't pass keys)
+	must(m.SetOptionString("input-default-bindings", "no"))
+	must(m.SetOptionString("input-vo-keyboard", "no"))
+
+	// Enable OSD bar for seek/volume feedback
+	must(m.SetOptionString("osd-level", "1"))
+	must(m.SetOptionString("osd-duration", "2000"))
+	must(m.SetOptionString("osd-bar", "yes"))
 
 	// Subtitle defaults from config
 	must(m.SetOptionString("sub-font", cfg.Subtitles.Font))
@@ -261,6 +270,20 @@ func (p *Player) SetVolume(vol int) error {
 func (p *Player) AdjustVolume(delta int) error {
 	return p.do(func(m *mpv.Mpv) error {
 		return m.CommandString(mpvCmd("add", "volume", fmt.Sprintf("%d", delta)))
+	})
+}
+
+// ShowProgress flashes the OSD progress bar.
+func (p *Player) ShowProgress() {
+	p.do(func(m *mpv.Mpv) error {
+		return m.CommandString(mpvCmd("show-progress"))
+	})
+}
+
+// ShowText displays a text message on mpv's OSD for the given duration (ms).
+func (p *Player) ShowText(text string, durationMS int) {
+	p.do(func(m *mpv.Mpv) error {
+		return m.CommandString(mpvCmd("show-text", text, fmt.Sprintf("%d", durationMS)))
 	})
 }
 
