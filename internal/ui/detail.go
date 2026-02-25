@@ -72,12 +72,16 @@ func (dp *DetailPanel) Draw(dst *ebiten.Image) {
 			scale = scaleY
 		}
 		op.GeoM.Scale(scale, scale)
+		op.Filter = ebiten.FilterLinear
 		dst.DrawImage(dp.Backdrop, op)
 	}
 
-	// Gradient overlay on backdrop
+	// Gradient overlay at bottom of backdrop
 	vector.DrawFilledRect(dst, 0, float32(BackdropHeight-100), float32(sw), 100,
 		ColorOverlay, false)
+	// Solid background below backdrop to cover image bleed and ensure readable text
+	vector.DrawFilledRect(dst, 0, float32(BackdropHeight), float32(sw), float32(ScreenHeight-BackdropHeight),
+		ColorBackground, false)
 
 	// Metadata area below backdrop
 	y := float64(BackdropHeight) + 20

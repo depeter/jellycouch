@@ -236,6 +236,7 @@ func DrawImageCover(dst *ebiten.Image, src *ebiten.Image, x, y, w, h float64) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Scale(scale, scale)
 	op.GeoM.Translate(x-offsetX, y-offsetY)
+	op.Filter = ebiten.FilterLinear
 
 	// Clip to target rect using a sub-image of the destination
 	// Since Ebitengine doesn't have clip regions, we use SubImage on dst
