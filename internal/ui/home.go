@@ -3,13 +3,11 @@ package ui
 import (
 	"fmt"
 	"log"
-	"math"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
-	"image/color"
 
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/jellyfin"
@@ -524,35 +522,3 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 	}
 }
 
-// drawCompassIcon draws a compass/discovery icon at (cx, cy) with given radius.
-func drawCompassIcon(dst *ebiten.Image, cx, cy, r float32, clr color.Color) {
-	// Outer ring
-	vector.StrokeCircle(dst, cx, cy, r, 1.5, clr, false)
-	// Cardinal direction dots
-	dotR := float32(1.5)
-	vector.DrawFilledCircle(dst, cx, cy-r+2, dotR, clr, false) // N
-	vector.DrawFilledCircle(dst, cx+r-2, cy, dotR, clr, false) // E
-	vector.DrawFilledCircle(dst, cx, cy+r-2, dotR, clr, false) // S
-	vector.DrawFilledCircle(dst, cx-r+2, cy, dotR, clr, false) // W
-	// Diamond needle in center
-	vector.StrokeLine(dst, cx, cy-3, cx+2, cy, 1.5, clr, false)
-	vector.StrokeLine(dst, cx+2, cy, cx, cy+3, 1.5, clr, false)
-	vector.StrokeLine(dst, cx, cy+3, cx-2, cy, 1.5, clr, false)
-	vector.StrokeLine(dst, cx-2, cy, cx, cy-3, 1.5, clr, false)
-}
-
-// drawGearIcon draws a gear/settings icon at (cx, cy) with given radius.
-func drawGearIcon(dst *ebiten.Image, cx, cy, r float32, clr color.Color) {
-	// Inner hub
-	vector.DrawFilledCircle(dst, cx, cy, r*0.35, clr, false)
-	// Outer teeth — small circles around the perimeter
-	teeth := 8
-	for i := 0; i < teeth; i++ {
-		angle := float64(i) * 2 * math.Pi / float64(teeth)
-		tx := cx + r*0.75*float32(math.Cos(angle))
-		ty := cy + r*0.75*float32(math.Sin(angle))
-		vector.DrawFilledCircle(dst, tx, ty, r*0.25, clr, false)
-	}
-	// Ring connecting teeth
-	vector.StrokeCircle(dst, cx, cy, r*0.55, 1.5, clr, false)
-}

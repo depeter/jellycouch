@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -26,7 +27,7 @@ type JellyseerrRequestsScreen struct {
 	total     int
 
 	filterIndex int
-	focusMode   int // 0=filter tabs, 1=request list, 2=search button
+	focusMode   int // 0=filter tabs, 1=request list
 	loading     bool
 	loadError   string
 
@@ -42,6 +43,13 @@ type JellyseerrRequestsScreen struct {
 	mu         sync.Mutex
 }
 
+// Search button layout
+const (
+	reqsSearchBtnW = 100.0
+	reqsSearchBtnH = 38.0
+	reqsSearchBtnY = 12.0
+)
+
 func NewJellyseerrRequestsScreen(client *jellyseerr.Client, imgCache *cache.ImageCache) *JellyseerrRequestsScreen {
 	cols := (ScreenWidth - SectionPadding*2) / (PosterWidth + PosterGap)
 	return &JellyseerrRequestsScreen{
@@ -51,7 +59,7 @@ func NewJellyseerrRequestsScreen(client *jellyseerr.Client, imgCache *cache.Imag
 	}
 }
 
-func (jr *JellyseerrRequestsScreen) Name() string { return "Requests" }
+func (jr *JellyseerrRequestsScreen) Name() string { return "My Requests" }
 
 func (jr *JellyseerrRequestsScreen) OnEnter() {
 	go jr.loadRequests()
@@ -199,6 +207,10 @@ func (jr *JellyseerrRequestsScreen) requestToMediaStatus(reqStatus int) int {
 	}
 }
 
+func (jr *JellyseerrRequestsScreen) searchBtnX() float64 {
+	return float64(ScreenWidth) - SectionPadding - reqsSearchBtnW
+}
+
 func (jr *JellyseerrRequestsScreen) Update() (*ScreenTransition, error) {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
@@ -240,9 +252,8 @@ func (jr *JellyseerrRequestsScreen) Update() (*ScreenTransition, error) {
 			}
 		}
 		// Check search button
-		searchBtnX := float64(ScreenWidth) - SectionPadding - 120
-		searchBtnY := 14.0
-		if PointInRect(mx, my, searchBtnX, searchBtnY, 120, 34) {
+		searchX := jr.searchBtnX()
+		if PointInRect(mx, my, searchX, reqsSearchBtnY, reqsSearchBtnW, reqsSearchBtnH) {
 			if jr.OnSearch != nil {
 				jr.OnSearch()
 			}
@@ -266,8 +277,8 @@ func (jr *JellyseerrRequestsScreen) Update() (*ScreenTransition, error) {
 		}
 	}
 
-	// Keyboard shortcut: T for search
-	if inpututil.IsKeyJustPressed(ebiten.KeyT) && jr.focusMode != 1 {
+	// Keyboard shortcut: / for search
+	if inpututil.IsKeyJustPressed(ebiten.KeySlash) && jr.focusMode != 1 {
 		if jr.OnSearch != nil {
 			jr.OnSearch()
 		}
@@ -327,13 +338,14 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 	jr.scrollY = Lerp(jr.scrollY, jr.targetScrollY, ScrollAnimSpeed)
 
 	// Header
-	DrawText(dst, "Requests", SectionPadding, 16, FontSizeTitle, ColorPrimary)
+	DrawText(dst, "My Requests", SectionPadding, 16, FontSizeTitle, ColorPrimary)
 
 	// Search button (top right)
-	searchBtnX := float64(ScreenWidth) - SectionPadding - 120
-	searchBtnY := 14.0
-	vector.DrawFilledRect(dst, float32(searchBtnX), float32(searchBtnY), 120, 34, ColorSurface, false)
-	DrawTextCentered(dst, "\U0001F50D Search", searchBtnX+60, searchBtnY+17, FontSizeSmall, ColorTextSecondary)
+	searchX := float32(jr.searchBtnX())
+	drawNavButton(dst, "Search", searchX, reqsSearchBtnY, reqsSearchBtnW, reqsSearchBtnH,
+		false, // not focusable via keyboard on this screen (use / shortcut)
+		func(d *ebiten.Image, cx, cy, r float32, c color.Color) { drawSearchIcon(d, cx, cy, r, c) },
+		ColorPrimary)
 
 	// Filter tabs
 	tabY := 55.0
@@ -402,6 +414,6 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 	}
 
 	// Hint
-	hint := "T to search  \u00b7  \u2190 \u2192 filter  \u00b7  Esc to go back"
+	hint := "/ search  \u00b7  \u2190 \u2192 filter  \u00b7  Esc back"
 	DrawText(dst, hint, SectionPadding, float64(ScreenHeight)-40, FontSizeSmall, ColorTextMuted)
 }

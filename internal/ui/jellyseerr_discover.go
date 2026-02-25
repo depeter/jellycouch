@@ -2,12 +2,12 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
 	"log"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"github.com/hajimehoshi/ebiten/v2/vector"
 
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/jellyseerr"
@@ -21,7 +21,8 @@ type JellyseerrDiscoverScreen struct {
 	sections     []*PosterGrid
 	results      [][]jellyseerr.SearchResult // parallel to sections
 	sectionIndex int
-	focusMode    int // 0=header buttons, 1=sections
+	focusMode    int // 0=nav buttons, 1=sections
+	navBtnIndex  int // 0=My Requests, 1=Search (when focusMode==0)
 	loaded       bool
 	loading      bool
 	loadError    string
@@ -44,7 +45,7 @@ func NewJellyseerrDiscoverScreen(client *jellyseerr.Client, imgCache *cache.Imag
 	}
 }
 
-func (ds *JellyseerrDiscoverScreen) Name() string { return "Discover" }
+func (ds *JellyseerrDiscoverScreen) Name() string { return "Discovery" }
 
 func (ds *JellyseerrDiscoverScreen) OnEnter() {
 	if !ds.loaded && !ds.loading {
@@ -171,6 +172,22 @@ func (ds *JellyseerrDiscoverScreen) mediaStatus(r jellyseerr.SearchResult) int {
 	return r.MediaInfo.Status
 }
 
+// Nav button layout constants
+const (
+	discNavBtnY  = 12.0
+	discNavBtnH  = 38.0
+	discReqBtnW  = 130.0
+	discSrchBtnW = 100.0
+	discBtnGap   = 10.0
+)
+
+func (ds *JellyseerrDiscoverScreen) searchBtnX() float64 {
+	return float64(ScreenWidth) - SectionPadding - discSrchBtnW
+}
+func (ds *JellyseerrDiscoverScreen) reqBtnX() float64 {
+	return ds.searchBtnX() - discBtnGap - discReqBtnW
+}
+
 func (ds *JellyseerrDiscoverScreen) Update() (*ScreenTransition, error) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
@@ -178,6 +195,14 @@ func (ds *JellyseerrDiscoverScreen) Update() (*ScreenTransition, error) {
 	_, enter, back := InputState()
 
 	if back {
+		if ds.focusMode == 0 {
+			// From nav buttons, go to sections
+			ds.focusMode = 1
+			if len(ds.sections) > 0 {
+				ds.sections[ds.sectionIndex].Active = true
+			}
+			return nil, nil
+		}
 		return &ScreenTransition{Type: TransitionPop}, nil
 	}
 
@@ -196,19 +221,17 @@ func (ds *JellyseerrDiscoverScreen) Update() (*ScreenTransition, error) {
 		return nil, nil
 	}
 	if clicked {
-		// Requests button
-		reqX := float64(ScreenWidth) - SectionPadding - 230.0
-		reqY := 14.0
-		if PointInRect(mx, my, reqX, reqY, 100, 34) {
+		// My Requests button
+		reqX := ds.reqBtnX()
+		if PointInRect(mx, my, reqX, discNavBtnY, discReqBtnW, discNavBtnH) {
 			if ds.OnRequests != nil {
 				ds.OnRequests()
 			}
 			return nil, nil
 		}
 		// Search button
-		searchX := float64(ScreenWidth) - SectionPadding - 120.0
-		searchY := 14.0
-		if PointInRect(mx, my, searchX, searchY, 120, 34) {
+		searchX := ds.searchBtnX()
+		if PointInRect(mx, my, searchX, discNavBtnY, discSrchBtnW, discNavBtnH) {
 			if ds.OnSearch != nil {
 				ds.OnSearch()
 			}
@@ -234,7 +257,42 @@ func (ds *JellyseerrDiscoverScreen) Update() (*ScreenTransition, error) {
 		}
 	}
 
-	// Keyboard shortcuts
+	// Nav buttons focused
+	if ds.focusMode == 0 {
+		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) || enter {
+			if ds.navBtnIndex == 0 {
+				if ds.OnRequests != nil {
+					ds.OnRequests()
+				}
+			} else {
+				if ds.OnSearch != nil {
+					ds.OnSearch()
+				}
+			}
+			return nil, nil
+		}
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
+			if ds.navBtnIndex == 0 {
+				ds.navBtnIndex = 1
+			}
+			return nil, nil
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
+			if ds.navBtnIndex == 1 {
+				ds.navBtnIndex = 0
+			}
+			return nil, nil
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) && ds.loaded && len(ds.sections) > 0 {
+			ds.focusMode = 1
+			ds.sections[ds.sectionIndex].Active = true
+			return nil, nil
+		}
+		return nil, nil
+	}
+
+	// Keyboard shortcuts (from sections)
 	if inpututil.IsKeyJustPressed(ebiten.KeyR) {
 		if ds.OnRequests != nil {
 			ds.OnRequests()
@@ -262,6 +320,11 @@ func (ds *JellyseerrDiscoverScreen) Update() (*ScreenTransition, error) {
 			ds.sectionIndex--
 			ds.sections[ds.sectionIndex].Active = true
 			ds.ensureSectionVisible()
+		} else {
+			// Move focus to nav buttons
+			currentSection.Active = false
+			ds.focusMode = 0
+			ds.navBtnIndex = 0
 		}
 	case DirDown:
 		if ds.sectionIndex < len(ds.sections)-1 {
@@ -304,19 +367,21 @@ func (ds *JellyseerrDiscoverScreen) Draw(dst *ebiten.Image) {
 	ds.scrollY = Lerp(ds.scrollY, ds.targetScrollY, ScrollAnimSpeed)
 
 	// Header
-	DrawText(dst, "Discover", SectionPadding, 16, FontSizeTitle, ColorPrimary)
+	DrawText(dst, "Discovery", SectionPadding, 16, FontSizeTitle, ColorPrimary)
 
-	// Requests button
-	reqX := float64(ScreenWidth) - SectionPadding - 230.0
-	reqY := 14.0
-	vector.DrawFilledRect(dst, float32(reqX), float32(reqY), 100, 34, ColorSurface, false)
-	DrawTextCentered(dst, "Requests", reqX+50, reqY+17, FontSizeSmall, ColorTextSecondary)
+	// My Requests button
+	reqX := float32(ds.reqBtnX())
+	drawNavButton(dst, "My Requests", reqX, discNavBtnY, discReqBtnW, discNavBtnH,
+		ds.focusMode == 0 && ds.navBtnIndex == 0,
+		func(d *ebiten.Image, cx, cy, r float32, c color.Color) { drawListIcon(d, cx, cy, r, c) },
+		ColorAccent)
 
 	// Search button
-	searchX := float64(ScreenWidth) - SectionPadding - 120.0
-	searchY := 14.0
-	vector.DrawFilledRect(dst, float32(searchX), float32(searchY), 120, 34, ColorSurface, false)
-	DrawTextCentered(dst, "\U0001F50D Search", searchX+60, searchY+17, FontSizeSmall, ColorTextSecondary)
+	searchX := float32(ds.searchBtnX())
+	drawNavButton(dst, "Search", searchX, discNavBtnY, discSrchBtnW, discNavBtnH,
+		ds.focusMode == 0 && ds.navBtnIndex == 1,
+		func(d *ebiten.Image, cx, cy, r float32, c color.Color) { drawSearchIcon(d, cx, cy, r, c) },
+		ColorPrimary)
 
 	if !ds.loaded {
 		DrawTextCentered(dst, "Loading...", float64(ScreenWidth)/2, float64(ScreenHeight)/2,

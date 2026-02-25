@@ -43,7 +43,7 @@ func NewJellyseerrSearchScreen(client *jellyseerr.Client, imgCache *cache.ImageC
 	}
 }
 
-func (js *JellyseerrSearchScreen) Name() string { return "Jellyseerr Search" }
+func (js *JellyseerrSearchScreen) Name() string { return "Search" }
 func (js *JellyseerrSearchScreen) OnEnter()     {}
 func (js *JellyseerrSearchScreen) OnExit()      {}
 
@@ -224,7 +224,7 @@ func (js *JellyseerrSearchScreen) Draw(dst *ebiten.Image) {
 	js.scrollY = Lerp(js.scrollY, js.targetScrollY, ScrollAnimSpeed)
 
 	// Title
-	DrawText(dst, "Jellyseerr Search", SectionPadding, 16, FontSizeTitle, ColorPrimary)
+	DrawText(dst, "Search", SectionPadding, 16, FontSizeTitle, ColorPrimary)
 
 	// Search bar
 	barX := float32(SectionPadding)
