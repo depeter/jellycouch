@@ -57,6 +57,9 @@ func New(cfg *config.Config) (*Player, error) {
 	// Volume
 	must(m.SetOptionString("volume", fmt.Sprintf("%d", cfg.Playback.Volume)))
 
+	// Enable yt-dlp for YouTube URLs (trailers, etc.)
+	must(m.SetOptionString("ytdl", "yes"))
+
 	if err := m.Initialize(); err != nil {
 		return nil, fmt.Errorf("mpv init: %w", err)
 	}
@@ -223,10 +226,16 @@ func (p *Player) eventLoop() {
 			p.mu.Unlock()
 
 		case mpv.EventEnd:
+			ef := ev.EndFile()
 			p.mu.Lock()
+			wasPlaying := p.playing
 			p.playing = false
 			p.mu.Unlock()
-			if p.OnPlaybackEnd != nil {
+			log.Printf("mpv end-file: reason=%s wasPlaying=%v", ef.Reason, wasPlaying)
+			// Only signal playback end when we were actually playing.
+			// Stop() sets playing=false before sending the stop command,
+			// so EndFileStop events arrive with wasPlaying=false and are ignored.
+			if wasPlaying && p.OnPlaybackEnd != nil {
 				p.OnPlaybackEnd()
 			}
 

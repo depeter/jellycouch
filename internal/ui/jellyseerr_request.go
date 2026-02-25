@@ -36,6 +36,12 @@ type JellyseerrRequestScreen struct {
 	reqError   string
 	reqSuccess string
 
+	wantBack   bool
+	trailerURL string
+
+	// Callbacks
+	OnPlayTrailer func(url string)
+
 	errDisplay ErrorDisplay
 	mu         sync.Mutex
 }
@@ -74,9 +80,11 @@ func (jr *JellyseerrRequestScreen) OnEnter() {
 		}
 	}
 
-	// For TV shows, load season info
+	// Load detail for trailer info + season selection
 	if jr.result.MediaType == "tv" {
 		go jr.loadTVDetail()
+	} else if jr.result.MediaType == "movie" {
+		go jr.loadMovieDetail()
 	}
 }
 
@@ -93,6 +101,7 @@ func (jr *JellyseerrRequestScreen) loadTVDetail() {
 	if detail.MediaInfo != nil && detail.MediaInfo.Status > jr.status {
 		jr.status = detail.MediaInfo.Status
 	}
+	jr.trailerURL = detail.TrailerURL()
 	// Initialize season selection (all selected by default, skip specials)
 	jr.selectedSeasons = make([]bool, len(detail.Seasons))
 	for i, s := range detail.Seasons {
@@ -102,10 +111,28 @@ func (jr *JellyseerrRequestScreen) loadTVDetail() {
 	jr.mu.Unlock()
 }
 
+func (jr *JellyseerrRequestScreen) loadMovieDetail() {
+	detail, err := jr.client.GetMovie(jr.result.ID)
+	if err != nil {
+		log.Printf("Failed to load movie detail: %v", err)
+		return
+	}
+	jr.mu.Lock()
+	if detail.MediaInfo != nil && detail.MediaInfo.Status > jr.status {
+		jr.status = detail.MediaInfo.Status
+	}
+	jr.trailerURL = detail.TrailerURL()
+	jr.updateButtons()
+	jr.mu.Unlock()
+}
+
 func (jr *JellyseerrRequestScreen) updateButtons() {
 	jr.buttons = nil
 	if jr.status < jellyseerr.StatusPending {
 		jr.buttons = append(jr.buttons, "Request")
+	}
+	if jr.trailerURL != "" {
+		jr.buttons = append(jr.buttons, "Trailer")
 	}
 	jr.buttons = append(jr.buttons, "Back")
 	if jr.buttonIndex >= len(jr.buttons) {
@@ -119,7 +146,8 @@ func (jr *JellyseerrRequestScreen) Update() (*ScreenTransition, error) {
 
 	dir, enter, back := InputState()
 
-	if back {
+	if back || jr.wantBack {
+		jr.wantBack = false
 		return &ScreenTransition{Type: TransitionPop}, nil
 	}
 
@@ -187,11 +215,12 @@ func (jr *JellyseerrRequestScreen) handleButton() {
 			return
 		}
 		go jr.doRequest()
+	case "Trailer":
+		if jr.OnPlayTrailer != nil && jr.trailerURL != "" {
+			jr.OnPlayTrailer(jr.trailerURL)
+		}
 	case "Back":
-		// Will be handled via screen transition on next Update
-		jr.mu.Unlock()
-		// We can't return a transition from here, so just pop on next back
-		jr.mu.Lock()
+		jr.wantBack = true
 	}
 }
 

@@ -127,28 +127,60 @@ type RequestsResponse struct {
 	Results  []MediaRequest `json:"results"`
 }
 
+// RelatedVideo represents a video (trailer, teaser, etc.) from TMDB.
+type RelatedVideo struct {
+	URL  string `json:"url"`
+	Key  string `json:"key"`
+	Name string `json:"name"`
+	Size int    `json:"size"`
+	Type string `json:"type"` // "Trailer", "Teaser", "Clip", etc.
+	Site string `json:"site"` // "YouTube", etc.
+}
+
 // MovieDetail contains detailed movie info from Jellyseerr.
 type MovieDetail struct {
-	ID          int        `json:"id"`
-	Title       string     `json:"title"`
-	Overview    string     `json:"overview"`
-	PosterPath  string     `json:"posterPath"`
-	ReleaseDate string     `json:"releaseDate"`
-	VoteAverage float64    `json:"voteAverage"`
-	MediaInfo   *MediaInfo `json:"mediaInfo"`
+	ID            int            `json:"id"`
+	Title         string         `json:"title"`
+	Overview      string         `json:"overview"`
+	PosterPath    string         `json:"posterPath"`
+	ReleaseDate   string         `json:"releaseDate"`
+	VoteAverage   float64        `json:"voteAverage"`
+	RelatedVideos []RelatedVideo `json:"relatedVideos"`
+	MediaInfo     *MediaInfo     `json:"mediaInfo"`
+}
+
+// TrailerURL returns the full YouTube URL for the first trailer, or "".
+func (d *MovieDetail) TrailerURL() string {
+	for _, v := range d.RelatedVideos {
+		if v.Type == "Trailer" && v.Site == "YouTube" && v.Key != "" {
+			return "https://www.youtube.com/watch?v=" + v.Key
+		}
+	}
+	return ""
 }
 
 // TVDetail contains detailed TV show info from Jellyseerr.
 type TVDetail struct {
-	ID           int        `json:"id"`
-	Name         string     `json:"name"`
-	Overview     string     `json:"overview"`
-	PosterPath   string     `json:"posterPath"`
-	FirstAirDate string     `json:"firstAirDate"`
-	VoteAverage  float64    `json:"voteAverage"`
-	NumberOfSeasons int     `json:"numberOfSeasons"`
-	Seasons      []Season   `json:"seasons"`
-	MediaInfo    *MediaInfo `json:"mediaInfo"`
+	ID              int            `json:"id"`
+	Name            string         `json:"name"`
+	Overview        string         `json:"overview"`
+	PosterPath      string         `json:"posterPath"`
+	FirstAirDate    string         `json:"firstAirDate"`
+	VoteAverage     float64        `json:"voteAverage"`
+	NumberOfSeasons int            `json:"numberOfSeasons"`
+	Seasons         []Season       `json:"seasons"`
+	RelatedVideos   []RelatedVideo `json:"relatedVideos"`
+	MediaInfo       *MediaInfo     `json:"mediaInfo"`
+}
+
+// TrailerURL returns the full YouTube URL for the first trailer, or "".
+func (d *TVDetail) TrailerURL() string {
+	for _, v := range d.RelatedVideos {
+		if v.Type == "Trailer" && v.Site == "YouTube" && v.Key != "" {
+			return "https://www.youtube.com/watch?v=" + v.Key
+		}
+	}
+	return ""
 }
 
 // Season represents a TV season.

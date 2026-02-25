@@ -189,6 +189,9 @@ func pushJellyseerrRequestScreen(game *app.Game, cfg *config.Config, imgCache *c
 		return
 	}
 	reqScreen := ui.NewJellyseerrRequestScreen(game.Jellyseerr, imgCache, result)
+	reqScreen.OnPlayTrailer = func(url string) {
+		game.PlayURL(url)
+	}
 	game.Screens.Push(reqScreen)
 }
 
