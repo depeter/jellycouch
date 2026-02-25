@@ -102,23 +102,87 @@ func (jr *JellyseerrRequestsScreen) loadRequests() {
 			RequestStatus: jr.requestToMediaStatus(req.Status),
 		}
 
-		posterURL := req.Media.PosterPath
-		if posterURL != "" {
-			posterURL = "https://image.tmdb.org/t/p/w300" + posterURL
-			if img := jr.imgCache.Get(posterURL); img != nil {
-				jr.gridItems[i].Image = img
-			} else {
-				idx := i
-				jr.imgCache.LoadAsync(posterURL, func(img *ebiten.Image) {
-					jr.mu.Lock()
-					defer jr.mu.Unlock()
-					if idx < len(jr.gridItems) {
-						jr.gridItems[idx].Image = img
-					}
-				})
-			}
+		// Fetch poster and title from TMDB detail lookup
+		if req.Media.TmdbID != 0 {
+			idx := i
+			mediaType := req.Type
+			tmdbID := req.Media.TmdbID
+			go jr.fetchDetailForRequest(idx, mediaType, tmdbID)
 		}
 	}
+}
+
+// fetchDetailForRequest fetches movie/TV detail by TMDB ID to get poster and title.
+func (jr *JellyseerrRequestsScreen) fetchDetailForRequest(idx int, mediaType string, tmdbID int) {
+	var posterPath, title string
+
+	if mediaType == "movie" {
+		detail, err := jr.client.GetMovie(tmdbID)
+		if err != nil {
+			return
+		}
+		posterPath = detail.PosterPath
+		title = detail.Title
+	} else {
+		detail, err := jr.client.GetTV(tmdbID)
+		if err != nil {
+			return
+		}
+		posterPath = detail.PosterPath
+		title = detail.Name
+	}
+
+	jr.mu.Lock()
+	defer jr.mu.Unlock()
+
+	if idx >= len(jr.gridItems) {
+		return
+	}
+
+	if title != "" {
+		jr.gridItems[idx].Title = title
+	}
+
+	if posterPath != "" {
+		posterURL := "https://image.tmdb.org/t/p/w300" + posterPath
+		if img := jr.imgCache.Get(posterURL); img != nil {
+			jr.gridItems[idx].Image = img
+		} else {
+			jr.imgCache.LoadAsync(posterURL, func(img *ebiten.Image) {
+				jr.mu.Lock()
+				defer jr.mu.Unlock()
+				if idx < len(jr.gridItems) {
+					jr.gridItems[idx].Image = img
+				}
+			})
+		}
+	}
+}
+
+// Also update selectRequest to include poster path from detail lookup
+func (jr *JellyseerrRequestsScreen) fetchPosterForSelect(req jellyseerr.MediaRequest) jellyseerr.SearchResult {
+	result := jellyseerr.SearchResult{
+		ID:        req.Media.TmdbID,
+		MediaType: req.Type,
+		MediaInfo: &jellyseerr.MediaInfo{
+			Status: req.Media.Status,
+		},
+		PosterPath: req.Media.PosterPath,
+	}
+
+	// Try to get the title from the grid item
+	for _, item := range jr.gridItems {
+		if item.ID == fmt.Sprintf("%d", req.ID) && item.Title != fmt.Sprintf("Request #%d", req.ID) {
+			if req.Type == "movie" {
+				result.Title = item.Title
+			} else {
+				result.Name = item.Title
+			}
+			break
+		}
+	}
+
+	return result
 }
 
 // requestToMediaStatus maps a request status to a media status for badge display.
@@ -252,15 +316,7 @@ func (jr *JellyseerrRequestsScreen) selectRequest(idx int) {
 		return
 	}
 	req := jr.requests[idx]
-	// Convert request to a search result for the detail screen
-	result := jellyseerr.SearchResult{
-		ID:        req.Media.TmdbID,
-		MediaType: req.Type,
-		MediaInfo: &jellyseerr.MediaInfo{
-			Status: req.Media.Status,
-		},
-		PosterPath: req.Media.PosterPath,
-	}
+	result := jr.fetchPosterForSelect(req)
 	jr.OnItemSelected(result)
 }
 

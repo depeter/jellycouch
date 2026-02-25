@@ -109,7 +109,7 @@ func pushHomeScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCac
 		pushSettingsScreen(game, cfg)
 	}
 	home.OnRequests = func() {
-		pushJellyseerrRequestsScreen(game, cfg, imgCache)
+		pushJellyseerrDiscoverScreen(game, cfg, imgCache)
 	}
 	home.JellyseerrEnabled = func() bool {
 		return game.Jellyseerr != nil
@@ -154,6 +154,23 @@ func pushSettingsScreen(game *app.Game, cfg *config.Config) {
 		}
 	})
 	game.Screens.Push(settings)
+}
+
+func pushJellyseerrDiscoverScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache) {
+	if game.Jellyseerr == nil {
+		return
+	}
+	discover := ui.NewJellyseerrDiscoverScreen(game.Jellyseerr, imgCache)
+	discover.OnItemSelected = func(result jellyseerr.SearchResult) {
+		pushJellyseerrRequestScreen(game, cfg, imgCache, result)
+	}
+	discover.OnRequests = func() {
+		pushJellyseerrRequestsScreen(game, cfg, imgCache)
+	}
+	discover.OnSearch = func() {
+		pushJellyseerrSearchScreen(game, cfg, imgCache)
+	}
+	game.Screens.Push(discover)
 }
 
 func pushJellyseerrSearchScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache) {
