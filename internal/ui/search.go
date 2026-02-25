@@ -227,7 +227,11 @@ func (ss *SearchScreen) doSearch() {
 		} else if item.Year > 0 {
 			ss.gridItems[i].Subtitle = fmt.Sprintf("%d", item.Year)
 		}
-		url := ss.client.GetPosterURL(item.ID)
+		posterID := item.ID
+		if item.Type == "Episode" && item.SeriesID != "" {
+			posterID = item.SeriesID
+		}
+		url := ss.client.GetPosterURL(posterID)
 		if img := ss.imgCache.Get(url); img != nil {
 			ss.gridItems[i].Image = img
 		} else {

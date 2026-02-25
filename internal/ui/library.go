@@ -293,7 +293,11 @@ func (ls *LibraryScreen) loadData(start int) {
 		ls.gridItems[i].Watched = item.Played
 		ls.gridItems[i].Rating = float64(item.CommunityRating)
 
-		url := ls.client.GetPosterURL(item.ID)
+		posterID := item.ID
+		if item.Type == "Episode" && item.SeriesID != "" {
+			posterID = item.SeriesID
+		}
+		url := ls.client.GetPosterURL(posterID)
 		if img := ls.imgCache.Get(url); img != nil {
 			ls.gridItems[i].Image = img
 		} else {
