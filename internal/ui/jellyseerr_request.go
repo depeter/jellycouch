@@ -794,9 +794,6 @@ func (jr *JellyseerrRequestScreen) Draw(dst *ebiten.Image) {
 		}
 	}
 
-	// Hint
-	hint := "Enter to select  \u00b7  Esc to go back"
-	DrawText(dst, hint, SectionPadding, float64(ScreenHeight)-40, FontSizeSmall, ColorTextMuted)
 }
 
 // drawOptions draws the option rows and returns the Y position after the last row.

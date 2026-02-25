@@ -409,7 +409,4 @@ func (ds *JellyseerrDiscoverScreen) Draw(dst *ebiten.Image) {
 		y += h + SectionGap
 	}
 
-	// Hint
-	hint := "R requests  \u00b7  / search  \u00b7  Esc back"
-	DrawText(dst, hint, SectionPadding, float64(ScreenHeight)-40, FontSizeSmall, ColorTextMuted)
 }

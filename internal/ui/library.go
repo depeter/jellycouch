@@ -491,10 +491,6 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 		DrawTextCentered(dst, "No items found", float64(ScreenWidth)/2, float64(ScreenHeight)/2,
 			FontSizeHeading, ColorTextSecondary)
 
-		// Hint
-		hint := "Esc: back  /: search  F: filters"
-		DrawTextCentered(dst, hint, float64(ScreenWidth)/2, float64(ScreenHeight)/2+40,
-			FontSizeSmall, ColorTextMuted)
 		return
 	}
 
@@ -524,15 +520,6 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 			FontSizeBody, ColorTextSecondary)
 	}
 
-	// Keybind hint at bottom
-	var hint string
-	if ls.focusMode == focusGrid {
-		hint = "Esc: back  /: search  F: filters  Up on top row: filter bar"
-	} else {
-		hint = "Left/Right: pills  Up/Down/Enter: cycle  Esc/Down: grid"
-	}
-	DrawTextCentered(dst, hint, float64(ScreenWidth)/2, float64(ScreenHeight)-20,
-		FontSizeSmall, ColorTextMuted)
 }
 
 func drawPosterItem(dst *ebiten.Image, item GridItem, x, y float64, focused bool) {

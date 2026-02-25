@@ -408,7 +408,4 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 		drawPosterItem(dst, item, x, iy, isFocused)
 	}
 
-	// Hint
-	hint := "/ search  \u00b7  \u2190 \u2192 filter  \u00b7  Esc back"
-	DrawText(dst, hint, SectionPadding, float64(ScreenHeight)-40, FontSizeSmall, ColorTextMuted)
 }
