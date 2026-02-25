@@ -2,6 +2,7 @@ package app
 
 import (
 	"log"
+	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -154,11 +155,14 @@ func (g *Game) Update() error {
 			return nil
 		}
 
-		// Only handle Escape/Backspace to exit playback — mpv handles everything else
 		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) || inpututil.IsKeyJustPressed(ebiten.KeyBackspace) {
 			g.StopPlayback()
 			return nil
 		}
+
+		// Forward playback controls to mpv (required on Windows where
+		// embedded mpv doesn't receive keyboard input directly)
+		g.handlePlaybackKeys()
 	}
 
 	ui.UpdateInputState()
@@ -180,4 +184,148 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return g.Width, g.Height
+}
+
+// handlePlaybackKeys forwards configured keybinds to the mpv player.
+func (g *Game) handlePlaybackKeys() {
+	if g.Player == nil {
+		return
+	}
+	kb := &g.Config.Keybinds
+
+	if keyJustPressed(kb.PlayPause) {
+		g.Player.TogglePause()
+	}
+	if keyJustPressed(kb.SeekForward) {
+		g.Player.Seek(10)
+	}
+	if keyJustPressed(kb.SeekBackward) {
+		g.Player.Seek(-10)
+	}
+	if keyJustPressed(kb.SeekForwardLarge) {
+		g.Player.Seek(60)
+	}
+	if keyJustPressed(kb.SeekBackwardLarge) {
+		g.Player.Seek(-60)
+	}
+	if keyJustPressed(kb.VolumeUp) {
+		g.Player.AdjustVolume(5)
+	}
+	if keyJustPressed(kb.VolumeDown) {
+		g.Player.AdjustVolume(-5)
+	}
+	if keyJustPressed(kb.Mute) {
+		g.Player.ToggleMute()
+	}
+	if keyJustPressed(kb.SubCycle) {
+		g.Player.CycleSubtitles()
+	}
+	if keyJustPressed(kb.AudioCycle) {
+		g.Player.CycleAudio()
+	}
+	if keyJustPressed(kb.Fullscreen) {
+		ebiten.SetFullscreen(!ebiten.IsFullscreen())
+	}
+}
+
+// parseKey converts a config key name to an ebiten.Key.
+func parseKey(name string) (ebiten.Key, bool) {
+	switch strings.ToLower(name) {
+	case "space":
+		return ebiten.KeySpace, true
+	case "enter", "return":
+		return ebiten.KeyEnter, true
+	case "tab":
+		return ebiten.KeyTab, true
+	case "left":
+		return ebiten.KeyArrowLeft, true
+	case "right":
+		return ebiten.KeyArrowRight, true
+	case "up":
+		return ebiten.KeyArrowUp, true
+	case "down":
+		return ebiten.KeyArrowDown, true
+	case "a":
+		return ebiten.KeyA, true
+	case "b":
+		return ebiten.KeyB, true
+	case "c":
+		return ebiten.KeyC, true
+	case "d":
+		return ebiten.KeyD, true
+	case "e":
+		return ebiten.KeyE, true
+	case "f":
+		return ebiten.KeyF, true
+	case "g":
+		return ebiten.KeyG, true
+	case "h":
+		return ebiten.KeyH, true
+	case "i":
+		return ebiten.KeyI, true
+	case "j":
+		return ebiten.KeyJ, true
+	case "k":
+		return ebiten.KeyK, true
+	case "l":
+		return ebiten.KeyL, true
+	case "m":
+		return ebiten.KeyM, true
+	case "n":
+		return ebiten.KeyN, true
+	case "o":
+		return ebiten.KeyO, true
+	case "p":
+		return ebiten.KeyP, true
+	case "q":
+		return ebiten.KeyQ, true
+	case "r":
+		return ebiten.KeyR, true
+	case "s":
+		return ebiten.KeyS, true
+	case "t":
+		return ebiten.KeyT, true
+	case "u":
+		return ebiten.KeyU, true
+	case "v":
+		return ebiten.KeyV, true
+	case "w":
+		return ebiten.KeyW, true
+	case "x":
+		return ebiten.KeyX, true
+	case "y":
+		return ebiten.KeyY, true
+	case "z":
+		return ebiten.KeyZ, true
+	case "0":
+		return ebiten.KeyDigit0, true
+	case "1":
+		return ebiten.KeyDigit1, true
+	case "2":
+		return ebiten.KeyDigit2, true
+	case "3":
+		return ebiten.KeyDigit3, true
+	case "4":
+		return ebiten.KeyDigit4, true
+	case "5":
+		return ebiten.KeyDigit5, true
+	case "6":
+		return ebiten.KeyDigit6, true
+	case "7":
+		return ebiten.KeyDigit7, true
+	case "8":
+		return ebiten.KeyDigit8, true
+	case "9":
+		return ebiten.KeyDigit9, true
+	default:
+		return 0, false
+	}
+}
+
+// keyJustPressed checks if the key named by the config string was just pressed.
+func keyJustPressed(name string) bool {
+	if k, ok := parseKey(name); ok {
+		return inpututil.IsKeyJustPressed(k)
+	}
+	return false
 }

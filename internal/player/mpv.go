@@ -257,6 +257,13 @@ func (p *Player) SetVolume(vol int) error {
 	})
 }
 
+// AdjustVolume changes volume by a relative amount.
+func (p *Player) AdjustVolume(delta int) error {
+	return p.do(func(m *mpv.Mpv) error {
+		return m.CommandString(mpvCmd("add", "volume", fmt.Sprintf("%d", delta)))
+	})
+}
+
 // CycleSubtitles cycles through subtitle tracks.
 func (p *Player) CycleSubtitles() error {
 	return p.do(func(m *mpv.Mpv) error {
