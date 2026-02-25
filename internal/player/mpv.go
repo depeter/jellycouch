@@ -11,9 +11,17 @@ import (
 	"github.com/depeter/jellycouch/internal/config"
 )
 
+// playerCmd is a function to execute on the mpv thread, with a channel for the result.
+type playerCmd struct {
+	fn     func(m *mpv.Mpv) error
+	result chan error
+}
+
 // Player wraps libmpv for video playback.
+// All mpv API calls are proxied to a single dedicated OS thread.
 type Player struct {
-	m        *mpv.Mpv
+	cmdCh chan playerCmd
+
 	mu       sync.Mutex
 	playing  bool
 	paused   bool
@@ -25,7 +33,32 @@ type Player struct {
 }
 
 // New creates and initializes a new mpv player instance.
+// The mpv handle is created, configured, and used entirely on a single OS thread.
 func New(cfg *config.Config) (*Player, error) {
+	p := &Player{
+		cmdCh: make(chan playerCmd, 8),
+	}
+
+	initErr := make(chan error, 1)
+	go p.mpvThread(cfg, initErr)
+
+	if err := <-initErr; err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func must(err error) {
+	if err != nil {
+		log.Printf("mpv option warning: %v", err)
+	}
+}
+
+// mpvThread runs on a locked OS thread. All mpv API calls happen here.
+func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	m := mpv.New()
 
 	// Core options — mpv owns the render pipeline
@@ -62,148 +95,31 @@ func New(cfg *config.Config) (*Player, error) {
 	must(m.SetOptionString("ytdl", "yes"))
 
 	if err := m.Initialize(); err != nil {
-		return nil, fmt.Errorf("mpv init: %w", err)
+		initErr <- fmt.Errorf("mpv init: %w", err)
+		return
 	}
-
-	p := &Player{m: m}
 
 	// Observe properties for position/duration tracking
 	m.ObserveProperty(0, "time-pos", mpv.FormatDouble)
 	m.ObserveProperty(0, "duration", mpv.FormatDouble)
 	m.ObserveProperty(0, "pause", mpv.FormatFlag)
 
-	go p.eventLoop()
+	initErr <- nil
 
-	return p, nil
-}
-
-func must(err error) {
-	if err != nil {
-		log.Printf("mpv option warning: %v", err)
-	}
-}
-
-// SetWindowID sets the native window handle for embedded playback.
-func (p *Player) SetWindowID(wid int64) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.m.SetOptionString("wid", fmt.Sprintf("%d", wid))
-}
-
-// LoadFile starts playback of a URL.
-func (p *Player) LoadFile(url string, itemID string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.itemID = itemID
-	p.playing = true
-	p.paused = false
-	return p.m.Command([]string{"loadfile", url})
-}
-
-// Seek seeks relative to current position.
-func (p *Player) Seek(seconds float64) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.m.Command([]string{"seek", fmt.Sprintf("%.1f", seconds), "relative"})
-}
-
-// SeekAbsolute seeks to an absolute position.
-func (p *Player) SeekAbsolute(seconds float64) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.m.Command([]string{"seek", fmt.Sprintf("%.1f", seconds), "absolute"})
-}
-
-// TogglePause toggles pause state.
-func (p *Player) TogglePause() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.m.Command([]string{"cycle", "pause"})
-}
-
-// SetVolume sets the volume (0-150).
-func (p *Player) SetVolume(vol int) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.m.SetPropertyString("volume", fmt.Sprintf("%d", vol))
-}
-
-// CycleSubtitles cycles through subtitle tracks.
-func (p *Player) CycleSubtitles() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.m.Command([]string{"cycle", "sub"})
-}
-
-// CycleAudio cycles through audio tracks.
-func (p *Player) CycleAudio() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.m.Command([]string{"cycle", "audio"})
-}
-
-// ToggleMute toggles audio mute.
-func (p *Player) ToggleMute() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.m.Command([]string{"cycle", "mute"})
-}
-
-// Stop stops playback.
-func (p *Player) Stop() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.playing = false
-	return p.m.Command([]string{"stop"})
-}
-
-// Destroy cleans up the mpv instance.
-func (p *Player) Destroy() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.m.TerminateDestroy()
-}
-
-// Playing returns whether media is currently loaded.
-func (p *Player) Playing() bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.playing
-}
-
-// Paused returns the current pause state.
-func (p *Player) Paused() bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.paused
-}
-
-// Position returns the current playback position in seconds.
-func (p *Player) Position() float64 {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.position
-}
-
-// Duration returns the total duration in seconds.
-func (p *Player) Duration() float64 {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.duration
-}
-
-// ItemID returns the currently playing item ID.
-func (p *Player) ItemID() string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.itemID
-}
-
-func (p *Player) eventLoop() {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+	// Combined event + command loop
 	for {
-		ev := p.m.WaitEvent(1.0)
+		// Drain all pending commands before waiting for events
+		drained := false
+		for !drained {
+			select {
+			case cmd := <-p.cmdCh:
+				cmd.result <- cmd.fn(m)
+			default:
+				drained = true
+			}
+		}
+
+		ev := m.WaitEvent(0.1)
 		if ev == nil {
 			continue
 		}
@@ -248,9 +164,6 @@ func (p *Player) eventLoop() {
 			p.playing = false
 			p.mu.Unlock()
 			log.Printf("mpv end-file: reason=%s wasPlaying=%v", ef.Reason, wasPlaying)
-			// Only signal playback end when we were actually playing.
-			// Stop() sets playing=false before sending the stop command,
-			// so EndFileStop events arrive with wasPlaying=false and are ignored.
 			if wasPlaying && p.OnPlaybackEnd != nil {
 				p.OnPlaybackEnd()
 			}
@@ -259,4 +172,132 @@ func (p *Player) eventLoop() {
 			return
 		}
 	}
+}
+
+// do sends a command to the mpv thread and waits for the result.
+func (p *Player) do(fn func(m *mpv.Mpv) error) error {
+	ch := make(chan error, 1)
+	p.cmdCh <- playerCmd{fn: fn, result: ch}
+	return <-ch
+}
+
+// SetWindowID sets the native window handle for embedded playback.
+func (p *Player) SetWindowID(wid int64) error {
+	return p.do(func(m *mpv.Mpv) error {
+		return m.SetOptionString("wid", fmt.Sprintf("%d", wid))
+	})
+}
+
+// LoadFile starts playback of a URL.
+func (p *Player) LoadFile(url string, itemID string) error {
+	p.mu.Lock()
+	p.itemID = itemID
+	p.playing = true
+	p.paused = false
+	p.mu.Unlock()
+	return p.do(func(m *mpv.Mpv) error {
+		return m.Command([]string{"loadfile", url})
+	})
+}
+
+// Seek seeks relative to current position.
+func (p *Player) Seek(seconds float64) error {
+	return p.do(func(m *mpv.Mpv) error {
+		return m.Command([]string{"seek", fmt.Sprintf("%.1f", seconds), "relative"})
+	})
+}
+
+// SeekAbsolute seeks to an absolute position.
+func (p *Player) SeekAbsolute(seconds float64) error {
+	return p.do(func(m *mpv.Mpv) error {
+		return m.Command([]string{"seek", fmt.Sprintf("%.1f", seconds), "absolute"})
+	})
+}
+
+// TogglePause toggles pause state.
+func (p *Player) TogglePause() error {
+	return p.do(func(m *mpv.Mpv) error {
+		return m.Command([]string{"cycle", "pause"})
+	})
+}
+
+// SetVolume sets the volume (0-150).
+func (p *Player) SetVolume(vol int) error {
+	return p.do(func(m *mpv.Mpv) error {
+		return m.SetPropertyString("volume", fmt.Sprintf("%d", vol))
+	})
+}
+
+// CycleSubtitles cycles through subtitle tracks.
+func (p *Player) CycleSubtitles() error {
+	return p.do(func(m *mpv.Mpv) error {
+		return m.Command([]string{"cycle", "sub"})
+	})
+}
+
+// CycleAudio cycles through audio tracks.
+func (p *Player) CycleAudio() error {
+	return p.do(func(m *mpv.Mpv) error {
+		return m.Command([]string{"cycle", "audio"})
+	})
+}
+
+// ToggleMute toggles audio mute.
+func (p *Player) ToggleMute() error {
+	return p.do(func(m *mpv.Mpv) error {
+		return m.Command([]string{"cycle", "mute"})
+	})
+}
+
+// Stop stops playback.
+func (p *Player) Stop() error {
+	p.mu.Lock()
+	p.playing = false
+	p.mu.Unlock()
+	return p.do(func(m *mpv.Mpv) error {
+		return m.Command([]string{"stop"})
+	})
+}
+
+// Destroy cleans up the mpv instance.
+func (p *Player) Destroy() {
+	p.do(func(m *mpv.Mpv) error {
+		m.TerminateDestroy()
+		return nil
+	})
+}
+
+// Playing returns whether media is currently loaded.
+func (p *Player) Playing() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.playing
+}
+
+// Paused returns the current pause state.
+func (p *Player) Paused() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.paused
+}
+
+// Position returns the current playback position in seconds.
+func (p *Player) Position() float64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.position
+}
+
+// Duration returns the total duration in seconds.
+func (p *Player) Duration() float64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.duration
+}
+
+// ItemID returns the currently playing item ID.
+func (p *Player) ItemID() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.itemID
 }
