@@ -3,6 +3,7 @@ package player
 import (
 	"fmt"
 	"log"
+	"runtime"
 	"sync"
 
 	"github.com/gen2brain/go-mpv"
@@ -199,6 +200,8 @@ func (p *Player) ItemID() string {
 }
 
 func (p *Player) eventLoop() {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	for {
 		ev := p.m.WaitEvent(1.0)
 		if ev == nil {
