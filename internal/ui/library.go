@@ -94,6 +94,7 @@ func (ls *LibraryScreen) loadData(start int) {
 			ls.gridItems[i].Progress = float64(item.PlaybackPositionTicks) / float64(item.RuntimeTicks)
 		}
 		ls.gridItems[i].Watched = item.Played
+		ls.gridItems[i].Rating = float64(item.CommunityRating)
 
 		url := ls.client.GetPosterURL(item.ID)
 		if img := ls.imgCache.Get(url); img != nil {
@@ -314,6 +315,11 @@ func drawPosterItem(dst *ebiten.Image, item GridItem, x, y float64, focused bool
 	// Watched badge
 	if item.Watched {
 		DrawTextCentered(dst, "✓", x+PosterWidth-12, y+12, FontSizeSmall, ColorSuccess)
+	}
+
+	// Rating badge (top-left corner)
+	if item.Rating > 0 {
+		drawRatingBadge(dst, item.Rating, x, y)
 	}
 
 	titleColor := ColorTextSecondary

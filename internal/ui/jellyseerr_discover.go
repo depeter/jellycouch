@@ -131,6 +131,7 @@ func (ds *JellyseerrDiscoverScreen) loadData() {
 				ID:            fmt.Sprintf("%d", result.ID),
 				Title:         result.DisplayTitle(),
 				Subtitle:      result.Year(),
+				Rating:        result.VoteAverage,
 				RequestStatus: ds.mediaStatus(result),
 			}
 			posterURL := result.PosterURL()

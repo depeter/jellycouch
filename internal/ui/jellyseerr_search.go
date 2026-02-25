@@ -189,6 +189,7 @@ func (js *JellyseerrSearchScreen) doSearch() {
 			ID:            fmt.Sprintf("%d", result.ID),
 			Title:         result.DisplayTitle(),
 			Subtitle:      result.Year(),
+			Rating:        result.VoteAverage,
 			RequestStatus: js.mediaStatus(result),
 		}
 		posterURL := result.PosterURL()

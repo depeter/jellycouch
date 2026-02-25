@@ -26,6 +26,7 @@ type SearchResult struct {
 	Overview     string     `json:"overview"`
 	ReleaseDate  string     `json:"releaseDate"`  // movies
 	FirstAirDate string     `json:"firstAirDate"` // tv
+	VoteAverage  float64    `json:"voteAverage"`
 	MediaInfo    *MediaInfo `json:"mediaInfo"`
 }
 

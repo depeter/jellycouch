@@ -47,8 +47,9 @@ type JellyseerrRequestScreen struct {
 	reqError   string
 	reqSuccess string
 
-	wantBack   bool
-	trailerURL string
+	wantBack    bool
+	trailerURL  string
+	voteAverage float64
 
 	// Callbacks
 	OnPlayTrailer func(url string)
@@ -114,6 +115,7 @@ func (jr *JellyseerrRequestScreen) loadTVDetail() {
 	}
 	jr.mu.Lock()
 	jr.tvDetail = detail
+	jr.voteAverage = detail.VoteAverage
 	if detail.MediaInfo != nil && detail.MediaInfo.Status > jr.status {
 		jr.status = detail.MediaInfo.Status
 	}
@@ -134,6 +136,7 @@ func (jr *JellyseerrRequestScreen) loadMovieDetail() {
 		return
 	}
 	jr.mu.Lock()
+	jr.voteAverage = detail.VoteAverage
 	if detail.MediaInfo != nil && detail.MediaInfo.Status > jr.status {
 		jr.status = detail.MediaInfo.Status
 	}
@@ -665,7 +668,7 @@ func (jr *JellyseerrRequestScreen) Draw(dst *ebiten.Image) {
 	DrawText(dst, jr.result.DisplayTitle(), infoX, infoY, FontSizeTitle, ColorText)
 	infoY += FontSizeTitle + 8
 
-	// Year + type
+	// Year + type + rating
 	meta := ""
 	if yr := jr.result.Year(); yr != "" {
 		meta = yr
@@ -679,6 +682,12 @@ func (jr *JellyseerrRequestScreen) Draw(dst *ebiten.Image) {
 		} else {
 			meta += "Movie"
 		}
+	}
+	if jr.voteAverage > 0 {
+		if meta != "" {
+			meta += "  \u2022  "
+		}
+		meta += fmt.Sprintf("★ %.1f", jr.voteAverage)
 	}
 	if meta != "" {
 		DrawText(dst, meta, infoX, infoY, FontSizeBody, ColorTextSecondary)

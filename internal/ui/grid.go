@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 
@@ -16,6 +17,7 @@ type GridItem struct {
 	Image    *ebiten.Image
 	Progress float64 // 0.0 to 1.0, playback progress
 	Watched  bool
+	Rating   float64 // TMDB/community rating (0 = no rating)
 	// Jellyseerr request status: 0=none, 2=pending, 3=partial, 4=processing, 5=available
 	RequestStatus int
 	// Set by the grid during layout
@@ -170,6 +172,11 @@ func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 			drawRequestBadge(dst, item.RequestStatus, ix, iy)
 		}
 
+		// Rating badge (top-left corner)
+		if item.Rating > 0 {
+			drawRatingBadge(dst, item.Rating, ix, iy)
+		}
+
 		// Title below poster
 		titleColor := ColorTextSecondary
 		if isFocused {
@@ -291,6 +298,27 @@ func drawRequestBadge(dst *ebiten.Image, status int, x, y float64) {
 	vector.DrawFilledRect(dst, float32(x), float32(bannerY),
 		float32(PosterWidth), float32(bh), badgeColor, false)
 	DrawTextCentered(dst, label, x+PosterWidth/2, bannerY+bh/2, FontSizeSmall, ColorText)
+}
+
+// drawRatingBadge draws a small pill badge in the top-left corner with "★ 7.5" format.
+func drawRatingBadge(dst *ebiten.Image, rating float64, x, y float64) {
+	label := fmt.Sprintf("★ %.1f", rating)
+	tw, _ := MeasureText(label, FontSizeSmall)
+	padX := 6.0
+	padY := 3.0
+	bw := tw + padX*2
+	bh := FontSizeSmall + padY*2
+	bx := x + 4
+	by := y + 4
+
+	// Semi-transparent dark background
+	vector.DrawFilledRect(dst, float32(bx), float32(by),
+		float32(bw), float32(bh),
+		color.RGBA{R: 0x00, G: 0x00, B: 0x00, A: 0xCC}, false)
+
+	// Gold star + white text
+	DrawText(dst, label, bx+padX, by+padY, FontSizeSmall,
+		color.RGBA{R: 0xFF, G: 0xD7, B: 0x00, A: 0xFF})
 }
 
 // statusBadgeColor returns the badge background color for a media status.

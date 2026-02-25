@@ -132,6 +132,7 @@ func (hs *HomeScreen) convertItemsForGrid(grid *PosterGrid, items []jellyfin.Med
 			result[i].Progress = float64(item.PlaybackPositionTicks) / float64(item.RuntimeTicks)
 		}
 		result[i].Watched = item.Played
+		result[i].Rating = float64(item.CommunityRating)
 
 		// Async load poster image — capture grid pointer and item ID for race-safe callback
 		url := hs.client.GetPosterURL(item.ID)
