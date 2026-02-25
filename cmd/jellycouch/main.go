@@ -8,6 +8,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 
 	"github.com/depeter/jellycouch/assets/fonts"
+	"github.com/depeter/jellycouch/assets/icon"
 	"github.com/depeter/jellycouch/internal/app"
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/config"
@@ -87,6 +88,7 @@ func main() {
 	// Configure window
 	ebiten.SetWindowSize(cfg.UI.Width, cfg.UI.Height)
 	ebiten.SetWindowTitle("JellyCouch")
+	ebiten.SetWindowIcon(icon.Generate())
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	if cfg.UI.Fullscreen {
 		ebiten.SetFullscreen(true)
