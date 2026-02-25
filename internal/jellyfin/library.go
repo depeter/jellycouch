@@ -14,6 +14,8 @@ type LibraryFilter struct {
 	Genres    []string // genre names (empty = all)
 	Status    string   // ItemFilter value: "", "IsPlayed", "IsUnplayed", "IsFavorite", "IsResumable"
 	Search    string   // text search term
+	Letter    string   // NameStartsWith filter (single letter or "#" for non-alpha)
+	Years     []int32  // filter by production years
 }
 
 // MediaItem is a simplified representation of a Jellyfin item.
@@ -120,8 +122,8 @@ func (c *Client) GetFilteredItems(parentID string, start, limit int, itemTypes [
 		UserId(c.userID).
 		StartIndex(int32(start)).
 		Limit(int32(limit)).
-		Fields([]jellyfin.ItemFields{jellyfin.ITEMFIELDS_OVERVIEW, jellyfin.ITEMFIELDS_PRIMARY_IMAGE_ASPECT_RATIO}).
-		EnableImageTypes([]jellyfin.ImageType{jellyfin.IMAGETYPE_PRIMARY, jellyfin.IMAGETYPE_BACKDROP}).
+		Fields([]jellyfin.ItemFields{jellyfin.ITEMFIELDS_PRIMARY_IMAGE_ASPECT_RATIO}).
+		EnableImageTypes([]jellyfin.ImageType{jellyfin.IMAGETYPE_PRIMARY}).
 		ImageTypeLimit(1).
 		Recursive(true).
 		SortBy([]jellyfin.ItemSortBy{sortBy}).
@@ -145,6 +147,12 @@ func (c *Client) GetFilteredItems(parentID string, start, limit int, itemTypes [
 	}
 	if filter.Search != "" {
 		req = req.SearchTerm(filter.Search)
+	}
+	if filter.Letter != "" {
+		req = req.NameStartsWith(filter.Letter)
+	}
+	if len(filter.Years) > 0 {
+		req = req.Years(filter.Years)
 	}
 
 	result, _, err := req.Execute()

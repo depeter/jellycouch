@@ -46,6 +46,35 @@ var statusOptions = []struct {
 	{"Resumable", "IsResumable"},
 }
 
+// Letter filter options (A-Z + # for non-alpha)
+var letterOptions = []string{
+	"All", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+	"N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "#",
+}
+
+// Year/decade filter options
+var yearOptions = []struct {
+	Label string
+	Years []int32
+}{
+	{"All", nil},
+	{"2020s", yearsRange(2020, 2029)},
+	{"2010s", yearsRange(2010, 2019)},
+	{"2000s", yearsRange(2000, 2009)},
+	{"1990s", yearsRange(1990, 1999)},
+	{"1980s", yearsRange(1980, 1989)},
+	{"1970s", yearsRange(1970, 1979)},
+	{"Older", yearsRange(1900, 1969)},
+}
+
+func yearsRange(from, to int) []int32 {
+	years := make([]int32, 0, to-from+1)
+	for y := from; y <= to; y++ {
+		years = append(years, int32(y))
+	}
+	return years
+}
+
 // LibraryScreen shows a grid of all items in a library with filtering and sorting.
 type LibraryScreen struct {
 	client   *jellyfin.Client
@@ -97,10 +126,18 @@ func NewLibraryScreen(client *jellyfin.Client, imgCache *cache.ImageCache, paren
 		statusLabels[i] = opt.Label
 	}
 
+	// Build year option labels
+	yearLabels := make([]string, len(yearOptions))
+	for i, opt := range yearOptions {
+		yearLabels[i] = opt.Label
+	}
+
 	filterBar := NewFilterBar([]FilterOption{
 		{Label: "Sort", Options: sortLabels, Selected: 0},
 		{Label: "Genre", Options: []string{"All"}, Selected: 0},
 		{Label: "Status", Options: statusLabels, Selected: 0},
+		{Label: "Letter", Options: letterOptions, Selected: 0},
+		{Label: "Year", Options: yearLabels, Selected: 0},
 	})
 
 	return &LibraryScreen{
@@ -172,6 +209,18 @@ func (ls *LibraryScreen) buildFilter() jellyfin.LibraryFilter {
 	statusIdx := ls.filterBar.Filters[2].Selected
 	if statusIdx >= 0 && statusIdx < len(statusOptions) {
 		f.Status = statusOptions[statusIdx].Filter
+	}
+
+	// Letter
+	letterVal := ls.filterBar.Filters[3].Value()
+	if letterVal != "" && letterVal != "All" {
+		f.Letter = letterVal
+	}
+
+	// Year
+	yearIdx := ls.filterBar.Filters[4].Selected
+	if yearIdx >= 0 && yearIdx < len(yearOptions) {
+		f.Years = yearOptions[yearIdx].Years
 	}
 
 	// Search
