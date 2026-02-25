@@ -122,6 +122,9 @@ func pushHomeScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCac
 	home.OnRequests = func() {
 		pushJellyseerrDiscoverScreen(game, cfg, imgCache)
 	}
+	home.OnLibraryBrowse = func(parentID, title string) {
+		pushLibraryScreen(game, cfg, imgCache, parentID, title, nil)
+	}
 	home.JellyseerrEnabled = func() bool {
 		return game.Jellyseerr != nil
 	}
@@ -137,13 +140,17 @@ func pushDetailScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageC
 		game.StartPlayback(itemID, resumeTicks)
 	}
 	detail.OnLibrary = func(parentID, title string) {
-		lib := ui.NewLibraryScreen(game.Client, imgCache, parentID, title, nil)
-		lib.OnItemSelected = func(subItem jellyfin.MediaItem) {
-			pushDetailScreen(game, cfg, imgCache, subItem)
-		}
-		game.Screens.Push(lib)
+		pushLibraryScreen(game, cfg, imgCache, parentID, title, nil)
 	}
 	game.Screens.Push(detail)
+}
+
+func pushLibraryScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache, parentID, title string, itemTypes []string) {
+	lib := ui.NewLibraryScreen(game.Client, imgCache, parentID, title, itemTypes)
+	lib.OnItemSelected = func(item jellyfin.MediaItem) {
+		pushDetailScreen(game, cfg, imgCache, item)
+	}
+	game.Screens.Push(lib)
 }
 
 func pushSearchScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache, query string) {

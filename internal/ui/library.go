@@ -6,12 +6,47 @@ import (
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/jellyfin"
 )
 
-// LibraryScreen shows a grid of all items in a library.
+const (
+	focusGrid      = 0
+	focusFilterBar = 1
+)
+
+// Sort option mappings
+var sortOptions = []struct {
+	Label     string
+	SortBy    string
+	SortOrder string
+}{
+	{"Name A-Z", "SortName", "Ascending"},
+	{"Name Z-A", "SortName", "Descending"},
+	{"Date Added (New)", "DateCreated", "Descending"},
+	{"Date Added (Old)", "DateCreated", "Ascending"},
+	{"Release Date (New)", "PremiereDate", "Descending"},
+	{"Release Date (Old)", "PremiereDate", "Ascending"},
+	{"Rating (High)", "CommunityRating", "Descending"},
+	{"Rating (Low)", "CommunityRating", "Ascending"},
+	{"Random", "Random", "Ascending"},
+}
+
+// Status option mappings
+var statusOptions = []struct {
+	Label  string
+	Filter string
+}{
+	{"All", ""},
+	{"Unplayed", "IsUnplayed"},
+	{"Played", "IsPlayed"},
+	{"Favorites", "IsFavorite"},
+	{"Resumable", "IsResumable"},
+}
+
+// LibraryScreen shows a grid of all items in a library with filtering and sorting.
 type LibraryScreen struct {
 	client   *jellyfin.Client
 	imgCache *cache.ImageCache
@@ -20,10 +55,16 @@ type LibraryScreen struct {
 	title     string
 	itemTypes []string
 
-	items []jellyfin.MediaItem
-	grid  *FocusGrid
+	items     []jellyfin.MediaItem
+	grid      *FocusGrid
 	gridItems []GridItem
-	total int
+	total     int
+
+	filterBar  *FilterBar
+	filter     jellyfin.LibraryFilter
+	genres     []string
+	genresLoaded bool
+	focusMode  int // focusGrid or focusFilterBar
 
 	loaded      bool
 	loading     bool
@@ -31,6 +72,9 @@ type LibraryScreen struct {
 	loadError   string
 	scrollY     float64
 	targetScrollY float64
+
+	// debounce: track last applied search to detect changes
+	appliedSearch string
 
 	OnItemSelected func(item jellyfin.MediaItem)
 
@@ -40,6 +84,25 @@ type LibraryScreen struct {
 
 func NewLibraryScreen(client *jellyfin.Client, imgCache *cache.ImageCache, parentID, title string, itemTypes []string) *LibraryScreen {
 	cols := (ScreenWidth - SectionPadding*2) / (PosterWidth + PosterGap)
+
+	// Build sort option labels
+	sortLabels := make([]string, len(sortOptions))
+	for i, opt := range sortOptions {
+		sortLabels[i] = opt.Label
+	}
+
+	// Build status option labels
+	statusLabels := make([]string, len(statusOptions))
+	for i, opt := range statusOptions {
+		statusLabels[i] = opt.Label
+	}
+
+	filterBar := NewFilterBar([]FilterOption{
+		{Label: "Sort", Options: sortLabels, Selected: 0},
+		{Label: "Genre", Options: []string{"All"}, Selected: 0},
+		{Label: "Status", Options: statusLabels, Selected: 0},
+	})
+
 	return &LibraryScreen{
 		client:    client,
 		imgCache:  imgCache,
@@ -47,6 +110,8 @@ func NewLibraryScreen(client *jellyfin.Client, imgCache *cache.ImageCache, paren
 		title:     title,
 		itemTypes: itemTypes,
 		grid:      NewFocusGrid(cols, 0),
+		filterBar: filterBar,
+		focusMode: focusGrid,
 	}
 }
 
@@ -56,13 +121,87 @@ func (ls *LibraryScreen) OnEnter() {
 	if !ls.loaded && !ls.loading {
 		ls.loading = true
 		go ls.loadData(0)
+		go ls.loadGenres()
 	}
 }
 
 func (ls *LibraryScreen) OnExit() {}
 
+func (ls *LibraryScreen) loadGenres() {
+	genres, err := ls.client.GetGenres(ls.parentID, ls.itemTypes)
+	if err != nil {
+		log.Printf("Failed to load genres: %v", err)
+		return
+	}
+
+	ls.mu.Lock()
+	ls.genres = genres
+	ls.genresLoaded = true
+
+	// Rebuild genre pill options: "All" + genre names
+	genreOptions := make([]string, 0, len(genres)+1)
+	genreOptions = append(genreOptions, "All")
+	genreOptions = append(genreOptions, genres...)
+	if len(ls.filterBar.Filters) > 1 {
+		ls.filterBar.Filters[1].Options = genreOptions
+		// Reset selection if it's out of range
+		if ls.filterBar.Filters[1].Selected >= len(genreOptions) {
+			ls.filterBar.Filters[1].Selected = 0
+		}
+	}
+	ls.mu.Unlock()
+}
+
+func (ls *LibraryScreen) buildFilter() jellyfin.LibraryFilter {
+	f := jellyfin.LibraryFilter{}
+
+	// Sort
+	sortIdx := ls.filterBar.Filters[0].Selected
+	if sortIdx >= 0 && sortIdx < len(sortOptions) {
+		f.SortBy = sortOptions[sortIdx].SortBy
+		f.SortOrder = sortOptions[sortIdx].SortOrder
+	}
+
+	// Genre
+	genreVal := ls.filterBar.Filters[1].Value()
+	if genreVal != "" && genreVal != "All" {
+		f.Genres = []string{genreVal}
+	}
+
+	// Status
+	statusIdx := ls.filterBar.Filters[2].Selected
+	if statusIdx >= 0 && statusIdx < len(statusOptions) {
+		f.Status = statusOptions[statusIdx].Filter
+	}
+
+	// Search
+	f.Search = ls.filterBar.SearchInput.Text
+
+	return f
+}
+
+func (ls *LibraryScreen) applyFilters() {
+	ls.filter = ls.buildFilter()
+	ls.appliedSearch = ls.filterBar.SearchInput.Text
+	ls.items = nil
+	ls.gridItems = nil
+	ls.total = 0
+	ls.grid.Focused = 0
+	ls.grid.SetTotal(0)
+	ls.scrollY = 0
+	ls.targetScrollY = 0
+	ls.loaded = false
+	ls.loading = true
+	ls.loadError = ""
+	go ls.loadData(0)
+}
+
 func (ls *LibraryScreen) loadData(start int) {
-	items, total, err := ls.client.GetItems(ls.parentID, start, 50, ls.itemTypes)
+	ls.mu.Lock()
+	filter := ls.filter
+	ls.mu.Unlock()
+
+	items, total, err := ls.client.GetFilteredItems(ls.parentID, start, 50, ls.itemTypes, filter)
 	if err != nil {
 		log.Printf("Failed to load library items: %v", err)
 		ls.mu.Lock()
@@ -125,15 +264,14 @@ func (ls *LibraryScreen) loadMore() {
 	ls.loadData(len(ls.items))
 }
 
+// gridBaseY returns the Y position where the poster grid starts.
+func (ls *LibraryScreen) gridBaseY() float64 {
+	return float64(NavBarHeight) + filterBarHeight + 20
+}
+
 func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
-
-	dir, enter, back := InputState()
-
-	if back {
-		return &ScreenTransition{Type: TransitionPop}, nil
-	}
 
 	// Mouse wheel scroll
 	_, wy := MouseWheelDelta()
@@ -149,14 +287,36 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 	if clicked && ls.errDisplay.HandleClick(mx, my, ls.loadError) {
 		return nil, nil
 	}
+
+	// Filter bar mouse click
+	if clicked {
+		if idx, ok := ls.filterBar.HandleClick(mx, my); ok {
+			ls.focusMode = focusFilterBar
+			ls.filterBar.Active = true
+			if idx < len(ls.filterBar.Filters) {
+				ls.filterBar.FocusedIndex = idx
+				// Cycle pill value on click
+				pill := &ls.filterBar.Filters[idx]
+				pill.Selected = (pill.Selected + 1) % len(pill.Options)
+				ls.applyFilters()
+			} else {
+				ls.filterBar.FocusedIndex = idx
+			}
+			return nil, nil
+		}
+	}
+
+	// Grid mouse click
 	if clicked && ls.loaded {
+		gridBase := ls.gridBaseY() - ls.scrollY
 		for i := range ls.gridItems {
 			col := i % ls.grid.Cols
 			row := i / ls.grid.Cols
-			baseY := float64(NavBarHeight+10) - ls.scrollY
 			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-			y := baseY + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+			y := gridBase + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
 			if PointInRect(mx, my, x, y, PosterWidth, PosterHeight) {
+				ls.focusMode = focusGrid
+				ls.filterBar.Active = false
 				ls.grid.Focused = i
 				if i < len(ls.items) && ls.OnItemSelected != nil {
 					ls.OnItemSelected(ls.items[i])
@@ -169,12 +329,12 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 	// Right-click: toggle watched state
 	rmx, rmy, rclicked := MouseJustRightClicked()
 	if rclicked && ls.loaded {
+		gridBase := ls.gridBaseY() - ls.scrollY
 		for i := range ls.gridItems {
 			col := i % ls.grid.Cols
 			row := i / ls.grid.Cols
-			baseY := float64(NavBarHeight+10) - ls.scrollY
 			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-			y := baseY + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+			y := gridBase + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
 			if PointInRect(rmx, rmy, x, y, PosterWidth, PosterHeight) {
 				if i < len(ls.items) {
 					if ls.items[i].Played {
@@ -190,11 +350,78 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 		}
 	}
 
+	// Focus mode dispatch
+	if ls.focusMode == focusFilterBar {
+		return ls.updateFilterBar()
+	}
+	return ls.updateGrid()
+}
+
+func (ls *LibraryScreen) updateFilterBar() (*ScreenTransition, error) {
+	// Escape/Down from filter bar → return to grid
+	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+		ls.focusMode = focusGrid
+		ls.filterBar.Active = false
+		return nil, nil
+	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) && !ls.filterBar.IsSearchFocused() {
+		ls.focusMode = focusGrid
+		ls.filterBar.Active = false
+		return nil, nil
+	}
+
+	changed := ls.filterBar.Update()
+
+	// Check if search text changed and apply debounced
+	if ls.filterBar.SearchInput.Text != ls.appliedSearch {
+		// Apply on Enter (handled inside filterBar.Update returning changed=true)
+		if changed {
+			ls.applyFilters()
+			return nil, nil
+		}
+	} else if changed {
+		ls.applyFilters()
+	}
+
+	return nil, nil
+}
+
+func (ls *LibraryScreen) updateGrid() (*ScreenTransition, error) {
+	dir, enter, back := InputState()
+
+	if back {
+		return &ScreenTransition{Type: TransitionPop}, nil
+	}
+
+	// Shortcut keys
+	if inpututil.IsKeyJustPressed(ebiten.KeySlash) {
+		ls.focusMode = focusFilterBar
+		ls.filterBar.Active = true
+		ls.filterBar.FocusedIndex = len(ls.filterBar.Filters) // search input
+		return nil, nil
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyF) {
+		ls.focusMode = focusFilterBar
+		ls.filterBar.Active = true
+		ls.filterBar.FocusedIndex = 0
+		return nil, nil
+	}
+
 	if !ls.loaded {
 		return nil, nil
 	}
 
 	if dir != DirNone {
+		// Check if Up on first row → go to filter bar
+		if dir == DirUp && ls.grid.FocusedRow() == 0 {
+			ls.focusMode = focusFilterBar
+			ls.filterBar.Active = true
+			if ls.filterBar.FocusedIndex >= len(ls.filterBar.Filters) {
+				ls.filterBar.FocusedIndex = 0
+			}
+			return nil, nil
+		}
 		ls.grid.Update(dir)
 		ls.ensureVisible()
 	}
@@ -242,6 +469,9 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 		DrawText(dst, countStr, float64(ScreenWidth)-200, 24, FontSizeSmall, ColorTextMuted)
 	}
 
+	// Filter bar
+	ls.filterBar.Draw(dst, SectionPadding, float64(NavBarHeight))
+
 	if ls.loadError != "" && !ls.loaded {
 		errX := float64(ScreenWidth)/2 - 300
 		errY := float64(ScreenHeight)/2 - 20
@@ -257,8 +487,19 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 		return
 	}
 
+	if len(ls.gridItems) == 0 {
+		DrawTextCentered(dst, "No items found", float64(ScreenWidth)/2, float64(ScreenHeight)/2,
+			FontSizeHeading, ColorTextSecondary)
+
+		// Hint
+		hint := "Esc: back  /: search  F: filters"
+		DrawTextCentered(dst, hint, float64(ScreenWidth)/2, float64(ScreenHeight)/2+40,
+			FontSizeSmall, ColorTextMuted)
+		return
+	}
+
 	// Draw grid
-	baseY := float64(NavBarHeight+10) - ls.scrollY
+	baseY := ls.gridBaseY() - ls.scrollY
 	for i, item := range ls.gridItems {
 		col := i % ls.grid.Cols
 		row := i / ls.grid.Cols
@@ -271,7 +512,7 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 			continue
 		}
 
-		isFocused := i == ls.grid.Focused
+		isFocused := ls.focusMode == focusGrid && i == ls.grid.Focused
 		drawPosterItem(dst, item, x, y, isFocused)
 	}
 
@@ -282,6 +523,16 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 		DrawTextCentered(dst, "Loading more...", float64(ScreenWidth)/2, bottomY,
 			FontSizeBody, ColorTextSecondary)
 	}
+
+	// Keybind hint at bottom
+	var hint string
+	if ls.focusMode == focusGrid {
+		hint = "Esc: back  /: search  F: filters  ↑ on top row: filter bar"
+	} else {
+		hint = "←→: pills  ↑↓/Enter: cycle  Esc/↓: grid"
+	}
+	DrawTextCentered(dst, hint, float64(ScreenWidth)/2, float64(ScreenHeight)-20,
+		FontSizeSmall, ColorTextMuted)
 }
 
 func drawPosterItem(dst *ebiten.Image, item GridItem, x, y float64, focused bool) {

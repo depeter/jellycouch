@@ -2,9 +2,19 @@ package jellyfin
 
 import (
 	"fmt"
+	"sort"
 
 	jellyfin "github.com/sj14/jellyfin-go/api"
 )
+
+// LibraryFilter holds server-side filter/sort parameters for library queries.
+type LibraryFilter struct {
+	SortBy    string   // SDK ItemSortBy string value
+	SortOrder string   // "Ascending" / "Descending"
+	Genres    []string // genre names (empty = all)
+	Status    string   // ItemFilter value: "", "IsPlayed", "IsUnplayed", "IsFavorite", "IsResumable"
+	Search    string   // text search term
+}
 
 // MediaItem is a simplified representation of a Jellyfin item.
 type MediaItem struct {
@@ -93,6 +103,85 @@ func (c *Client) GetItems(parentID string, start, limit int, itemTypes []string)
 		total = int(*result.TotalRecordCount)
 	}
 	return convertItems(result.Items), total, nil
+}
+
+// GetFilteredItems returns items in a library with pagination and filtering.
+func (c *Client) GetFilteredItems(parentID string, start, limit int, itemTypes []string, filter LibraryFilter) ([]MediaItem, int, error) {
+	sortBy := jellyfin.ItemSortBy(filter.SortBy)
+	if filter.SortBy == "" {
+		sortBy = jellyfin.ITEMSORTBY_SORT_NAME
+	}
+	sortOrder := jellyfin.SortOrder(filter.SortOrder)
+	if filter.SortOrder == "" {
+		sortOrder = jellyfin.SORTORDER_ASCENDING
+	}
+
+	req := c.api.ItemsAPI.GetItems(c.ctx).
+		UserId(c.userID).
+		StartIndex(int32(start)).
+		Limit(int32(limit)).
+		Fields([]jellyfin.ItemFields{jellyfin.ITEMFIELDS_OVERVIEW, jellyfin.ITEMFIELDS_PRIMARY_IMAGE_ASPECT_RATIO}).
+		EnableImageTypes([]jellyfin.ImageType{jellyfin.IMAGETYPE_PRIMARY, jellyfin.IMAGETYPE_BACKDROP}).
+		ImageTypeLimit(1).
+		Recursive(true).
+		SortBy([]jellyfin.ItemSortBy{sortBy}).
+		SortOrder([]jellyfin.SortOrder{sortOrder})
+
+	if parentID != "" {
+		req = req.ParentId(parentID)
+	}
+	if len(itemTypes) > 0 {
+		baseTypes := make([]jellyfin.BaseItemKind, len(itemTypes))
+		for i, t := range itemTypes {
+			baseTypes[i] = jellyfin.BaseItemKind(t)
+		}
+		req = req.IncludeItemTypes(baseTypes)
+	}
+	if len(filter.Genres) > 0 {
+		req = req.Genres(filter.Genres)
+	}
+	if filter.Status != "" {
+		req = req.Filters([]jellyfin.ItemFilter{jellyfin.ItemFilter(filter.Status)})
+	}
+	if filter.Search != "" {
+		req = req.SearchTerm(filter.Search)
+	}
+
+	result, _, err := req.Execute()
+	if err != nil {
+		return nil, 0, fmt.Errorf("get filtered items: %w", err)
+	}
+	total := 0
+	if result.TotalRecordCount != nil {
+		total = int(*result.TotalRecordCount)
+	}
+	return convertItems(result.Items), total, nil
+}
+
+// GetGenres returns genre names for a library, sorted alphabetically.
+func (c *Client) GetGenres(parentID string, itemTypes []string) ([]string, error) {
+	req := c.api.GenresAPI.GetGenres(c.ctx).
+		UserId(c.userID)
+	if parentID != "" {
+		req = req.ParentId(parentID)
+	}
+	if len(itemTypes) > 0 {
+		baseTypes := make([]jellyfin.BaseItemKind, len(itemTypes))
+		for i, t := range itemTypes {
+			baseTypes[i] = jellyfin.BaseItemKind(t)
+		}
+		req = req.IncludeItemTypes(baseTypes)
+	}
+	result, _, err := req.Execute()
+	if err != nil {
+		return nil, fmt.Errorf("get genres: %w", err)
+	}
+	var genres []string
+	for _, item := range result.Items {
+		genres = append(genres, item.GetName())
+	}
+	sort.Strings(genres)
+	return genres, nil
 }
 
 // GetSeasons returns seasons for a series.

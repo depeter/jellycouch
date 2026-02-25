@@ -14,6 +14,14 @@ import (
 	"github.com/depeter/jellycouch/internal/jellyfin"
 )
 
+// sectionMeta stores per-section library info. IsLibrary is true for library sections
+// that support "See All" browsing.
+type sectionMeta struct {
+	IsLibrary bool
+	ParentID  string
+	Title     string
+}
+
 // HomeScreen displays library sections: Continue Watching, Next Up, and each library's latest items.
 type HomeScreen struct {
 	client   *jellyfin.Client
@@ -30,12 +38,16 @@ type HomeScreen struct {
 	scrollY      float64
 	targetScrollY float64
 
+	// Per-section metadata for library browsing
+	sectionMeta []sectionMeta
+
 	// Callbacks
 	OnItemSelected    func(item jellyfin.MediaItem)
 	OnSearch          func(query string)
 	OnSettings        func()
 	OnRequests        func()
 	OnAuthError       func()
+	OnLibraryBrowse   func(parentID, title string)
 	JellyseerrEnabled func() bool
 
 	authFailed bool
@@ -65,6 +77,7 @@ func (hs *HomeScreen) OnExit() {}
 
 func (hs *HomeScreen) loadData() {
 	var sections []*PosterGrid
+	var metas []sectionMeta
 	var anyError error
 
 	// Continue Watching
@@ -72,6 +85,7 @@ func (hs *HomeScreen) loadData() {
 		grid := NewPosterGrid("Continue Watching")
 		hs.convertItemsForGrid(grid, items)
 		sections = append(sections, grid)
+		metas = append(metas, sectionMeta{})
 	} else if err != nil {
 		anyError = err
 	}
@@ -81,6 +95,7 @@ func (hs *HomeScreen) loadData() {
 		grid := NewPosterGrid("Next Up")
 		hs.convertItemsForGrid(grid, items)
 		sections = append(sections, grid)
+		metas = append(metas, sectionMeta{})
 	} else if err != nil {
 		anyError = err
 	}
@@ -102,12 +117,23 @@ func (hs *HomeScreen) loadData() {
 			}
 			grid := NewPosterGrid("Latest " + view.Name)
 			hs.convertItemsForGrid(grid, items)
+			// Add "See All >" pseudo-item at the end
+			grid.Items = append(grid.Items, GridItem{
+				ID:    "_seeall_" + view.ID,
+				Title: "See All →",
+			})
 			sections = append(sections, grid)
+			metas = append(metas, sectionMeta{
+				IsLibrary: true,
+				ParentID:  view.ID,
+				Title:     view.Name,
+			})
 		}
 	}
 
 	hs.mu.Lock()
 	hs.sections = sections
+	hs.sectionMeta = metas
 	if len(sections) > 0 {
 		sections[0].Active = true
 	}
@@ -239,10 +265,17 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 
 				// Select the item
 				item := section.SelectedItem()
-				if item != nil && hs.OnItemSelected != nil {
-					fullItem, err := hs.client.GetItem(item.ID)
-					if err == nil {
-						hs.OnItemSelected(*fullItem)
+				if item != nil {
+					if len(item.ID) > 8 && item.ID[:8] == "_seeall_" && hs.OnLibraryBrowse != nil {
+						if i < len(hs.sectionMeta) && hs.sectionMeta[i].IsLibrary {
+							meta := hs.sectionMeta[i]
+							hs.OnLibraryBrowse(meta.ParentID, meta.Title)
+						}
+					} else if hs.OnItemSelected != nil {
+						fullItem, err := hs.client.GetItem(item.ID)
+						if err == nil {
+							hs.OnItemSelected(*fullItem)
+						}
 					}
 				}
 				return nil, nil
@@ -417,11 +450,19 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 
 	if enter {
 		item := currentSection.SelectedItem()
-		if item != nil && hs.OnItemSelected != nil {
-			// Fetch full item data
-			fullItem, err := hs.client.GetItem(item.ID)
-			if err == nil {
-				hs.OnItemSelected(*fullItem)
+		if item != nil {
+			// Check if this is a "See All" pseudo-item
+			if len(item.ID) > 8 && item.ID[:8] == "_seeall_" && hs.OnLibraryBrowse != nil {
+				if hs.sectionIndex < len(hs.sectionMeta) && hs.sectionMeta[hs.sectionIndex].IsLibrary {
+					meta := hs.sectionMeta[hs.sectionIndex]
+					hs.OnLibraryBrowse(meta.ParentID, meta.Title)
+				}
+			} else if hs.OnItemSelected != nil {
+				// Fetch full item data
+				fullItem, err := hs.client.GetItem(item.ID)
+				if err == nil {
+					hs.OnItemSelected(*fullItem)
+				}
 			}
 		}
 	}
