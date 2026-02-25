@@ -127,7 +127,7 @@ func (hs *HomeScreen) loadData() {
 			// Add "See All >" pseudo-item at the end
 			grid.Items = append(grid.Items, GridItem{
 				ID:    "_seeall_" + view.ID,
-				Title: "See All →",
+				Title: "See All >",
 			})
 			sections = append(sections, grid)
 			metas = append(metas, sectionMeta{
@@ -629,7 +629,7 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 		if hs.input.Text != "" {
 			DrawText(dst, hs.input.Text, searchX+14, searchY+10, FontSizeBody, ColorText)
 		} else {
-			DrawText(dst, "\U0001F50D  Search library...", searchX+14, searchY+10, FontSizeBody, ColorTextMuted)
+			DrawText(dst, "Search library...", searchX+14, searchY+10, FontSizeBody, ColorTextMuted)
 		}
 	}
 

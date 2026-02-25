@@ -296,7 +296,7 @@ func (p *Player) ShowOSD() {
 		"{\\an2\\fs28\\bord2}" +
 		"${time-pos} / ${duration}   Vol: ${volume}%\\N" +
 		"{\\fs22\\alpha&H40&}" +
-		"← → Seek   Space Pause   S Subs   A Audio   Esc Back"
+		"Left/Right Seek   Space Pause   S Subs   A Audio   Esc Back"
 	p.do(func(m *mpv.Mpv) error {
 		return m.CommandString(mpvCmd("show-text", osd, "4000"))
 	})

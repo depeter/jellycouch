@@ -188,9 +188,9 @@ func (fb *FilterBar) Draw(dst *ebiten.Image, x, y float64) float64 {
 				float32(pillW), float32(filterBarHeight), ColorPrimary, false)
 			DrawTextCentered(dst, label, curX+pillW/2, y+filterBarHeight/2,
 				FontSizeBody, ColorBackground)
-			// Draw ▲/▼ arrows as affordance
-			DrawTextCentered(dst, "▲", curX+pillW/2, y-6, FontSizeSmall, ColorPrimary)
-			DrawTextCentered(dst, "▼", curX+pillW/2, y+filterBarHeight+6, FontSizeSmall, ColorPrimary)
+			// Draw up/down arrow triangles as affordance
+			drawTriangle(dst, float32(curX+pillW/2), float32(y-6), 5, true, ColorPrimary)
+			drawTriangle(dst, float32(curX+pillW/2), float32(y+filterBarHeight+6), 5, false, ColorPrimary)
 		} else {
 			vector.DrawFilledRect(dst, float32(curX), float32(y),
 				float32(pillW), float32(filterBarHeight), ColorSurface, false)
@@ -228,7 +228,7 @@ func (fb *FilterBar) Draw(dst *ebiten.Image, x, y float64) float64 {
 		if fb.SearchInput.Text != "" {
 			DrawText(dst, fb.SearchInput.Text, curX+10, y+10, FontSizeBody, ColorText)
 		} else {
-			DrawText(dst, "\U0001F50D  Search...", curX+10, y+10, FontSizeBody, ColorTextMuted)
+			DrawText(dst, "Search...", curX+10, y+10, FontSizeBody, ColorTextMuted)
 		}
 	}
 

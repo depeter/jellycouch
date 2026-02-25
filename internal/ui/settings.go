@@ -350,13 +350,13 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 	// Bottom hint
 	var hint string
 	if ss.editing {
-		hint = "Enter to save  ·  Esc to cancel"
+		hint = "Enter to save  |  Esc to cancel"
 	} else {
 		item := ss.focusedItem()
 		if item.Options != nil {
-			hint = "← → to change  ·  ↑ ↓ to navigate  ·  Esc to go back (auto-saves)"
+			hint = "Left/Right to change  |  Up/Down to navigate  |  Esc to go back (auto-saves)"
 		} else {
-			hint = "Enter to edit  ·  ↑ ↓ to navigate  ·  Esc to go back (auto-saves)"
+			hint = "Enter to edit  |  Up/Down to navigate  |  Esc to go back (auto-saves)"
 		}
 	}
 	DrawText(dst, hint, SectionPadding, float64(ScreenHeight)-40,

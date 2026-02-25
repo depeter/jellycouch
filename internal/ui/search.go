@@ -277,7 +277,7 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 	if ss.input.Text != "" {
 		clearX := float64(barX+barW) - 32
 		clearY := float64(barY) + 10
-		DrawTextCentered(dst, "✕", clearX, clearY+float64(barH)/2-10, FontSizeBody, ColorTextMuted)
+		drawXMark(dst, float32(clearX), float32(clearY)+float32(barH)/2-10, 5, ColorTextMuted)
 	}
 
 	if ss.searching {

@@ -68,6 +68,50 @@ func drawListIcon(dst *ebiten.Image, cx, cy, r float32, clr color.Color) {
 	}
 }
 
+// drawTriangle draws a small filled triangle pointing up (if up=true) or down.
+func drawTriangle(dst *ebiten.Image, cx, cy, size float32, up bool, clr color.Color) {
+	var path vector.Path
+	if up {
+		path.MoveTo(cx, cy-size)
+		path.LineTo(cx-size, cy+size*0.5)
+		path.LineTo(cx+size, cy+size*0.5)
+	} else {
+		path.MoveTo(cx, cy+size)
+		path.LineTo(cx-size, cy-size*0.5)
+		path.LineTo(cx+size, cy-size*0.5)
+	}
+	path.Close()
+	vs, is := path.AppendVerticesAndIndicesForFilling(nil, nil)
+	r, g, b, a := clr.RGBA()
+	for i := range vs {
+		vs[i].ColorR = float32(r) / 0xffff
+		vs[i].ColorG = float32(g) / 0xffff
+		vs[i].ColorB = float32(b) / 0xffff
+		vs[i].ColorA = float32(a) / 0xffff
+	}
+	dst.DrawTriangles(vs, is, emptyImage, nil)
+}
+
+// emptyImage is a 1x1 white image for drawing arbitrary shapes.
+var emptyImage = func() *ebiten.Image {
+	img := ebiten.NewImage(1, 1)
+	img.Fill(color.White)
+	return img
+}()
+
+// drawCheckmark draws a small checkmark at (cx, cy) with given size.
+func drawCheckmark(dst *ebiten.Image, cx, cy, size float32, clr color.Color) {
+	// Short stroke down-right, then long stroke up-right
+	vector.StrokeLine(dst, cx-size*0.5, cy, cx-size*0.1, cy+size*0.5, 2, clr, false)
+	vector.StrokeLine(dst, cx-size*0.1, cy+size*0.5, cx+size*0.6, cy-size*0.4, 2, clr, false)
+}
+
+// drawXMark draws a small X at (cx, cy) with given size.
+func drawXMark(dst *ebiten.Image, cx, cy, size float32, clr color.Color) {
+	vector.StrokeLine(dst, cx-size, cy-size, cx+size, cy+size, 1.5, clr, false)
+	vector.StrokeLine(dst, cx+size, cy-size, cx-size, cy+size, 1.5, clr, false)
+}
+
 // drawNavButton draws a styled nav bar button and returns its bounds.
 func drawNavButton(dst *ebiten.Image, label string, x, y, w, h float32, focused bool, iconFn func(*ebiten.Image, float32, float32, float32, color.Color), accentColor color.Color) {
 	if focused {

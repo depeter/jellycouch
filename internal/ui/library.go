@@ -527,9 +527,9 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 	// Keybind hint at bottom
 	var hint string
 	if ls.focusMode == focusGrid {
-		hint = "Esc: back  /: search  F: filters  ↑ on top row: filter bar"
+		hint = "Esc: back  /: search  F: filters  Up on top row: filter bar"
 	} else {
-		hint = "←→: pills  ↑↓/Enter: cycle  Esc/↓: grid"
+		hint = "Left/Right: pills  Up/Down/Enter: cycle  Esc/Down: grid"
 	}
 	DrawTextCentered(dst, hint, float64(ScreenWidth)/2, float64(ScreenHeight)-20,
 		FontSizeSmall, ColorTextMuted)
@@ -565,7 +565,7 @@ func drawPosterItem(dst *ebiten.Image, item GridItem, x, y float64, focused bool
 
 	// Watched badge
 	if item.Watched {
-		DrawTextCentered(dst, "✓", x+PosterWidth-12, y+12, FontSizeSmall, ColorSuccess)
+		drawCheckmark(dst, float32(x+PosterWidth-12), float32(y+12), 5, ColorSuccess)
 	}
 
 	// Rating badge (top-left corner)

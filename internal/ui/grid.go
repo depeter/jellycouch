@@ -163,8 +163,8 @@ func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 			badgeCY := float32(iy) + badgeR + 4
 			// Green circle background
 			vector.DrawFilledCircle(dst, badgeCX, badgeCY, badgeR, ColorSuccess, false)
-			// Checkmark (simple "✓" text centered)
-			DrawTextCentered(dst, "✓", float64(badgeCX), float64(badgeCY), FontSizeSmall, ColorText)
+			// Checkmark drawn with vector lines
+			drawCheckmark(dst, badgeCX, badgeCY, badgeR*0.5, ColorText)
 		}
 
 		// Request status badge (full-width banner at bottom of poster)
