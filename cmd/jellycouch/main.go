@@ -96,8 +96,8 @@ func pushHomeScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCac
 	home.OnItemSelected = func(item jellyfin.MediaItem) {
 		pushDetailScreen(game, cfg, imgCache, item)
 	}
-	home.OnSearch = func() {
-		pushSearchScreen(game, cfg, imgCache)
+	home.OnSearch = func(query string) {
+		pushSearchScreen(game, cfg, imgCache, query)
 	}
 	home.OnSettings = func() {
 		pushSettingsScreen(game, cfg)
@@ -120,10 +120,13 @@ func pushDetailScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageC
 	game.Screens.Push(detail)
 }
 
-func pushSearchScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache) {
+func pushSearchScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache, query string) {
 	search := ui.NewSearchScreen(game.Client, imgCache)
 	search.OnItemSelected = func(item jellyfin.MediaItem) {
 		pushDetailScreen(game, cfg, imgCache, item)
+	}
+	if query != "" {
+		search.SetInitialQuery(query)
 	}
 	game.Screens.Push(search)
 }

@@ -46,6 +46,12 @@ func (ss *SearchScreen) Name() string { return "Search" }
 func (ss *SearchScreen) OnEnter()     {}
 func (ss *SearchScreen) OnExit()      {}
 
+// SetInitialQuery sets the search text and triggers a search immediately.
+func (ss *SearchScreen) SetInitialQuery(query string) {
+	ss.input.SetText(query)
+	go ss.doSearch()
+}
+
 func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()

@@ -20,6 +20,8 @@ type HomeScreen struct {
 
 	sections     []*PosterGrid
 	sectionIndex int
+	focusMode    int // 0=search bar, 1=sections
+	input        TextInput
 	loaded       bool
 	loading      bool
 	loadError    string
@@ -28,7 +30,7 @@ type HomeScreen struct {
 
 	// Callbacks
 	OnItemSelected func(item jellyfin.MediaItem)
-	OnSearch       func()
+	OnSearch       func(query string)
 	OnSettings     func()
 
 	mu sync.Mutex
@@ -36,8 +38,9 @@ type HomeScreen struct {
 
 func NewHomeScreen(client *jellyfin.Client, imgCache *cache.ImageCache) *HomeScreen {
 	return &HomeScreen{
-		client:   client,
-		imgCache: imgCache,
+		client:    client,
+		imgCache:  imgCache,
+		focusMode: 1, // start with sections focused
 	}
 }
 
@@ -151,23 +154,7 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
-	// Settings shortcut
-	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
-		if hs.OnSettings != nil {
-			hs.OnSettings()
-		}
-		return nil, nil
-	}
-
-	// Search shortcut — just pressed only
-	if inpututil.IsKeyJustPressed(ebiten.KeySlash) {
-		if hs.OnSearch != nil {
-			hs.OnSearch()
-		}
-		return nil, nil
-	}
-
-	// Mouse wheel scroll
+	// Mouse wheel scroll (always active)
 	_, wy := MouseWheelDelta()
 	if wy != 0 {
 		hs.targetScrollY -= wy * 60
@@ -179,15 +166,16 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 	// Mouse click handling
 	mx, my, clicked := MouseJustClicked()
 	if clicked {
-		// Search bar click
+		// Search bar click — focus the search bar for typing
 		searchX := float64(ScreenWidth)/2 - 200
 		searchY := 12.0
 		searchW := 400.0
 		searchH := 38.0
 		if PointInRect(mx, my, searchX, searchY, searchW, searchH) {
-			if hs.OnSearch != nil {
-				hs.OnSearch()
+			if hs.focusMode == 1 && len(hs.sections) > 0 {
+				hs.sections[hs.sectionIndex].Active = false
 			}
+			hs.focusMode = 0
 			return nil, nil
 		}
 		// Settings button click
@@ -206,7 +194,10 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 		for i, section := range hs.sections {
 			if idx, ok := section.HandleClick(mx, my); ok {
 				// Set active section
-				hs.sections[hs.sectionIndex].Active = false
+				if hs.focusMode == 1 {
+					hs.sections[hs.sectionIndex].Active = false
+				}
+				hs.focusMode = 1
 				hs.sectionIndex = i
 				hs.sections[hs.sectionIndex].Active = true
 				section.Focused = idx
@@ -241,6 +232,55 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 		}
 	}
 
+	// Search bar focused — handle text input
+	if hs.focusMode == 0 {
+		hs.input.Update()
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && hs.input.Text != "" {
+			query := hs.input.Text
+			hs.input.Clear()
+			hs.focusMode = 1
+			if len(hs.sections) > 0 {
+				hs.sections[hs.sectionIndex].Active = true
+			}
+			if hs.OnSearch != nil {
+				hs.OnSearch(query)
+			}
+			return nil, nil
+		}
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+			hs.focusMode = 1
+			if len(hs.sections) > 0 {
+				hs.sections[hs.sectionIndex].Active = true
+			}
+			return nil, nil
+		}
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) && hs.loaded && len(hs.sections) > 0 {
+			hs.focusMode = 1
+			hs.sections[hs.sectionIndex].Active = true
+		}
+
+		return nil, nil
+	}
+
+	// Keyboard shortcuts (only when sections focused, not search bar)
+	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
+		if hs.OnSettings != nil {
+			hs.OnSettings()
+		}
+		return nil, nil
+	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeySlash) {
+		if len(hs.sections) > 0 {
+			hs.sections[hs.sectionIndex].Active = false
+		}
+		hs.focusMode = 0
+		return nil, nil
+	}
+
 	if !hs.loaded || len(hs.sections) == 0 {
 		return nil, nil
 	}
@@ -256,6 +296,9 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 			hs.sectionIndex--
 			hs.sections[hs.sectionIndex].Active = true
 			hs.ensureSectionVisible()
+		} else {
+			currentSection.Active = false
+			hs.focusMode = 0
 		}
 	case DirDown:
 		if hs.sectionIndex < len(hs.sections)-1 {
@@ -322,14 +365,27 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 	// Header
 	DrawText(dst, "JellyCouch", SectionPadding, 16, FontSizeTitle, ColorPrimary)
 
-	// Search bar (clickable)
+	// Search bar
 	searchX := float64(ScreenWidth)/2 - 200
 	searchY := 12.0
 	searchW := 400.0
 	searchH := 38.0
-	vector.DrawFilledRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), ColorSurface, false)
-	vector.StrokeRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), 1, ColorTextMuted, false)
-	DrawText(dst, "\U0001F50D  Search library...", searchX+14, searchY+10, FontSizeBody, ColorTextMuted)
+	if hs.focusMode == 0 {
+		vector.DrawFilledRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), ColorSurfaceHover, false)
+		vector.StrokeRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), 2, ColorFocusBorder, false)
+		if hs.input.Text == "" {
+			DrawText(dst, "Search...", searchX+14, searchY+10, FontSizeBody, ColorTextMuted)
+		}
+		DrawText(dst, hs.input.DisplayText(), searchX+14, searchY+10, FontSizeBody, ColorText)
+	} else {
+		vector.DrawFilledRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), ColorSurface, false)
+		vector.StrokeRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), 1, ColorTextMuted, false)
+		if hs.input.Text != "" {
+			DrawText(dst, hs.input.Text, searchX+14, searchY+10, FontSizeBody, ColorText)
+		} else {
+			DrawText(dst, "\U0001F50D  Search library...", searchX+14, searchY+10, FontSizeBody, ColorTextMuted)
+		}
+	}
 
 	// Settings button
 	settingsX := float64(ScreenWidth) - SectionPadding - 80
