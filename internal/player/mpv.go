@@ -207,6 +207,9 @@ func (p *Player) eventLoop() {
 
 		switch ev.EventID {
 		case mpv.EventPropertyChange:
+			if ev.Data == nil {
+				continue
+			}
 			prop := ev.Property()
 			p.mu.Lock()
 			switch prop.Name {
@@ -226,6 +229,16 @@ func (p *Player) eventLoop() {
 			p.mu.Unlock()
 
 		case mpv.EventEnd:
+			if ev.Data == nil {
+				p.mu.Lock()
+				wasPlaying := p.playing
+				p.playing = false
+				p.mu.Unlock()
+				if wasPlaying && p.OnPlaybackEnd != nil {
+					p.OnPlaybackEnd()
+				}
+				continue
+			}
 			ef := ev.EndFile()
 			p.mu.Lock()
 			wasPlaying := p.playing
