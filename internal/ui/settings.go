@@ -24,6 +24,8 @@ type SettingsScreen struct {
 
 	// Row rects for mouse clicks (flat list across all sections)
 	rowRects []settingsRowRect
+	// Paste button rect (only valid while editing)
+	pasteRect ButtonRect
 
 	OnSave func()
 }
@@ -166,6 +168,14 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 		if ss.editInput.Update() {
 			ss.editError = "" // clear error as user types
 		}
+		// Paste button click
+		mx, my, clicked := MouseJustClicked()
+		if clicked && PointInRect(mx, my, ss.pasteRect.X, ss.pasteRect.Y, ss.pasteRect.W, ss.pasteRect.H) {
+			if clip := readClipboard(); clip != "" {
+				ss.editInput.insertAtCursor(clip)
+				ss.editError = ""
+			}
+		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
 			// Apply edit with validation
 			item := ss.focusedItem()
@@ -302,6 +312,15 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 				vx := float32(valueX - 4)
 				vw := float32(rowW) - float32(300) - 8
 				vector.StrokeRect(dst, vx, float32(y-2), vw, float32(rowH)-4, 2, ColorFocusBorder, false)
+				// Paste button at the right end of the edit field
+				pasteW := 60.0
+				pasteH := float64(rowH) - 8
+				pasteX := float64(vx+vw) - pasteW - 4
+				pasteY := y - 1
+				ss.pasteRect = ButtonRect{X: pasteX, Y: pasteY, W: pasteW, H: pasteH}
+				vector.DrawFilledRect(dst, float32(pasteX), float32(pasteY), float32(pasteW), float32(pasteH), ColorSurface, false)
+				vector.StrokeRect(dst, float32(pasteX), float32(pasteY), float32(pasteW), float32(pasteH), 1, ColorTextMuted, false)
+				DrawTextCentered(dst, "Paste", pasteX+pasteW/2, pasteY+pasteH/2, FontSizeSmall, ColorTextSecondary)
 			}
 
 			if item.Options != nil && isFocused && !isEditing {
