@@ -117,6 +117,11 @@ func (ti *TextInput) splitAtCursor() (before, after string) {
 	return ti.Text[:bytePos], ti.Text[bytePos:]
 }
 
+// CursorAtStart reports whether the cursor is at the start of the text (or text is empty).
+func (ti *TextInput) CursorAtStart() bool {
+	return ti.Cursor <= 0
+}
+
 // CursorAtEnd reports whether the cursor is at the end of the text.
 func (ti *TextInput) CursorAtEnd() bool {
 	return ti.Cursor >= utf8.RuneCountInString(ti.Text)

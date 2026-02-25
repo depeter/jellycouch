@@ -29,14 +29,18 @@ type HomeScreen struct {
 
 	sections     []*PosterGrid
 	sectionIndex int
-	focusMode    int // 0=search bar, 1=sections, 2=nav buttons
+	focusMode    int // 0=search bar, 1=sections, 2=nav buttons, 3=library nav
 	navBtnIndex  int // 0=discovery, 1=settings (when focusMode==2)
+	libNavIndex  int // which library button is focused (when focusMode==3)
 	input        TextInput
 	loaded       bool
 	loading      bool
 	loadError    string
 	scrollY      float64
 	targetScrollY float64
+
+	// Library views for nav buttons
+	libraryViews []struct{ ID, Name string }
 
 	// Per-section metadata for library browsing
 	sectionMeta []sectionMeta
@@ -106,12 +110,15 @@ func (hs *HomeScreen) loadData() {
 		log.Printf("Failed to load views: %v", err)
 		anyError = err
 	} else {
+		// Store library views for nav buttons
+		var libViews []struct{ ID, Name string }
 		for _, view := range views {
 			items, err := hs.client.GetLatestMedia(view.ID, 20)
 			if err != nil {
 				log.Printf("Failed to load latest for %s: %v", view.Name, err)
 				continue
 			}
+			libViews = append(libViews, struct{ ID, Name string }{view.ID, view.Name})
 			if len(items) == 0 {
 				continue
 			}
@@ -129,11 +136,18 @@ func (hs *HomeScreen) loadData() {
 				Title:     view.Name,
 			})
 		}
+		hs.mu.Lock()
+		hs.libraryViews = libViews
+		hs.mu.Unlock()
 	}
 
 	hs.mu.Lock()
 	hs.sections = sections
 	hs.sectionMeta = metas
+	// Clamp libNavIndex in case views changed
+	if hs.libNavIndex >= len(hs.libraryViews) {
+		hs.libNavIndex = 0
+	}
 	if len(sections) > 0 {
 		sections[0].Active = true
 	}
@@ -250,6 +264,23 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 				return nil, nil
 			}
 		}
+
+		// Library nav button clicks
+		libBtnX := 230.0
+		for _, view := range hs.libraryViews {
+			tw, _ := MeasureText(view.Name, FontSizeBody)
+			btnW := tw + 28
+			if PointInRect(mx, my, libBtnX, 12, btnW, 38) {
+				if hs.focusMode == 1 && len(hs.sections) > 0 {
+					hs.sections[hs.sectionIndex].Active = false
+				}
+				if hs.OnLibraryBrowse != nil {
+					hs.OnLibraryBrowse(view.ID, view.Name)
+				}
+				return nil, nil
+			}
+			libBtnX += btnW + 10
+		}
 	}
 	if clicked && hs.loaded && len(hs.sections) > 0 {
 		for i, section := range hs.sections {
@@ -331,6 +362,13 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 			return nil, nil
 		}
 
+		// Left arrow at start of input → move focus to library nav
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) && hs.input.CursorAtStart() && len(hs.libraryViews) > 0 {
+			hs.libNavIndex = len(hs.libraryViews) - 1
+			hs.focusMode = 3
+			return nil, nil
+		}
+
 		// Right arrow at end of input text → move focus to nav buttons
 		if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) && hs.input.CursorAtEnd() {
 			if hs.JellyseerrEnabled != nil && hs.JellyseerrEnabled() {
@@ -345,7 +383,7 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 		return nil, nil
 	}
 
-	// Nav buttons focused
+	// Nav buttons focused (right side: Discovery/Settings)
 	if hs.focusMode == 2 {
 		hasDiscovery := hs.JellyseerrEnabled != nil && hs.JellyseerrEnabled()
 
@@ -382,6 +420,49 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 				hs.navBtnIndex = 0 // Discovery
 			} else {
 				hs.focusMode = 0 // Back to search bar
+			}
+			return nil, nil
+		}
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) && hs.loaded && len(hs.sections) > 0 {
+			hs.focusMode = 1
+			hs.sections[hs.sectionIndex].Active = true
+			return nil, nil
+		}
+
+		return nil, nil
+	}
+
+	// Library nav buttons focused (left side: Movies, TV Shows, etc.)
+	if hs.focusMode == 3 && len(hs.libraryViews) > 0 {
+		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+			view := hs.libraryViews[hs.libNavIndex]
+			if hs.OnLibraryBrowse != nil {
+				hs.OnLibraryBrowse(view.ID, view.Name)
+			}
+			return nil, nil
+		}
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+			hs.focusMode = 1
+			if len(hs.sections) > 0 {
+				hs.sections[hs.sectionIndex].Active = true
+			}
+			return nil, nil
+		}
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
+			if hs.libNavIndex < len(hs.libraryViews)-1 {
+				hs.libNavIndex++
+			} else {
+				hs.focusMode = 0 // Move to search bar
+			}
+			return nil, nil
+		}
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
+			if hs.libNavIndex > 0 {
+				hs.libNavIndex--
 			}
 			return nil, nil
 		}
@@ -510,6 +591,25 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 
 	// Header
 	DrawText(dst, "JellyCouch", SectionPadding, 16, FontSizeTitle, ColorPrimary)
+
+	// Library nav buttons (between title and search bar)
+	libBtnX := 230.0
+	for i, view := range hs.libraryViews {
+		tw, _ := MeasureText(view.Name, FontSizeBody)
+		btnW := tw + 28
+		btnH := 38.0
+		btnY := 12.0
+		focused := hs.focusMode == 3 && i == hs.libNavIndex
+		if focused {
+			vector.DrawFilledRect(dst, float32(libBtnX), float32(btnY), float32(btnW), float32(btnH), ColorPrimary, false)
+			DrawTextCentered(dst, view.Name, libBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorBackground)
+		} else {
+			vector.DrawFilledRect(dst, float32(libBtnX), float32(btnY), float32(btnW), float32(btnH), ColorSurfaceHover, false)
+			vector.StrokeRect(dst, float32(libBtnX), float32(btnY), float32(btnW), float32(btnH), 1, ColorPrimary, false)
+			DrawTextCentered(dst, view.Name, libBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorText)
+		}
+		libBtnX += btnW + 10
+	}
 
 	// Search bar
 	searchX := float64(ScreenWidth)/2 - 200
