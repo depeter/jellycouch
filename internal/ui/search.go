@@ -118,6 +118,32 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 		}
 	}
 
+	// Right-click: toggle watched state
+	rmx, rmy, rclicked := MouseJustRightClicked()
+	if rclicked && len(ss.gridItems) > 0 {
+		barY := 20.0
+		barH := 44.0
+		resultBaseY := barY + barH + 40 - ss.scrollY
+		for i := range ss.gridItems {
+			col := i % ss.grid.Cols
+			row := i / ss.grid.Cols
+			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
+			iy := resultBaseY + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+			if PointInRect(rmx, rmy, x, iy, PosterWidth, PosterHeight) {
+				if i < len(ss.results) {
+					if ss.results[i].Played {
+						go ss.client.MarkUnplayed(ss.results[i].ID)
+					} else {
+						go ss.client.MarkPlayed(ss.results[i].ID)
+					}
+					ss.results[i].Played = !ss.results[i].Played
+					ss.gridItems[i].Watched = ss.results[i].Played
+				}
+				return nil, nil
+			}
+		}
+	}
+
 	switch ss.focusMode {
 	case 0: // search bar
 		ss.input.Update()

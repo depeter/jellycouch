@@ -186,6 +186,24 @@ func (ds *DetailScreen) Update() (*ScreenTransition, error) {
 		}
 	}
 
+	// Right-click: toggle watched state on episodes
+	rmx, rmy, rclicked := MouseJustRightClicked()
+	if rclicked {
+		for i, rect := range ds.episodeRects {
+			if PointInRect(rmx, rmy, rect.X, rect.Y, rect.W, rect.H) {
+				if i < len(ds.episodes) {
+					if ds.episodes[i].Played {
+						go ds.client.MarkUnplayed(ds.episodes[i].ID)
+					} else {
+						go ds.client.MarkPlayed(ds.episodes[i].ID)
+					}
+					ds.episodes[i].Played = !ds.episodes[i].Played
+				}
+				return nil, nil
+			}
+		}
+	}
+
 	switch ds.focusMode {
 	case 0: // buttons
 		if dir == DirDown {

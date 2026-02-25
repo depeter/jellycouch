@@ -76,6 +76,15 @@ func MouseJustClicked() (x, y int, clicked bool) {
 	return
 }
 
+// MouseJustRightClicked returns the cursor position and whether the right mouse button was just clicked.
+func MouseJustRightClicked() (x, y int, clicked bool) {
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+		x, y = ebiten.CursorPosition()
+		clicked = true
+	}
+	return
+}
+
 // PointInRect returns true if point (px, py) is inside the rectangle (rx, ry, rw, rh).
 func PointInRect(px, py int, rx, ry, rw, rh float64) bool {
 	return float64(px) >= rx && float64(px) <= rx+rw &&

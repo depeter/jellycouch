@@ -224,6 +224,23 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 		}
 	}
 
+	// Right-click: toggle watched state
+	rmx, rmy, rclicked := MouseJustRightClicked()
+	if rclicked && hs.loaded && len(hs.sections) > 0 {
+		for _, section := range hs.sections {
+			if idx, ok := section.HandleClick(rmx, rmy); ok {
+				item := &section.Items[idx]
+				if item.Watched {
+					go hs.client.MarkUnplayed(item.ID)
+				} else {
+					go hs.client.MarkPlayed(item.ID)
+				}
+				item.Watched = !item.Watched
+				return nil, nil
+			}
+		}
+	}
+
 	if !hs.loaded || len(hs.sections) == 0 {
 		return nil, nil
 	}

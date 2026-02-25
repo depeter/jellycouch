@@ -161,6 +161,30 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 		}
 	}
 
+	// Right-click: toggle watched state
+	rmx, rmy, rclicked := MouseJustRightClicked()
+	if rclicked && ls.loaded {
+		for i := range ls.gridItems {
+			col := i % ls.grid.Cols
+			row := i / ls.grid.Cols
+			baseY := float64(NavBarHeight+10) - ls.scrollY
+			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
+			y := baseY + float64(row)*(PosterHeight+PosterGap+FontSizeCaption+8)
+			if PointInRect(rmx, rmy, x, y, PosterWidth, PosterHeight) {
+				if i < len(ls.items) {
+					if ls.items[i].Played {
+						go ls.client.MarkUnplayed(ls.items[i].ID)
+					} else {
+						go ls.client.MarkPlayed(ls.items[i].ID)
+					}
+					ls.items[i].Played = !ls.items[i].Played
+					ls.gridItems[i].Watched = ls.items[i].Played
+				}
+				return nil, nil
+			}
+		}
+	}
+
 	if !ls.loaded {
 		return nil, nil
 	}
