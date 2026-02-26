@@ -82,15 +82,13 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 	}
 
 	streamURL := g.Client.GetStreamURL(itemID)
-	if err := g.Player.LoadFile(streamURL, itemID); err != nil {
+	var startSec float64
+	if resumeTicks > 0 {
+		startSec = float64(resumeTicks) / 10_000_000
+	}
+	if err := g.Player.LoadFile(streamURL, itemID, startSec); err != nil {
 		log.Printf("Failed to load file: %v", err)
 		return
-	}
-
-	// Resume from position if applicable
-	if resumeTicks > 0 {
-		seconds := float64(resumeTicks) / 10_000_000
-		g.Player.SeekAbsolute(seconds)
 	}
 
 	// Report playback start
@@ -128,7 +126,7 @@ func (g *Game) PlayURL(url string) {
 		log.Printf("Failed to set window ID: %v", err)
 	}
 
-	if err := g.Player.LoadFile(url, ""); err != nil {
+	if err := g.Player.LoadFile(url, "", 0); err != nil {
 		log.Printf("Failed to load URL: %v", err)
 		return
 	}

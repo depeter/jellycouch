@@ -226,14 +226,17 @@ func (p *Player) SetWindowID(wid int64) error {
 	})
 }
 
-// LoadFile starts playback of a URL.
-func (p *Player) LoadFile(url string, itemID string) error {
+// LoadFile starts playback of a URL. If startSeconds > 0 the file opens at that position.
+func (p *Player) LoadFile(url string, itemID string, startSeconds float64) error {
 	p.mu.Lock()
 	p.itemID = itemID
 	p.playing = true
 	p.paused = false
 	p.mu.Unlock()
 	return p.do(func(m *mpv.Mpv) error {
+		if startSeconds > 0 {
+			return m.CommandString(mpvCmd("loadfile", url, "replace", fmt.Sprintf("start=%.1f", startSeconds)))
+		}
 		return m.CommandString(mpvCmd("loadfile", url))
 	})
 }
