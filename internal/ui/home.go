@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"log"
 	"sort"
 	"strings"
@@ -205,55 +204,10 @@ func (hs *HomeScreen) loadData() {
 func (hs *HomeScreen) convertItemsForGrid(grid *PosterGrid, items []jellyfin.MediaItem) {
 	result := make([]GridItem, len(items))
 	for i, item := range items {
-		result[i] = GridItem{
-			ID:    item.ID,
-			Title: item.Name,
-		}
-		// For episodes, show the series name as the title and episode info as subtitle
-		if item.Type == "Episode" && item.SeriesName != "" {
-			result[i].Title = item.SeriesName
-			ep := fmt.Sprintf("S%dE%d", item.ParentIndexNumber, item.IndexNumber)
-			if item.Name != "" {
-				ep += " · " + item.Name
-			}
-			result[i].Subtitle = ep
-		} else if item.Year > 0 {
-			result[i].Subtitle = fmt.Sprintf("%d", item.Year)
-		}
-
-		// Flow progress and watched state
-		if item.RuntimeTicks > 0 && item.PlaybackPositionTicks > 0 {
-			result[i].Progress = float64(item.PlaybackPositionTicks) / float64(item.RuntimeTicks)
-		}
-		result[i].Watched = item.Played
-		result[i].Rating = float64(item.CommunityRating)
-
-		// For episodes, show series poster instead of episode thumbnail
-		posterID := item.ID
-		if item.Type == "Episode" && item.SeriesID != "" {
-			posterID = item.SeriesID
-		}
-
-		// Async load poster image — capture grid pointer and item ID for race-safe callback
-		url := hs.client.GetPosterURL(posterID)
-		itemID := item.ID
-		hs.imgCache.LoadAsync(url, func(img *ebiten.Image) {
-			hs.mu.Lock()
-			defer hs.mu.Unlock()
-			for j := range grid.Items {
-				if grid.Items[j].ID == itemID {
-					grid.Items[j].Image = img
-					break
-				}
-			}
-		})
-
-		// Also check if already cached
-		if img := hs.imgCache.Get(url); img != nil {
-			result[i].Image = img
-		}
+		result[i] = GridItemFromMediaItem(item)
 	}
 	grid.Items = result
+	LoadGridItemImages(hs.client, hs.imgCache, &grid.Items, items, &hs.mu)
 }
 
 func (hs *HomeScreen) Update() (*ScreenTransition, error) {

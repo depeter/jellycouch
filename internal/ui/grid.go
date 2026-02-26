@@ -4,9 +4,13 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+
+	"github.com/depeter/jellycouch/internal/cache"
+	"github.com/depeter/jellycouch/internal/jellyfin"
 )
 
 // GridItem represents a single item in a poster grid.
@@ -331,6 +335,72 @@ func drawRatingBadge(dst *ebiten.Image, rating float64, x, y float64) {
 	// Rating number text
 	DrawText(dst, label, float64(starCX)+starSize+4, by+padY, FontSizeSmall,
 		color.RGBA{R: 0xFF, G: 0xD7, B: 0x00, A: 0xFF})
+}
+
+// GridItemFromMediaItem converts a Jellyfin MediaItem to a GridItem.
+// This handles episode title logic, progress calculation, and watched state.
+func GridItemFromMediaItem(item jellyfin.MediaItem) GridItem {
+	gi := GridItem{
+		ID:      item.ID,
+		Title:   item.Name,
+		Watched: item.Played,
+		Rating:  float64(item.CommunityRating),
+	}
+
+	// For episodes, show the series name as the title and episode info as subtitle
+	if item.Type == "Episode" && item.SeriesName != "" {
+		gi.Title = item.SeriesName
+		ep := fmt.Sprintf("S%dE%d", item.ParentIndexNumber, item.IndexNumber)
+		if item.Name != "" {
+			ep += " · " + item.Name
+		}
+		gi.Subtitle = ep
+	} else if item.Type == "Series" && item.RecursiveItemCount > 0 {
+		watched := item.RecursiveItemCount - item.UnplayedItemCount
+		gi.Subtitle = fmt.Sprintf("%d/%d", watched, item.RecursiveItemCount)
+	} else if item.Year > 0 {
+		gi.Subtitle = fmt.Sprintf("%d", item.Year)
+	}
+
+	// Progress
+	if item.RuntimeTicks > 0 && item.PlaybackPositionTicks > 0 {
+		gi.Progress = float64(item.PlaybackPositionTicks) / float64(item.RuntimeTicks)
+	}
+
+	return gi
+}
+
+// PosterID returns the appropriate poster image ID for a media item.
+// Episodes use their series poster instead of episode thumbnail.
+func PosterID(item jellyfin.MediaItem) string {
+	if item.Type == "Episode" && item.SeriesID != "" {
+		return item.SeriesID
+	}
+	return item.ID
+}
+
+// LoadGridItemImages loads poster images for grid items asynchronously.
+// It checks the cache first, and starts async loads for uncached items.
+func LoadGridItemImages(client *jellyfin.Client, imgCache *cache.ImageCache, items *[]GridItem, mediaItems []jellyfin.MediaItem, mu *sync.Mutex) {
+	for i, item := range mediaItems {
+		posterID := PosterID(item)
+		url := client.GetPosterURL(posterID)
+		if img := imgCache.Get(url); img != nil {
+			(*items)[i].Image = img
+		} else {
+			itemID := item.ID
+			imgCache.LoadAsync(url, func(img *ebiten.Image) {
+				mu.Lock()
+				defer mu.Unlock()
+				for j := range *items {
+					if (*items)[j].ID == itemID {
+						(*items)[j].Image = img
+						break
+					}
+				}
+			})
+		}
+	}
 }
 
 // statusBadgeColor returns the badge background color for a media status.

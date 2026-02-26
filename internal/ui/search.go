@@ -217,41 +217,9 @@ func (ss *SearchScreen) doSearch() {
 
 	ss.gridItems = make([]GridItem, len(items))
 	for i, item := range items {
-		ss.gridItems[i] = GridItem{
-			ID:    item.ID,
-			Title: item.Name,
-		}
-		if item.Type == "Episode" && item.SeriesName != "" {
-			ss.gridItems[i].Title = item.SeriesName
-			ep := fmt.Sprintf("S%dE%d", item.ParentIndexNumber, item.IndexNumber)
-			if item.Name != "" {
-				ep += " · " + item.Name
-			}
-			ss.gridItems[i].Subtitle = ep
-		} else if item.Year > 0 {
-			ss.gridItems[i].Subtitle = fmt.Sprintf("%d", item.Year)
-		}
-		posterID := item.ID
-		if item.Type == "Episode" && item.SeriesID != "" {
-			posterID = item.SeriesID
-		}
-		url := ss.client.GetPosterURL(posterID)
-		if img := ss.imgCache.Get(url); img != nil {
-			ss.gridItems[i].Image = img
-		} else {
-			itemID := item.ID
-			ss.imgCache.LoadAsync(url, func(img *ebiten.Image) {
-				ss.mu.Lock()
-				defer ss.mu.Unlock()
-				for j := range ss.gridItems {
-					if ss.gridItems[j].ID == itemID {
-						ss.gridItems[j].Image = img
-						break
-					}
-				}
-			})
-		}
+		ss.gridItems[i] = GridItemFromMediaItem(item)
 	}
+	LoadGridItemImages(ss.client, ss.imgCache, &ss.gridItems, items, &ss.mu)
 }
 
 func (ss *SearchScreen) Draw(dst *ebiten.Image) {

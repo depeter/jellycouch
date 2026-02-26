@@ -288,52 +288,9 @@ func (ls *LibraryScreen) loadData(start int) {
 	// Build grid items for all items (rebuild to keep indices consistent)
 	ls.gridItems = make([]GridItem, len(ls.items))
 	for i, item := range ls.items {
-		ls.gridItems[i] = GridItem{
-			ID:    item.ID,
-			Title: item.Name,
-		}
-		if item.Type == "Series" && item.RecursiveItemCount > 0 {
-			watched := item.RecursiveItemCount - item.UnplayedItemCount
-			ls.gridItems[i].Subtitle = fmt.Sprintf("%d/%d", watched, item.RecursiveItemCount)
-		} else if item.Type == "Episode" && item.SeriesName != "" {
-			ls.gridItems[i].Title = item.SeriesName
-			ep := fmt.Sprintf("S%dE%d", item.ParentIndexNumber, item.IndexNumber)
-			if item.Name != "" {
-				ep += " · " + item.Name
-			}
-			ls.gridItems[i].Subtitle = ep
-		} else if item.Year > 0 {
-			ls.gridItems[i].Subtitle = fmt.Sprintf("%d", item.Year)
-		}
-
-		// Flow progress and watched state
-		if item.RuntimeTicks > 0 && item.PlaybackPositionTicks > 0 {
-			ls.gridItems[i].Progress = float64(item.PlaybackPositionTicks) / float64(item.RuntimeTicks)
-		}
-		ls.gridItems[i].Watched = item.Played
-		ls.gridItems[i].Rating = float64(item.CommunityRating)
-
-		posterID := item.ID
-		if item.Type == "Episode" && item.SeriesID != "" {
-			posterID = item.SeriesID
-		}
-		url := ls.client.GetPosterURL(posterID)
-		if img := ls.imgCache.Get(url); img != nil {
-			ls.gridItems[i].Image = img
-		} else {
-			itemID := item.ID
-			ls.imgCache.LoadAsync(url, func(img *ebiten.Image) {
-				ls.mu.Lock()
-				defer ls.mu.Unlock()
-				for j := range ls.gridItems {
-					if ls.gridItems[j].ID == itemID {
-						ls.gridItems[j].Image = img
-						break
-					}
-				}
-			})
-		}
+		ls.gridItems[i] = GridItemFromMediaItem(item)
 	}
+	LoadGridItemImages(ls.client, ls.imgCache, &ls.gridItems, ls.items, &ls.mu)
 
 	ls.loaded = true
 	ls.loading = false
