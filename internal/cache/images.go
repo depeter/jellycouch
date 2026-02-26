@@ -11,15 +11,25 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
+
+var httpClient = &http.Client{Timeout: 10 * time.Second}
 
 // ImageCache provides disk + memory caching for images.
 type ImageCache struct {
 	cacheDir string
 	memory   sync.Map // url -> *ebiten.Image
-	loading  sync.Map // url -> chan struct{} (in-flight dedup)
+	loading  sync.Map // url -> *loadEntry (in-flight dedup with waiters)
+	sem      chan struct{}
+}
+
+// loadEntry tracks in-flight downloads and their waiters.
+type loadEntry struct {
+	mu        sync.Mutex
+	callbacks []func(*ebiten.Image)
 }
 
 // NewImageCache creates a new image cache with the given disk directory.
@@ -27,7 +37,10 @@ func NewImageCache(cacheDir string) (*ImageCache, error) {
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return nil, err
 	}
-	return &ImageCache{cacheDir: cacheDir}, nil
+	return &ImageCache{
+		cacheDir: cacheDir,
+		sem:      make(chan struct{}, 6),
+	}, nil
 }
 
 // Get returns a cached image if available, or nil.
@@ -47,13 +60,25 @@ func (ic *ImageCache) LoadAsync(url string, callback func(*ebiten.Image)) {
 		return
 	}
 
-	// Dedup in-flight requests
-	if _, loaded := ic.loading.LoadOrStore(url, struct{}{}); loaded {
+	// Dedup in-flight requests — add callback to existing entry or create new one
+	entry := &loadEntry{}
+	entry.callbacks = append(entry.callbacks, callback)
+
+	if existing, loaded := ic.loading.LoadOrStore(url, entry); loaded {
+		// Another goroutine is already downloading this URL — append our callback
+		existingEntry := existing.(*loadEntry)
+		existingEntry.mu.Lock()
+		existingEntry.callbacks = append(existingEntry.callbacks, callback)
+		existingEntry.mu.Unlock()
 		return
 	}
 
 	go func() {
 		defer ic.loading.Delete(url)
+
+		// Acquire semaphore to limit concurrent downloads
+		ic.sem <- struct{}{}
+		defer func() { <-ic.sem }()
 
 		img, err := ic.loadImage(url)
 		if err != nil {
@@ -62,7 +87,16 @@ func (ic *ImageCache) LoadAsync(url string, callback func(*ebiten.Image)) {
 
 		eimg := ebiten.NewImageFromImage(img)
 		ic.memory.Store(url, eimg)
-		callback(eimg)
+
+		// Notify all waiters
+		entry.mu.Lock()
+		cbs := make([]func(*ebiten.Image), len(entry.callbacks))
+		copy(cbs, entry.callbacks)
+		entry.mu.Unlock()
+
+		for _, cb := range cbs {
+			cb(eimg)
+		}
 	}()
 }
 
@@ -80,8 +114,8 @@ func (ic *ImageCache) loadImage(url string) (image.Image, error) {
 		os.Remove(diskPath)
 	}
 
-	// Download
-	resp, err := http.Get(url)
+	// Download with timeout-aware client
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return nil, err
 	}

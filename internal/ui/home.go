@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 
@@ -80,71 +81,123 @@ func (hs *HomeScreen) OnEnter() {
 func (hs *HomeScreen) OnExit() {}
 
 func (hs *HomeScreen) loadData() {
-	var sections []*PosterGrid
-	var metas []sectionMeta
-	var anyError error
-
-	// Continue Watching
-	if items, err := hs.client.GetResumeItems(20); err == nil && len(items) > 0 {
-		grid := NewPosterGrid("Continue Watching")
-		hs.convertItemsForGrid(grid, items)
-		sections = append(sections, grid)
-		metas = append(metas, sectionMeta{})
-	} else if err != nil {
-		anyError = err
+	type sectionResult struct {
+		grid  *PosterGrid
+		meta  sectionMeta
+		order int // for stable sort
 	}
 
-	// Next Up
-	if items, err := hs.client.GetNextUp(20); err == nil && len(items) > 0 {
-		grid := NewPosterGrid("Next Up")
-		hs.convertItemsForGrid(grid, items)
-		sections = append(sections, grid)
-		metas = append(metas, sectionMeta{})
-	} else if err != nil {
-		anyError = err
+	var (
+		resultsMu sync.Mutex
+		results   []sectionResult
+		anyError  error
+		wg        sync.WaitGroup
+	)
+
+	addResult := func(sr sectionResult) {
+		resultsMu.Lock()
+		results = append(results, sr)
+		resultsMu.Unlock()
 	}
 
-	// Libraries
+	setError := func(err error) {
+		resultsMu.Lock()
+		if anyError == nil {
+			anyError = err
+		}
+		resultsMu.Unlock()
+	}
+
+	// Continue Watching (order 0)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		items, err := hs.client.GetResumeItems(20)
+		if err != nil {
+			setError(err)
+			return
+		}
+		if len(items) > 0 {
+			grid := NewPosterGrid("Continue Watching")
+			hs.convertItemsForGrid(grid, items)
+			addResult(sectionResult{grid: grid, meta: sectionMeta{}, order: 0})
+		}
+	}()
+
+	// Next Up (order 1)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		items, err := hs.client.GetNextUp(20)
+		if err != nil {
+			setError(err)
+			return
+		}
+		if len(items) > 0 {
+			grid := NewPosterGrid("Next Up")
+			hs.convertItemsForGrid(grid, items)
+			addResult(sectionResult{grid: grid, meta: sectionMeta{}, order: 1})
+		}
+	}()
+
+	// Libraries — first get views, then load latest for each in parallel
 	views, err := hs.client.GetViews()
 	if err != nil {
 		log.Printf("Failed to load views: %v", err)
-		anyError = err
+		setError(err)
 	} else {
-		// Store library views for nav buttons
 		var libViews []struct{ ID, Name string }
 		for _, view := range views {
-			items, err := hs.client.GetLatestMedia(view.ID, 20)
-			if err != nil {
-				log.Printf("Failed to load latest for %s: %v", view.Name, err)
-				continue
-			}
 			libViews = append(libViews, struct{ ID, Name string }{view.ID, view.Name})
-			if len(items) == 0 {
-				continue
-			}
-			grid := NewPosterGrid("Latest " + view.Name)
-			hs.convertItemsForGrid(grid, items)
-			// Add "See All >" pseudo-item at the end
-			grid.Items = append(grid.Items, GridItem{
-				ID:    "_seeall_" + view.ID,
-				Title: "See All >",
-			})
-			sections = append(sections, grid)
-			metas = append(metas, sectionMeta{
-				IsLibrary: true,
-				ParentID:  view.ID,
-				Title:     view.Name,
-			})
 		}
 		hs.mu.Lock()
 		hs.libraryViews = libViews
 		hs.mu.Unlock()
+
+		for i, view := range views {
+			wg.Add(1)
+			go func(view jellyfin.MediaItem, order int) {
+				defer wg.Done()
+				items, err := hs.client.GetLatestMedia(view.ID, 20)
+				if err != nil {
+					log.Printf("Failed to load latest for %s: %v", view.Name, err)
+					return
+				}
+				if len(items) == 0 {
+					return
+				}
+				grid := NewPosterGrid("Latest " + view.Name)
+				hs.convertItemsForGrid(grid, items)
+				grid.Items = append(grid.Items, GridItem{
+					ID:    "_seeall_" + view.ID,
+					Title: "See All >",
+				})
+				addResult(sectionResult{
+					grid:  grid,
+					meta:  sectionMeta{IsLibrary: true, ParentID: view.ID, Title: view.Name},
+					order: order,
+				})
+			}(view, i+2) // order starts at 2 after Continue Watching and Next Up
+		}
+	}
+
+	wg.Wait()
+
+	// Sort results by order to maintain stable section ordering
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].order < results[j].order
+	})
+
+	var sections []*PosterGrid
+	var metas []sectionMeta
+	for _, r := range results {
+		sections = append(sections, r.grid)
+		metas = append(metas, r.meta)
 	}
 
 	hs.mu.Lock()
 	hs.sections = sections
 	hs.sectionMeta = metas
-	// Clamp libNavIndex in case views changed
 	if hs.libNavIndex >= len(hs.libraryViews) {
 		hs.libNavIndex = 0
 	}

@@ -17,6 +17,7 @@ var (
 	ColorOverlay       = color.RGBA{R: 0x00, G: 0x00, B: 0x00, A: 0xC0}
 	ColorError         = color.RGBA{R: 0xE0, G: 0x40, B: 0x40, A: 0xFF}
 	ColorSuccess       = color.RGBA{R: 0x40, G: 0xC0, B: 0x60, A: 0xFF}
+	ColorRatingGold    = color.RGBA{R: 0xFF, G: 0xD7, B: 0x00, A: 0xFF}
 )
 
 // Layout constants

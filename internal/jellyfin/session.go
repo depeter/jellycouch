@@ -15,7 +15,7 @@ func (c *Client) ReportPlaybackStart(itemID string, positionTicks int64) error {
 	body.SetCanSeek(true)
 	body.SetPlayMethod(jellyfin.PLAYMETHOD_DIRECT_PLAY)
 
-	_, err := c.api.PlaystateAPI.ReportPlaybackStart(c.ctx).PlaybackStartInfo(body).Execute()
+	_, err := c.api.PlaystateAPI.ReportPlaybackStart(c.reqCtx()).PlaybackStartInfo(body).Execute()
 	if err != nil {
 		return fmt.Errorf("report playback start: %w", err)
 	}
@@ -31,7 +31,7 @@ func (c *Client) ReportPlaybackProgress(itemID string, positionTicks int64, isPa
 	body.SetCanSeek(true)
 	body.SetPlayMethod(jellyfin.PLAYMETHOD_DIRECT_PLAY)
 
-	_, err := c.api.PlaystateAPI.ReportPlaybackProgress(c.ctx).PlaybackProgressInfo(body).Execute()
+	_, err := c.api.PlaystateAPI.ReportPlaybackProgress(c.reqCtx()).PlaybackProgressInfo(body).Execute()
 	if err != nil {
 		return fmt.Errorf("report progress: %w", err)
 	}
@@ -44,7 +44,7 @@ func (c *Client) ReportPlaybackStopped(itemID string, positionTicks int64) error
 	body.SetItemId(itemID)
 	body.SetPositionTicks(positionTicks)
 
-	_, err := c.api.PlaystateAPI.ReportPlaybackStopped(c.ctx).PlaybackStopInfo(body).Execute()
+	_, err := c.api.PlaystateAPI.ReportPlaybackStopped(c.reqCtx()).PlaybackStopInfo(body).Execute()
 	if err != nil {
 		return fmt.Errorf("report playback stopped: %w", err)
 	}

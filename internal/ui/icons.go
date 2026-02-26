@@ -92,6 +92,38 @@ func drawTriangle(dst *ebiten.Image, cx, cy, size float32, up bool, clr color.Co
 	dst.DrawTriangles(vs, is, emptyImage, nil)
 }
 
+// drawStarIcon draws a filled 5-pointed star at (cx, cy) with given radius.
+func drawStarIcon(dst *ebiten.Image, cx, cy, r float32, clr color.Color) {
+	var path vector.Path
+	for i := 0; i < 5; i++ {
+		// Outer point
+		outerAngle := float64(i)*2*math.Pi/5 - math.Pi/2
+		ox := cx + r*float32(math.Cos(outerAngle))
+		oy := cy + r*float32(math.Sin(outerAngle))
+		// Inner point (between outer points)
+		innerAngle := outerAngle + math.Pi/5
+		ir := r * 0.38
+		ix := cx + ir*float32(math.Cos(innerAngle))
+		iy := cy + ir*float32(math.Sin(innerAngle))
+		if i == 0 {
+			path.MoveTo(ox, oy)
+		} else {
+			path.LineTo(ox, oy)
+		}
+		path.LineTo(ix, iy)
+	}
+	path.Close()
+	vs, is := path.AppendVerticesAndIndicesForFilling(nil, nil)
+	cr, cg, cb, ca := clr.RGBA()
+	for i := range vs {
+		vs[i].ColorR = float32(cr) / 0xffff
+		vs[i].ColorG = float32(cg) / 0xffff
+		vs[i].ColorB = float32(cb) / 0xffff
+		vs[i].ColorA = float32(ca) / 0xffff
+	}
+	dst.DrawTriangles(vs, is, emptyImage, nil)
+}
+
 // emptyImage is a 1x1 white image for drawing arbitrary shapes.
 var emptyImage = func() *ebiten.Image {
 	img := ebiten.NewImage(1, 1)

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
@@ -14,15 +15,19 @@ type ButtonRect struct {
 
 // DetailPanel shows item metadata with a backdrop.
 type DetailPanel struct {
-	Title       string
-	Year        string
-	Rating      string
-	Runtime     string
-	Overview    string
-	Backdrop    *ebiten.Image
-	ButtonIndex int
-	Buttons     []string
-	ButtonRects []ButtonRect // populated during Draw
+	Title          string
+	Year           string
+	Rating         string
+	Runtime        string
+	Overview       string
+	RatingValue    float32
+	OfficialRating string
+	Genres         string
+	Tagline        string
+	Backdrop       *ebiten.Image
+	ButtonIndex    int
+	Buttons        []string
+	ButtonRects    []ButtonRect // populated during Draw
 }
 
 func NewDetailPanel() *DetailPanel {
@@ -99,15 +104,45 @@ func (dp *DetailPanel) Draw(dst *ebiten.Image) {
 		}
 		meta += dp.Runtime
 	}
-	if dp.Rating != "" {
+	if dp.OfficialRating != "" {
 		if meta != "" {
 			meta += "  •  "
 		}
-		meta += dp.Rating
+		meta += dp.OfficialRating
+	}
+	if dp.Genres != "" {
+		if meta != "" {
+			meta += "  •  "
+		}
+		meta += dp.Genres
 	}
 	if meta != "" {
 		DrawText(dst, meta, SectionPadding, y, FontSizeBody, ColorTextSecondary)
+	}
+	// Draw rating with vector star after meta text
+	if dp.RatingValue > 0 {
+		ratingText := fmt.Sprintf("%.1f", dp.RatingValue)
+		var metaEndX float64
+		if meta != "" {
+			tw, _ := MeasureText(meta, FontSizeBody)
+			metaEndX = SectionPadding + tw + 20
+		} else {
+			metaEndX = SectionPadding
+		}
+		starR := float32(FontSizeBody * 0.4)
+		starCX := float32(metaEndX) + starR
+		starCY := float32(y) + float32(FontSizeBody)*0.45
+		drawStarIcon(dst, starCX, starCY, starR, color.RGBA{R: 0xFF, G: 0xD7, B: 0x00, A: 0xFF})
+		DrawText(dst, ratingText, float64(starCX+starR+4), y, FontSizeBody, ColorTextSecondary)
+	}
+	if meta != "" || dp.RatingValue > 0 {
 		y += FontSizeBody + 12
+	}
+
+	// Tagline
+	if dp.Tagline != "" {
+		DrawText(dst, dp.Tagline, SectionPadding, y, FontSizeBody, ColorTextMuted)
+		y += FontSizeBody + 8
 	}
 
 	// Overview (wrapped text)

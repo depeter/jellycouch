@@ -306,13 +306,14 @@ func drawRequestBadge(dst *ebiten.Image, status int, x, y float64) {
 	DrawTextCentered(dst, label, x+PosterWidth/2, bannerY+bh/2, FontSizeSmall, ColorText)
 }
 
-// drawRatingBadge draws a small pill badge in the top-left corner with "★ 7.5" format.
+// drawRatingBadge draws a small pill badge in the top-left corner with a vector star + "7.5" format.
 func drawRatingBadge(dst *ebiten.Image, rating float64, x, y float64) {
-	label := fmt.Sprintf("★ %.1f", rating)
+	label := fmt.Sprintf("%.1f", rating)
 	tw, _ := MeasureText(label, FontSizeSmall)
+	starSize := FontSizeSmall * 0.45
 	padX := 6.0
 	padY := 3.0
-	bw := tw + padX*2
+	bw := starSize*2 + 4 + tw + padX*2
 	bh := FontSizeSmall + padY*2
 	bx := x + 4
 	by := y + 4
@@ -322,8 +323,13 @@ func drawRatingBadge(dst *ebiten.Image, rating float64, x, y float64) {
 		float32(bw), float32(bh),
 		color.RGBA{R: 0x00, G: 0x00, B: 0x00, A: 0xCC}, false)
 
-	// Gold star + white text
-	DrawText(dst, label, bx+padX, by+padY, FontSizeSmall,
+	// Vector star
+	starCX := float32(bx+padX) + float32(starSize)
+	starCY := float32(by+bh/2)
+	drawStarIcon(dst, starCX, starCY, float32(starSize), color.RGBA{R: 0xFF, G: 0xD7, B: 0x00, A: 0xFF})
+
+	// Rating number text
+	DrawText(dst, label, float64(starCX)+starSize+4, by+padY, FontSizeSmall,
 		color.RGBA{R: 0xFF, G: 0xD7, B: 0x00, A: 0xFF})
 }
 

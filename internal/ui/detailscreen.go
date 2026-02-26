@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -59,9 +60,16 @@ func NewDetailScreen(client *jellyfin.Client, imgCache *cache.ImageCache, item j
 		ds.detail.Runtime = FormatRuntime(item.RuntimeTicks)
 	}
 	if item.CommunityRating > 0 {
-		ds.detail.Rating = fmt.Sprintf("★ %.1f", item.CommunityRating)
+		ds.detail.RatingValue = item.CommunityRating
 	}
 	ds.detail.Overview = item.Overview
+	ds.detail.OfficialRating = item.OfficialRating
+	if len(item.Genres) > 0 {
+		ds.detail.Genres = strings.Join(item.Genres, ", ")
+	}
+	if len(item.Taglines) > 0 {
+		ds.detail.Tagline = item.Taglines[0]
+	}
 
 	// Determine buttons
 	buttons := []string{"Play"}
@@ -346,6 +354,19 @@ func (ds *DetailScreen) Draw(dst *ebiten.Image) {
 			DrawTextCentered(dst, "Loading episodes...", float64(ScreenWidth)/2, y+50,
 				FontSizeBody, ColorTextSecondary)
 			return
+		}
+
+		// Focused episode overview
+		if ds.focusMode == 1 && ds.episodeGrid != nil && ds.episodeGrid.Focused < len(ds.episodes) {
+			ep := ds.episodes[ds.episodeGrid.Focused]
+			epTitle := fmt.Sprintf("E%d: %s", ep.IndexNumber, ep.Name)
+			DrawText(dst, epTitle, SectionPadding, y, FontSizeBody, ColorText)
+			y += FontSizeBody + 4
+			if ep.Overview != "" {
+				maxW := float64(ScreenWidth) - SectionPadding*2 - 200
+				h := DrawTextWrapped(dst, ep.Overview, SectionPadding, y, maxW, FontSizeSmall, ColorTextSecondary)
+				y += h + 8
+			}
 		}
 
 		// Episode items

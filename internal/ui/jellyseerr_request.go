@@ -683,14 +683,26 @@ func (jr *JellyseerrRequestScreen) Draw(dst *ebiten.Image) {
 			meta += "Movie"
 		}
 	}
-	if jr.voteAverage > 0 {
-		if meta != "" {
-			meta += "  \u2022  "
-		}
-		meta += fmt.Sprintf("★ %.1f", jr.voteAverage)
-	}
 	if meta != "" {
 		DrawText(dst, meta, infoX, infoY, FontSizeBody, ColorTextSecondary)
+	}
+	// Draw vote average with vector star
+	if jr.voteAverage > 0 {
+		ratingText := fmt.Sprintf("%.1f", jr.voteAverage)
+		var metaEndX float64
+		if meta != "" {
+			tw, _ := MeasureText(meta, FontSizeBody)
+			metaEndX = infoX + tw + 20
+		} else {
+			metaEndX = infoX
+		}
+		starR := float32(FontSizeBody * 0.4)
+		starCX := float32(metaEndX) + starR
+		starCY := float32(infoY) + float32(FontSizeBody)*0.45
+		drawStarIcon(dst, starCX, starCY, starR, ColorRatingGold)
+		DrawText(dst, ratingText, float64(starCX+starR+4), infoY, FontSizeBody, ColorTextSecondary)
+	}
+	if meta != "" || jr.voteAverage > 0 {
 		infoY += FontSizeBody + 12
 	}
 
