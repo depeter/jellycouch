@@ -559,7 +559,7 @@ func (o *PlaybackOverlay) btnCenterX(target ControlButton) int {
 	btnLabels := map[ControlButton]int{
 		BtnSeekBack60: 2, // ◀◀
 		BtnSeekBack10: 1, // ◀
-		BtnPlayPause:  2, // ❚❚ or ▶ (use 2 as worst case)
+		BtnPlayPause:  1, // ⏸ or ▶
 		BtnSeekFwd10:  1, // ▶
 		BtnSeekFwd60:  2, // ▶▶
 		BtnSubtitles:  1, // ☰
@@ -670,7 +670,7 @@ func (o *PlaybackOverlay) renderBar() {
 
 	// Button row
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(12)))
-	playPauseLabel := "\u258E\u258E" // pause icon while playing
+	playPauseLabel := "\u23F8" // pause icon while playing
 	if o.player.Paused() {
 		playPauseLabel = "\u25B6" // play icon while paused
 	}
