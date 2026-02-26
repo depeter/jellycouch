@@ -356,12 +356,7 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 		gridBase := ls.gridBaseY() - ls.ScrollY
 		if idx, ok := ls.grid.HandleClick(rmx, rmy, SectionPadding, gridBase); ok {
 			if idx < len(ls.items) {
-				if ls.items[idx].Played {
-					go ls.client.MarkUnplayed(ls.items[idx].ID)
-				} else {
-					go ls.client.MarkPlayed(ls.items[idx].ID)
-				}
-				ls.items[idx].Played = !ls.items[idx].Played
+				ls.items[idx].Played = ToggleWatched(ls.client, ls.items[idx].ID, ls.items[idx].Played)
 				ls.gridItems[idx].Watched = ls.items[idx].Played
 			}
 			return nil, nil

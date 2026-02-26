@@ -200,12 +200,7 @@ func (ds *DetailScreen) Update() (*ScreenTransition, error) {
 		for i, rect := range ds.episodeRects {
 			if PointInRect(rmx, rmy, rect.X, rect.Y, rect.W, rect.H) {
 				if i < len(ds.episodes) {
-					if ds.episodes[i].Played {
-						go ds.client.MarkUnplayed(ds.episodes[i].ID)
-					} else {
-						go ds.client.MarkPlayed(ds.episodes[i].ID)
-					}
-					ds.episodes[i].Played = !ds.episodes[i].Played
+					ds.episodes[i].Played = ToggleWatched(ds.client, ds.episodes[i].ID, ds.episodes[i].Played)
 				}
 				return nil, nil
 			}
@@ -291,13 +286,8 @@ func (ds *DetailScreen) handleButtonPress() {
 		if ds.OnLibrary != nil {
 			ds.OnLibrary(ds.item.ID, ds.item.Name)
 		}
-	case "Mark Watched":
-		go ds.client.MarkPlayed(ds.item.ID)
-		ds.item.Played = true
-		ds.updateWatchedButton()
-	case "Mark Unwatched":
-		go ds.client.MarkUnplayed(ds.item.ID)
-		ds.item.Played = false
+	case "Mark Watched", "Mark Unwatched":
+		ds.item.Played = ToggleWatched(ds.client, ds.item.ID, ds.item.Played)
 		ds.updateWatchedButton()
 	}
 }

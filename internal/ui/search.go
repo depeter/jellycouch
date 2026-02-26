@@ -122,12 +122,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 		resultBaseY := barY + barH + 40 - ss.ScrollY
 		if idx, ok := ss.grid.HandleClick(rmx, rmy, SectionPadding, resultBaseY); ok {
 			if idx < len(ss.results) {
-				if ss.results[idx].Played {
-					go ss.client.MarkUnplayed(ss.results[idx].ID)
-				} else {
-					go ss.client.MarkPlayed(ss.results[idx].ID)
-				}
-				ss.results[idx].Played = !ss.results[idx].Played
+				ss.results[idx].Played = ToggleWatched(ss.client, ss.results[idx].ID, ss.results[idx].Played)
 				ss.gridItems[idx].Watched = ss.results[idx].Played
 			}
 			return nil, nil

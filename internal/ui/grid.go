@@ -397,6 +397,18 @@ func LoadGridItemImages(client *jellyfin.Client, imgCache *cache.ImageCache, ite
 	}
 }
 
+// ToggleWatched fires the appropriate MarkPlayed/MarkUnplayed API call in the background
+// and flips the local played state. Returns the new played state.
+// The caller must hold any necessary mutex before calling this.
+func ToggleWatched(client *jellyfin.Client, itemID string, played bool) bool {
+	if played {
+		go client.MarkUnplayed(itemID)
+	} else {
+		go client.MarkPlayed(itemID)
+	}
+	return !played
+}
+
 // statusBadgeColor returns the badge background color for a media status.
 func statusBadgeColor(status int) color.RGBA {
 	switch status {

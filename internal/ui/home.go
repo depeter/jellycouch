@@ -260,12 +260,7 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 		for _, section := range hs.sections {
 			if idx, ok := section.HandleClick(rmx, rmy); ok {
 				item := &section.Items[idx]
-				if item.Watched {
-					go hs.client.MarkUnplayed(item.ID)
-				} else {
-					go hs.client.MarkPlayed(item.ID)
-				}
-				item.Watched = !item.Watched
+				item.Watched = ToggleWatched(hs.client, item.ID, item.Watched)
 				return nil, nil
 			}
 		}
