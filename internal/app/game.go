@@ -30,7 +30,9 @@ type Game struct {
 	// Set to true when mpv playback ends and we need to return to browse mode
 	playbackEnded bool
 
-	overlay *player.PlaybackOverlay
+	overlay     *player.PlaybackOverlay
+	currentItem *jellyfin.MediaItem
+	nextEpCh    chan *jellyfin.MediaItem
 }
 
 // NewGame creates the Game with all dependencies.
@@ -61,7 +63,7 @@ func (g *Game) InitPlayer() error {
 }
 
 // StartPlayback transitions to play mode.
-func (g *Game) StartPlayback(itemID string, resumeTicks int64) {
+func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.MediaItem) {
 	if g.Player == nil {
 		if err := g.InitPlayer(); err != nil {
 			log.Printf("Failed to init player: %v", err)
@@ -94,7 +96,14 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64) {
 	// Report playback start
 	go g.Client.ReportPlaybackStart(itemID, resumeTicks)
 
-	g.overlay = player.NewPlaybackOverlay(g.Player)
+	g.currentItem = item
+	g.nextEpCh = make(chan *jellyfin.MediaItem, 1)
+
+	g.overlay = player.NewPlaybackOverlay(g.Player, g.Width, g.Height)
+	g.overlay.OnStop = func() { g.StopPlayback() }
+	if item != nil && item.Type == "Episode" {
+		g.overlay.OnNextEpisode = func() { g.findAndQueueNextEpisode() }
+	}
 	g.overlay.Show()
 
 	g.State = StatePlay
@@ -124,7 +133,11 @@ func (g *Game) PlayURL(url string) {
 		return
 	}
 
-	g.overlay = player.NewPlaybackOverlay(g.Player)
+	g.currentItem = nil
+	g.nextEpCh = make(chan *jellyfin.MediaItem, 1)
+
+	g.overlay = player.NewPlaybackOverlay(g.Player, g.Width, g.Height)
+	g.overlay.OnStop = func() { g.StopPlayback() }
 	g.overlay.Show()
 
 	g.State = StatePlay
@@ -145,7 +158,72 @@ func (g *Game) StopPlayback() {
 			go g.Client.ReportPlaybackStopped(itemID, posTicks)
 		}
 	}
+	// Drain next-episode channel and clear state
+	if g.nextEpCh != nil {
+		select {
+		case <-g.nextEpCh:
+		default:
+		}
+	}
+	g.currentItem = nil
 	g.State = StateBrowse
+}
+
+// findAndQueueNextEpisode looks up the next episode and sends it on nextEpCh.
+func (g *Game) findAndQueueNextEpisode() {
+	item := g.currentItem
+	if item == nil || item.Type != "Episode" || item.SeriesID == "" {
+		return
+	}
+	ch := g.nextEpCh
+	go func() {
+		next := g.lookupNextEpisode(item)
+		if next == nil {
+			ch <- nil
+			return
+		}
+		full, err := g.Client.GetItem(next.ID)
+		if err != nil {
+			log.Printf("Failed to fetch next episode: %v", err)
+			ch <- nil
+			return
+		}
+		ch <- full
+	}()
+}
+
+// lookupNextEpisode finds the next episode after the given one.
+func (g *Game) lookupNextEpisode(item *jellyfin.MediaItem) *jellyfin.MediaItem {
+	// Try next episode in the same season
+	if item.SeasonID != "" {
+		episodes, err := g.Client.GetEpisodes(item.SeriesID, item.SeasonID)
+		if err == nil {
+			for i, ep := range episodes {
+				if ep.ID == item.ID && i+1 < len(episodes) {
+					return &episodes[i+1]
+				}
+			}
+		}
+	}
+
+	// Last episode of the season — try next season
+	seasons, err := g.Client.GetSeasons(item.SeriesID)
+	if err != nil {
+		return nil
+	}
+	foundSeason := false
+	for _, season := range seasons {
+		if foundSeason {
+			eps, err := g.Client.GetEpisodes(item.SeriesID, season.ID)
+			if err == nil && len(eps) > 0 {
+				return &eps[0]
+			}
+		}
+		if season.ID == item.SeasonID {
+			foundSeason = true
+		}
+	}
+	return nil
 }
 
 func (g *Game) Update() error {
@@ -170,6 +248,23 @@ func (g *Game) Update() error {
 		// Update overlay auto-hide timer
 		if g.overlay != nil {
 			g.overlay.Update()
+		}
+
+		// Check for next-episode result
+		if g.nextEpCh != nil {
+			select {
+			case nextItem := <-g.nextEpCh:
+				if nextItem != nil {
+					g.StopPlayback()
+					g.StartPlayback(nextItem.ID, 0, nextItem)
+					return nil
+				}
+				// nil means no next episode
+				if g.Player != nil {
+					g.Player.ShowText("No next episode", 3000)
+				}
+			default:
+			}
 		}
 
 		// Esc/Back — context-dependent behavior

@@ -34,6 +34,8 @@ const (
 	BtnSeekFwd60
 	BtnSubtitles
 	BtnAudio
+	BtnStop
+	BtnNext
 	btnCount // sentinel for wrapping
 )
 
@@ -128,6 +130,13 @@ type PlaybackOverlay struct {
 	accel      seekAccel
 	lastRender time.Time
 
+	// Screen dimensions for resolution-dependent scaling
+	screenW, screenH int
+
+	// Callbacks
+	OnStop        func()
+	OnNextEpisode func()
+
 	// Track selection state
 	trackType     TrackType
 	tracks        []Track
@@ -135,13 +144,63 @@ type PlaybackOverlay struct {
 }
 
 // NewPlaybackOverlay creates a new overlay for the given player.
-func NewPlaybackOverlay(p *Player) *PlaybackOverlay {
+// screenW/screenH are used to scale font sizes proportionally to resolution.
+func NewPlaybackOverlay(p *Player, screenW, screenH int) *PlaybackOverlay {
+	if screenW <= 0 {
+		screenW = 1920
+	}
+	if screenH <= 0 {
+		screenH = 1080
+	}
 	return &PlaybackOverlay{
 		player:     p,
 		Mode:       OverlayHidden,
 		hideDelay:  4 * time.Second,
 		focusedBtn: BtnPlayPause,
+		screenW:    screenW,
+		screenH:    screenH,
 	}
+}
+
+// scale returns a font size scaled proportionally from a 1080p baseline.
+func (o *PlaybackOverlay) scale(base float64) int {
+	s := base * float64(o.screenH) / 1080.0
+	if s < 1 {
+		s = 1
+	}
+	return int(s + 0.5)
+}
+
+// barWidth returns the progress bar character count scaled for resolution.
+func (o *PlaybackOverlay) barWidth() int {
+	w := 100 * o.screenW / 1920
+	if w < 30 {
+		w = 30
+	}
+	return w
+}
+
+// visibleButtons returns the set of buttons that should be shown, filtering
+// out BtnNext when no OnNextEpisode callback is set.
+func (o *PlaybackOverlay) visibleButtons() []ControlButton {
+	all := []ControlButton{
+		BtnSeekBack60, BtnSeekBack10, BtnPlayPause,
+		BtnSeekFwd10, BtnSeekFwd60, BtnSubtitles, BtnAudio, BtnStop,
+	}
+	if o.OnNextEpisode != nil {
+		all = append(all, BtnNext)
+	}
+	return all
+}
+
+// visibleIndex returns the index of focusedBtn in visibleButtons, or 0.
+func (o *PlaybackOverlay) visibleIndex() int {
+	for i, b := range o.visibleButtons() {
+		if b == o.focusedBtn {
+			return i
+		}
+	}
+	return 0
 }
 
 // Show displays the control bar and resets the auto-hide timer.
@@ -193,19 +252,24 @@ func (o *PlaybackOverlay) HandleBarInput(dir Direction, enter, back bool) bool {
 		}
 
 		if dir == DirLeft {
-			if o.focusedBtn > 0 {
-				o.focusedBtn--
+			vis := o.visibleButtons()
+			idx := o.visibleIndex()
+			if idx > 0 {
+				o.focusedBtn = vis[idx-1]
 			} else {
-				o.focusedBtn = btnCount - 1
+				o.focusedBtn = vis[len(vis)-1]
 			}
 			o.renderBar()
 			return true
 		}
 
 		if dir == DirRight {
-			o.focusedBtn++
-			if o.focusedBtn >= btnCount {
-				o.focusedBtn = 0
+			vis := o.visibleButtons()
+			idx := o.visibleIndex()
+			if idx < len(vis)-1 {
+				o.focusedBtn = vis[idx+1]
+			} else {
+				o.focusedBtn = vis[0]
 			}
 			o.renderBar()
 			return true
@@ -350,6 +414,14 @@ func (o *PlaybackOverlay) activateButton() {
 		o.OpenTrackPanel(TrackSub)
 	case BtnAudio:
 		o.OpenTrackPanel(TrackAudio)
+	case BtnStop:
+		if o.OnStop != nil {
+			o.OnStop()
+		}
+	case BtnNext:
+		if o.OnNextEpisode != nil {
+			o.OnNextEpisode()
+		}
 	}
 }
 
@@ -394,45 +466,45 @@ func (o *PlaybackOverlay) renderBar() {
 	// Using \an2 for bottom-center alignment
 	b.WriteString("{\\an2\\bord0\\shad0\\fsp0}")
 
-	// Progress bar line
+	// Progress bar line (thin horizontal line characters)
 	barColor := assColorGray
 	if o.focusZone == ZoneProgress {
 		barColor = assColorBlue
 	}
-	b.WriteString("{\\fs15\\bord1" + barColor + "}")
-	b.WriteString(o.buildProgressBar(60) + "\\N")
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(9), barColor))
+	b.WriteString(o.buildProgressBar(o.barWidth()) + "\\N")
 
 	// Time and volume line
-	b.WriteString("{\\fs17\\bord1" + assColorWhite + "}")
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(11), assColorWhite))
 	b.WriteString("${time-pos} / ${duration}")
 	b.WriteString("    ")
 	b.WriteString("${?mute==yes:Muted}${!mute:Vol: ${volume}%}")
-	b.WriteString("${?pause==yes:  \\N{\\fs14" + assColorGray + "$>Paused}")
+	b.WriteString(fmt.Sprintf("${?pause==yes:  \\N{\\fs%d%s$>Paused}", o.scale(10), assColorGray))
 	b.WriteString("\\N")
 
 	// Button row
-	b.WriteString("{\\fs18\\bord1}")
-	buttons := []struct {
-		btn   ControlButton
-		label string
-	}{
-		{BtnSeekBack60, "\u25C0\u25C0"},
-		{BtnSeekBack10, "\u25C0"},
-		{BtnPlayPause, "\u25B6\u258E\u258E"},
-		{BtnSeekFwd10, "\u25B6"},
-		{BtnSeekFwd60, "\u25B6\u25B6"},
-		{BtnSubtitles, "Subs"},
-		{BtnAudio, "Audio"},
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(12)))
+	btnLabels := map[ControlButton]string{
+		BtnSeekBack60: "\u25C0\u25C0",
+		BtnSeekBack10: "\u25C0",
+		BtnPlayPause:  "\u25B6\u258E\u258E",
+		BtnSeekFwd10:  "\u25B6",
+		BtnSeekFwd60:  "\u25B6\u25B6",
+		BtnSubtitles:  "Subs",
+		BtnAudio:      "Audio",
+		BtnStop:       "Stop",
+		BtnNext:       "Next",
 	}
 
-	for i, btn := range buttons {
+	for i, btn := range o.visibleButtons() {
 		if i > 0 {
 			b.WriteString("{" + assColorDimGray + "}  \u2502  ")
 		}
-		if btn.btn == o.focusedBtn {
-			b.WriteString("{" + assColorBlue + "\\b1}[ " + btn.label + " ]{\\b0}")
+		label := btnLabels[btn]
+		if btn == o.focusedBtn {
+			b.WriteString("{" + assColorBlue + "\\b1}[ " + label + " ]{\\b0}")
 		} else {
-			b.WriteString("{" + assColorGray + "}" + btn.label)
+			b.WriteString("{" + assColorGray + "}" + label)
 		}
 	}
 
@@ -453,7 +525,7 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 	if o.trackType == TrackAudio {
 		title = "Audio Tracks"
 	}
-	b.WriteString("{\\fs20\\bord1" + assColorBlue + "}" + title + "\\N\\N")
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(15), assColorBlue) + title + "\\N\\N")
 
 	// Track list
 	totalItems := len(o.tracks)
@@ -482,7 +554,7 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 			isCurrentlyActive = t.Selected
 		}
 
-		b.WriteString("{\\fs17\\bord1}")
+		b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(13)))
 
 		if i == o.selectedIndex {
 			// Focused item: blue with arrow
@@ -521,7 +593,7 @@ func (o *PlaybackOverlay) buildProgressBar(width int) string {
 		filled = int(frac*float64(width) + 0.5)
 	}
 
-	return strings.Repeat("\u2588", filled) + strings.Repeat("\u2500", width-filled)
+	return strings.Repeat("\u2501", filled) + strings.Repeat("\u2500", width-filled)
 }
 
 // formatDuration formats seconds into "H:MM:SS" or "MM:SS".

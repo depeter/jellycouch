@@ -63,23 +63,26 @@ func (nb *NavBar) Update() NavBarAction {
 	}
 
 	switch nb.focusSection {
-	case 0: // Library buttons
-		if len(nb.LibraryViews) == 0 {
-			nb.focusSection = 1
-			return NavBarActionNone
-		}
+	case 0: // Home + Library buttons (index 0 = Home, 1+ = library views)
+		sectionLen := 1 + len(nb.LibraryViews) // Home + libraries
 
 		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-			view := nb.LibraryViews[nb.libNavIndex]
-			if nb.OnNavigate != nil {
-				nb.OnNavigate("library", view.ID, view.Name)
+			if nb.libNavIndex == 0 {
+				if nb.OnNavigate != nil {
+					nb.OnNavigate("home", "", "")
+				}
+			} else {
+				view := nb.LibraryViews[nb.libNavIndex-1]
+				if nb.OnNavigate != nil {
+					nb.OnNavigate("library", view.ID, view.Name)
+				}
 			}
 			nb.Active = false
 			return NavBarActionDefocus
 		}
 
 		if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
-			if nb.libNavIndex < len(nb.LibraryViews)-1 {
+			if nb.libNavIndex < sectionLen-1 {
 				nb.libNavIndex++
 			} else {
 				nb.focusSection = 1
@@ -104,9 +107,9 @@ func (nb *NavBar) Update() NavBarAction {
 			return NavBarActionDefocus
 		}
 
-		// Left at start → library buttons
-		if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) && nb.input.CursorAtStart() && len(nb.LibraryViews) > 0 {
-			nb.libNavIndex = len(nb.LibraryViews) - 1
+		// Left at start → Home + library buttons
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) && nb.input.CursorAtStart() {
+			nb.libNavIndex = len(nb.LibraryViews) // last library button, or Home if no libraries
 			nb.focusSection = 0
 		}
 
@@ -170,8 +173,19 @@ func (nb *NavBar) HandleClick(mx, my int) bool {
 		return true
 	}
 
+	// Home button
+	homeBtnX := 230.0
+	homeTw, _ := MeasureText("Home", FontSizeBody)
+	homeBtnW := homeTw + 28
+	if PointInRect(mx, my, homeBtnX, 12, homeBtnW, 38) {
+		if nb.OnNavigate != nil {
+			nb.OnNavigate("home", "", "")
+		}
+		return true
+	}
+
 	// Library buttons
-	libBtnX := 230.0
+	libBtnX := homeBtnX + homeBtnW + 10
 	for _, view := range nb.LibraryViews {
 		tw, _ := MeasureText(view.Name, FontSizeBody)
 		btnW := tw + 28
@@ -229,15 +243,40 @@ func (nb *NavBar) Draw(dst *ebiten.Image) {
 	}
 	DrawText(dst, "JellyCouch", SectionPadding, 16, FontSizeTitle, homeColor)
 
+	// Home button
+	homeBtnX := 230.0
+	{
+		tw, _ := MeasureText("Home", FontSizeBody)
+		btnW := tw + 28
+		btnH := 38.0
+		btnY := 12.0
+		focused := nb.Active && nb.focusSection == 0 && nb.libNavIndex == 0
+		active := nb.ActiveScreenName == "Home"
+
+		if focused {
+			vector.DrawFilledRect(dst, float32(homeBtnX), float32(btnY), float32(btnW), float32(btnH), ColorPrimary, false)
+			DrawTextCentered(dst, "Home", homeBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorBackground)
+		} else if active {
+			vector.DrawFilledRect(dst, float32(homeBtnX), float32(btnY), float32(btnW), float32(btnH), ColorSurfaceHover, false)
+			vector.StrokeRect(dst, float32(homeBtnX), float32(btnY), float32(btnW), float32(btnH), 2, ColorPrimary, false)
+			DrawTextCentered(dst, "Home", homeBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorText)
+		} else {
+			vector.DrawFilledRect(dst, float32(homeBtnX), float32(btnY), float32(btnW), float32(btnH), ColorSurfaceHover, false)
+			vector.StrokeRect(dst, float32(homeBtnX), float32(btnY), float32(btnW), float32(btnH), 1, ColorPrimary, false)
+			DrawTextCentered(dst, "Home", homeBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorText)
+		}
+		homeBtnX += btnW + 10
+	}
+
 	// Library nav buttons
-	libBtnX := 230.0
+	libBtnX := homeBtnX
 	for i, view := range nb.LibraryViews {
 		tw, _ := MeasureText(view.Name, FontSizeBody)
 		btnW := tw + 28
 		btnH := 38.0
 		btnY := 12.0
 
-		focused := nb.Active && nb.focusSection == 0 && i == nb.libNavIndex
+		focused := nb.Active && nb.focusSection == 0 && i+1 == nb.libNavIndex
 		active := strings.HasPrefix(nb.ActiveScreenName, "Library: "+view.Name)
 
 		if focused {

@@ -176,8 +176,8 @@ func pushHomeScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCac
 
 func pushDetailScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache, item jellyfin.MediaItem) {
 	detail := ui.NewDetailScreen(game.Client, imgCache, item)
-	detail.OnPlay = func(itemID string, resumeTicks int64) {
-		game.StartPlayback(itemID, resumeTicks)
+	detail.OnPlay = func(item jellyfin.MediaItem, resumeTicks int64) {
+		game.StartPlayback(item.ID, resumeTicks, &item)
 	}
 	detail.OnLibrary = func(parentID, title string) {
 		pushLibraryScreen(game, cfg, imgCache, parentID, title, nil)

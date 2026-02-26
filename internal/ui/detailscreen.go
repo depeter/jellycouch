@@ -38,7 +38,7 @@ type DetailScreen struct {
 	focusMode  int
 	loaded     bool
 
-	OnPlay    func(itemID string, resumeTicks int64)
+	OnPlay    func(item jellyfin.MediaItem, resumeTicks int64)
 	OnLibrary func(parentID, title string)
 
 	mu sync.Mutex
@@ -187,7 +187,7 @@ func (ds *DetailScreen) Update() (*ScreenTransition, error) {
 					ds.focusMode = 1
 				}
 				if i < len(ds.episodes) && ds.OnPlay != nil {
-					ds.OnPlay(ds.episodes[i].ID, ds.episodes[i].PlaybackPositionTicks)
+					ds.OnPlay(ds.episodes[i], ds.episodes[i].PlaybackPositionTicks)
 				}
 				return nil, nil
 			}
@@ -267,7 +267,7 @@ func (ds *DetailScreen) Update() (*ScreenTransition, error) {
 			if idx < len(ds.episodes) {
 				ep := ds.episodes[idx]
 				if ds.OnPlay != nil {
-					ds.OnPlay(ep.ID, ep.PlaybackPositionTicks)
+					ds.OnPlay(ep, ep.PlaybackPositionTicks)
 				}
 			}
 		}
@@ -281,11 +281,11 @@ func (ds *DetailScreen) handleButtonPress() {
 	switch btn {
 	case "Play":
 		if ds.OnPlay != nil {
-			ds.OnPlay(ds.item.ID, 0)
+			ds.OnPlay(ds.item, 0)
 		}
 	case "Resume":
 		if ds.OnPlay != nil {
-			ds.OnPlay(ds.item.ID, ds.item.PlaybackPositionTicks)
+			ds.OnPlay(ds.item, ds.item.PlaybackPositionTicks)
 		}
 	case "Browse Seasons":
 		if ds.OnLibrary != nil {
