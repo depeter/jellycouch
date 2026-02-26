@@ -1,7 +1,10 @@
 package app
 
 import (
+	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -11,7 +14,7 @@ import (
 	"github.com/depeter/jellycouch/internal/config"
 	"github.com/depeter/jellycouch/internal/jellyfin"
 	"github.com/depeter/jellycouch/internal/jellyseerr"
-	"github.com/depeter/jellycouch/internal/player" // used for player.New, player.GetWindowHandle
+	"github.com/depeter/jellycouch/internal/player"
 	"github.com/depeter/jellycouch/internal/ui"
 )
 
@@ -30,9 +33,11 @@ type Game struct {
 	// Set to true when mpv playback ends and we need to return to browse mode
 	playbackEnded bool
 
-	overlay     *player.PlaybackOverlay
-	currentItem *jellyfin.MediaItem
-	nextEpCh    chan *jellyfin.MediaItem
+	overlay        *player.PlaybackOverlay
+	currentItem    *jellyfin.MediaItem
+	nextEpCh       chan *jellyfin.MediaItem
+	nextEpItem     *jellyfin.MediaItem // pre-fetched next episode for direct playback
+	nextEpBGRAPath string              // temp file for thumbnail overlay
 }
 
 // NewGame creates the Game with all dependencies.
@@ -96,11 +101,15 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 
 	g.currentItem = item
 	g.nextEpCh = make(chan *jellyfin.MediaItem, 1)
+	g.nextEpItem = nil
+	g.nextEpBGRAPath = ""
 
 	g.overlay = player.NewPlaybackOverlay(g.Player, g.Width, g.Height)
 	g.overlay.OnStop = func() { g.StopPlayback() }
 	if item != nil && item.Type == "Episode" {
-		g.overlay.OnNextEpisode = func() { g.findAndQueueNextEpisode() }
+		g.overlay.SetShowNextButton(true)
+		g.overlay.OnNextEpisode = func() { g.playNextEpisode() }
+		go g.prefetchNextEpisode(item)
 	}
 	g.overlay.Show()
 
@@ -163,8 +172,91 @@ func (g *Game) StopPlayback() {
 		default:
 		}
 	}
+	if g.nextEpBGRAPath != "" {
+		os.Remove(g.nextEpBGRAPath)
+		g.nextEpBGRAPath = ""
+	}
+	g.nextEpItem = nil
 	g.currentItem = nil
 	g.State = StateBrowse
+}
+
+// prefetchNextEpisode looks up the next episode and pre-fetches its metadata
+// and thumbnail for the overlay tooltip. Runs as a goroutine.
+func (g *Game) prefetchNextEpisode(item *jellyfin.MediaItem) {
+	if item == nil || item.Type != "Episode" || item.SeriesID == "" {
+		return
+	}
+
+	next := g.lookupNextEpisode(item)
+	if next == nil {
+		if g.overlay != nil {
+			g.overlay.SetNoNextEpisode()
+		}
+		return
+	}
+
+	// Fetch full item details
+	full, err := g.Client.GetItem(next.ID)
+	if err != nil {
+		log.Printf("Failed to fetch next episode: %v", err)
+		if g.overlay != nil {
+			g.overlay.SetNoNextEpisode()
+		}
+		return
+	}
+
+	g.nextEpItem = full
+
+	info := &player.NextEpisodeInfo{
+		Title:         full.Name,
+		SeasonNumber:  full.ParentIndexNumber,
+		EpisodeNumber: full.IndexNumber,
+		ItemID:        full.ID,
+	}
+
+	// Try to fetch a thumbnail image
+	imgURL := ""
+	if _, ok := full.ImageTags["Thumb"]; ok {
+		imgURL = g.Client.GetImageURL(full.ID, jellyfin.ImageThumb, 240, 0)
+	} else if _, ok := full.ImageTags["Primary"]; ok {
+		imgURL = g.Client.GetImageURL(full.ID, jellyfin.ImagePrimary, 240, 0)
+	}
+
+	if imgURL != "" {
+		img, err := g.Cache.LoadDecodedImage(imgURL)
+		if err == nil {
+			bgraPath := filepath.Join(g.Cache.CacheDir(), fmt.Sprintf("nextep_%s.bgra", full.ID))
+			w, h, err := player.PrepareOverlayImage(img, bgraPath)
+			if err == nil {
+				info.ImagePath = bgraPath
+				info.ImageW = w
+				info.ImageH = h
+				g.nextEpBGRAPath = bgraPath
+			} else {
+				log.Printf("Failed to prepare overlay image: %v", err)
+			}
+		} else {
+			log.Printf("Failed to load next episode thumbnail: %v", err)
+		}
+	}
+
+	if g.overlay != nil {
+		g.overlay.SetNextEpisode(info)
+	}
+}
+
+// playNextEpisode plays the pre-fetched next episode directly, or falls back
+// to the async lookup flow.
+func (g *Game) playNextEpisode() {
+	if g.nextEpItem != nil {
+		item := g.nextEpItem
+		g.StopPlayback()
+		g.StartPlayback(item.ID, 0, item)
+		return
+	}
+	// Fallback: trigger async lookup
+	g.findAndQueueNextEpisode()
 }
 
 // findAndQueueNextEpisode looks up the next episode and sends it on nextEpCh.
