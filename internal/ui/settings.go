@@ -27,6 +27,8 @@ type SettingsScreen struct {
 	// Paste button rect (only valid while editing)
 	pasteRect ButtonRect
 
+	langEditor *LangEditor
+
 	OnSave func()
 }
 
@@ -42,14 +44,13 @@ type settingsSection struct {
 }
 
 type settingsItem struct {
-	Label    string
-	Value    func() string
-	OnChange func(val string) error // returns error if validation fails
-	Options  []string               // when set, Left/Right cycles through these instead of text edit
+	Label     string
+	Value     func() string
+	OnChange  func(val string) error // returns error if validation fails
+	Options   []string               // when set, Left/Right cycles through these instead of text edit
+	MultiLang bool                   // when set, Enter opens multi-language editor overlay
 }
 
-// Common language codes for mpv audio/subtitle selection.
-var languageOptions = []string{"eng", "fre", "ger", "spa", "ita", "por", "nld", "rus", "jpn", "kor", "zho", "ara", "hin", "swe", "nor", "dan", "fin", "pol", "tur", "cze", "hun", "tha", "vie"}
 var hwAccelOptions = []string{"auto-safe", "auto", "no", "vaapi", "vdpau", "cuda", "videotoolbox", "d3d11va", "dxva2"}
 
 func NewSettingsScreen(cfg *config.Config, onSave func()) *SettingsScreen {
@@ -108,8 +109,8 @@ func NewSettingsScreen(cfg *config.Config, onSave func()) *SettingsScreen {
 			Label: "Playback",
 			Items: []settingsItem{
 				{Label: "HW Accel", Value: func() string { return cfg.Playback.HWAccel }, OnChange: func(v string) error { cfg.Playback.HWAccel = v; return nil }, Options: hwAccelOptions},
-				{Label: "Audio Language", Value: func() string { return cfg.Playback.AudioLanguage }, OnChange: func(v string) error { cfg.Playback.AudioLanguage = v; return nil }, Options: languageOptions},
-				{Label: "Sub Language", Value: func() string { return cfg.Playback.SubLanguage }, OnChange: func(v string) error { cfg.Playback.SubLanguage = v; return nil }, Options: languageOptions},
+				{Label: "Audio Language", Value: func() string { return cfg.Playback.AudioLanguage }, OnChange: func(v string) error { cfg.Playback.AudioLanguage = v; return nil }, MultiLang: true},
+				{Label: "Sub Language", Value: func() string { return cfg.Playback.SubLanguage }, OnChange: func(v string) error { cfg.Playback.SubLanguage = v; return nil }, MultiLang: true},
 				{Label: "Volume", Value: func() string { return fmt.Sprintf("%d", cfg.Playback.Volume) }, OnChange: func(v string) error {
 					n, err := strconv.Atoi(v)
 					if err != nil {
@@ -161,7 +162,22 @@ func cycleOption(item *settingsItem, delta int) {
 	item.OnChange(item.Options[idx])
 }
 
+func (ss *SettingsScreen) openLangEditor(item *settingsItem) {
+	title := item.Label + " Preferences"
+	ss.langEditor = NewLangEditor(title, item.Value())
+}
+
 func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
+	// Delegate to lang editor overlay when active
+	if ss.langEditor != nil {
+		ss.langEditor.Update()
+		if done, result := ss.langEditor.Done(); done {
+			ss.focusedItem().OnChange(result)
+			ss.langEditor = nil
+		}
+		return nil, nil
+	}
+
 	_, enter, back := InputState()
 
 	if ss.editing {
@@ -205,7 +221,9 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 				ss.sectionIndex = rect.SectionIdx
 				ss.itemIndex = rect.ItemIdx
 				item := ss.focusedItem()
-				if item.Options != nil {
+				if item.MultiLang {
+					ss.openLangEditor(item)
+				} else if item.Options != nil {
 					// Cycle forward on click
 					cycleOption(item, 1)
 				} else {
@@ -258,7 +276,9 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 
 	if enter {
 		item := ss.focusedItem()
-		if item.Options != nil {
+		if item.MultiLang {
+			ss.openLangEditor(item)
+		} else if item.Options != nil {
 			// Cycle forward on Enter for option items
 			cycleOption(item, 1)
 		} else {
@@ -325,7 +345,23 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 				DrawTextCentered(dst, "Paste", pasteX+pasteW/2, pasteY+pasteH/2, FontSizeSmall, ColorTextSecondary)
 			}
 
-			if item.Options != nil && isFocused && !isEditing {
+			if item.MultiLang && isFocused && !isEditing {
+				// Multi-language item: show display names and edit hint
+				display := formatLangDisplay(value)
+				if display == "" {
+					display = "(none)"
+				}
+				DrawText(dst, display, valueX, y+4, FontSizeBody, ColorText)
+				w, _ := MeasureText(display, FontSizeBody)
+				DrawText(dst, "[Enter to edit]", valueX+w+12, y+4, FontSizeSmall, ColorPrimary)
+			} else if item.MultiLang {
+				// Multi-language item (not focused): show display names
+				display := formatLangDisplay(value)
+				if display == "" {
+					display = "(none)"
+				}
+				DrawText(dst, display, valueX, y+4, FontSizeBody, ColorTextSecondary)
+			} else if item.Options != nil && isFocused && !isEditing {
 				// Draw arrows around value for cycle-able items
 				DrawText(dst, "◀", valueX-20, y+4, FontSizeBody, ColorPrimary)
 				DrawText(dst, value, valueX, y+4, FontSizeBody, ColorText)
@@ -349,4 +385,8 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 		y += 16
 	}
 
+	// Draw lang editor overlay on top
+	if ss.langEditor != nil {
+		ss.langEditor.Draw(dst)
+	}
 }
