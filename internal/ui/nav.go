@@ -31,7 +31,7 @@ func InputState() (dir Direction, enter, back bool) {
 	back = inpututil.IsKeyJustPressed(ebiten.KeyEscape) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyBackspace) ||
 		inpututil.IsMouseButtonJustPressed(ebiten.MouseButton3) ||
-		evdevBackJustPressed()
+		EvdevBackJustPressed()
 	return
 }
 

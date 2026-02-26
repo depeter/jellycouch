@@ -232,6 +232,9 @@ func (g *Game) Update() error {
 		ebiten.SetFullscreen(!ebiten.IsFullscreen())
 	}
 
+	// F12 toggles debug overlay (works in all modes)
+	ui.ToggleDebugOverlay()
+
 	switch g.State {
 	case StateBrowse:
 		if err := g.Screens.Update(); err != nil {
@@ -270,7 +273,8 @@ func (g *Game) Update() error {
 		// Esc/Back — context-dependent behavior
 		backPressed := inpututil.IsKeyJustPressed(ebiten.KeyEscape) ||
 			inpututil.IsKeyJustPressed(ebiten.KeyBackspace) ||
-			inpututil.IsMouseButtonJustPressed(ebiten.MouseButton3)
+			inpututil.IsMouseButtonJustPressed(ebiten.MouseButton3) ||
+			ui.EvdevBackJustPressed()
 
 		if backPressed && g.overlay != nil {
 			switch g.overlay.Mode {
@@ -304,11 +308,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	case StateBrowse:
 		screen.Fill(ui.ColorBackground)
 		g.Screens.Draw(screen)
+		ui.DrawDebugOverlay(screen)
 
 	case StatePlay:
 		// In play mode, mpv owns the window surface via --wid.
 		// We don't draw anything — mpv renders directly.
-		// However, if we ever need Go-side OSD, we could draw here.
+		// During playback, evdev events are still logged to terminal.
 	}
 }
 

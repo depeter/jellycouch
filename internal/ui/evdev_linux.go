@@ -7,7 +7,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 )
 
@@ -26,6 +28,13 @@ var inputEventSize = int(unsafe.Sizeof(struct {
 }{}))
 
 var evdevBackPressed atomic.Bool
+
+const recentEventsMax = 8
+
+var (
+	recentEventsMu sync.Mutex
+	recentEvents   []EvdevEvent
+)
 
 func init() {
 	go watchEvdevBack()
@@ -51,6 +60,7 @@ func readEvdev(path string) {
 	}
 	defer f.Close()
 
+	device := filepath.Base(path)
 	buf := make([]byte, inputEventSize)
 	for {
 		_, err := f.Read(buf)
@@ -63,15 +73,42 @@ func readEvdev(path string) {
 		code := binary.LittleEndian.Uint16(buf[18:20])
 		value := int32(binary.LittleEndian.Uint32(buf[20:24]))
 
+		// Record all key-press events (value=1) into ring buffer
+		if typ == evKey && value == 1 {
+			ev := EvdevEvent{
+				Time:   time.Now(),
+				Device: device,
+				Type:   typ,
+				Code:   code,
+				Value:  value,
+			}
+			recentEventsMu.Lock()
+			recentEvents = append(recentEvents, ev)
+			if len(recentEvents) > recentEventsMax {
+				recentEvents = recentEvents[len(recentEvents)-recentEventsMax:]
+			}
+			recentEventsMu.Unlock()
+
+			log.Printf("evdev: key press on %s — type=%d code=%d value=%d", device, typ, code, value)
+		}
+
 		if typ == evKey && code == keyBack && value == 1 {
-			log.Printf("evdev: KEY_BACK detected on %s", path)
 			evdevBackPressed.Store(true)
 		}
 	}
 }
 
-// evdevBackJustPressed returns true once if the evdev KEY_BACK was pressed,
+// EvdevBackJustPressed returns true once if the evdev KEY_BACK was pressed,
 // then resets the flag.
-func evdevBackJustPressed() bool {
+func EvdevBackJustPressed() bool {
 	return evdevBackPressed.CompareAndSwap(true, false)
+}
+
+// EvdevRecentEvents returns a snapshot of the most recent evdev key-press events.
+func EvdevRecentEvents() []EvdevEvent {
+	recentEventsMu.Lock()
+	defer recentEventsMu.Unlock()
+	out := make([]EvdevEvent, len(recentEvents))
+	copy(out, recentEvents)
+	return out
 }
