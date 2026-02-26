@@ -214,6 +214,9 @@ func (ds *DetailScreen) Update() (*ScreenTransition, error) {
 
 	switch ds.focusMode {
 	case 0: // buttons
+		if dir == DirUp {
+			return &ScreenTransition{Type: TransitionFocusNavBar}, nil
+		}
 		if dir == DirDown {
 			if len(ds.seasons) > 0 {
 				ds.focusMode = 2

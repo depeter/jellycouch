@@ -85,7 +85,7 @@ func (js *JellyseerrSearchScreen) Update() (*ScreenTransition, error) {
 	}
 	if clicked {
 		barX := float64(SectionPadding)
-		barY := 20.0
+		barY := float64(NavBarHeight) + 20.0
 		barW := float64(ScreenWidth - SectionPadding*2)
 		barH := 44.0
 		if PointInRect(mx, my, barX, barY, barW, barH) {
@@ -124,6 +124,10 @@ func (js *JellyseerrSearchScreen) Update() (*ScreenTransition, error) {
 
 		if enter && js.input.Text != "" {
 			go js.doSearch()
+		}
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
+			return &ScreenTransition{Type: TransitionFocusNavBar}, nil
 		}
 
 		if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) && len(js.results) > 0 {
@@ -224,12 +228,12 @@ func (js *JellyseerrSearchScreen) Draw(dst *ebiten.Image) {
 
 	js.scrollY = Lerp(js.scrollY, js.targetScrollY, ScrollAnimSpeed)
 
-	// Title
-	DrawText(dst, "Search", SectionPadding, 16, FontSizeTitle, ColorPrimary)
+	// Title (below navbar)
+	DrawText(dst, "Search", SectionPadding, NavBarHeight+16, FontSizeTitle, ColorPrimary)
 
 	// Search bar
 	barX := float32(SectionPadding)
-	barY := float32(58)
+	barY := float32(NavBarHeight + 58)
 	barW := float32(ScreenWidth - SectionPadding*2)
 	barH := float32(44)
 

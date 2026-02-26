@@ -47,7 +47,7 @@ type JellyseerrRequestsScreen struct {
 const (
 	reqsSearchBtnW = 100.0
 	reqsSearchBtnH = 38.0
-	reqsSearchBtnY = 12.0
+	reqsSearchBtnY = NavBarHeight + 12.0
 )
 
 func NewJellyseerrRequestsScreen(client *jellyseerr.Client, imgCache *cache.ImageCache) *JellyseerrRequestsScreen {
@@ -261,7 +261,7 @@ func (jr *JellyseerrRequestsScreen) Update() (*ScreenTransition, error) {
 		}
 		// Check grid items
 		if len(jr.gridItems) > 0 {
-			baseY := 110.0 - jr.scrollY
+			baseY := float64(NavBarHeight) + 110.0 - jr.scrollY
 			for i := range jr.gridItems {
 				col := i % jr.grid.Cols
 				row := i / jr.grid.Cols
@@ -287,6 +287,9 @@ func (jr *JellyseerrRequestsScreen) Update() (*ScreenTransition, error) {
 
 	switch jr.focusMode {
 	case 0: // filter tabs
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
+			return &ScreenTransition{Type: TransitionFocusNavBar}, nil
+		}
 		dir, _, _ := InputState()
 		switch dir {
 		case DirLeft:
@@ -337,8 +340,8 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 
 	jr.scrollY = Lerp(jr.scrollY, jr.targetScrollY, ScrollAnimSpeed)
 
-	// Header
-	DrawText(dst, "My Requests", SectionPadding, 16, FontSizeTitle, ColorPrimary)
+	// Header (below navbar)
+	DrawText(dst, "My Requests", SectionPadding, NavBarHeight+16, FontSizeTitle, ColorPrimary)
 
 	// Search button (top right)
 	searchX := float32(jr.searchBtnX())
@@ -348,7 +351,7 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 		ColorPrimary)
 
 	// Filter tabs
-	tabY := 55.0
+	tabY := float64(NavBarHeight) + 55.0
 	jr.filterRects = make([]ButtonRect, len(requestFilterLabels))
 	tabX := float64(SectionPadding)
 	for i, label := range requestFilterLabels {
@@ -372,7 +375,7 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 		tabX += tabW + 16
 	}
 
-	baseY := 110.0
+	baseY := float64(NavBarHeight) + 110.0
 
 	if jr.loading {
 		DrawTextCentered(dst, "Loading requests...", float64(ScreenWidth)/2, baseY+100,

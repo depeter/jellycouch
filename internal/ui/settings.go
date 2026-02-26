@@ -227,6 +227,8 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 			if ss.sectionIndex < 0 {
 				ss.sectionIndex = 0
 				ss.itemIndex = 0
+				// Focus navbar when at the very top
+				return &ScreenTransition{Type: TransitionFocusNavBar}, nil
 			} else {
 				ss.itemIndex = len(ss.sections[ss.sectionIndex].Items) - 1
 			}
@@ -270,9 +272,9 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 }
 
 func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
-	DrawText(dst, "Settings", SectionPadding, 16, FontSizeTitle, ColorText)
+	DrawText(dst, "Settings", SectionPadding, NavBarHeight+16, FontSizeTitle, ColorText)
 
-	y := float64(NavBarHeight + 10)
+	y := float64(NavBarHeight*2 + 10)
 	ss.rowRects = ss.rowRects[:0] // reset
 
 	for si, sec := range ss.sections {

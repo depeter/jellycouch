@@ -175,7 +175,7 @@ func (ds *JellyseerrDiscoverScreen) mediaStatus(r jellyseerr.SearchResult) int {
 
 // Nav button layout constants
 const (
-	discNavBtnY  = 12.0
+	discNavBtnY  = NavBarHeight + 12.0
 	discNavBtnH  = 38.0
 	discReqBtnW  = 130.0
 	discSrchBtnW = 100.0
@@ -285,6 +285,9 @@ func (ds *JellyseerrDiscoverScreen) Update() (*ScreenTransition, error) {
 			}
 			return nil, nil
 		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
+			return &ScreenTransition{Type: TransitionFocusNavBar}, nil
+		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) && ds.loaded && len(ds.sections) > 0 {
 			ds.focusMode = 1
 			ds.sections[ds.sectionIndex].Active = true
@@ -322,7 +325,7 @@ func (ds *JellyseerrDiscoverScreen) Update() (*ScreenTransition, error) {
 			ds.sections[ds.sectionIndex].Active = true
 			ds.ensureSectionVisible()
 		} else {
-			// Move focus to nav buttons
+			// Move focus to local nav buttons
 			currentSection.Active = false
 			ds.focusMode = 0
 			ds.navBtnIndex = 0
@@ -367,8 +370,8 @@ func (ds *JellyseerrDiscoverScreen) Draw(dst *ebiten.Image) {
 
 	ds.scrollY = Lerp(ds.scrollY, ds.targetScrollY, ScrollAnimSpeed)
 
-	// Header
-	DrawText(dst, "Discovery", SectionPadding, 16, FontSizeTitle, ColorPrimary)
+	// Header (below navbar)
+	DrawText(dst, "Discovery", SectionPadding, NavBarHeight+16, FontSizeTitle, ColorPrimary)
 
 	// My Requests button
 	reqX := float32(ds.reqBtnX())
@@ -403,7 +406,7 @@ func (ds *JellyseerrDiscoverScreen) Draw(dst *ebiten.Image) {
 		return
 	}
 
-	y := float64(NavBarHeight+10) - ds.scrollY
+	y := float64(NavBarHeight*2+10) - ds.scrollY
 	for _, section := range ds.sections {
 		h := section.Draw(dst, SectionPadding, y)
 		y += h + SectionGap

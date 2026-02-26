@@ -105,6 +105,9 @@ type LibraryScreen struct {
 	// debounce: track last applied search to detect changes
 	appliedSearch string
 
+	// auto-detected collection type (e.g. "tvshows")
+	collectionType string
+
 	OnItemSelected func(item jellyfin.MediaItem)
 
 	errDisplay ErrorDisplay
@@ -159,9 +162,23 @@ func (ls *LibraryScreen) Name() string { return "Library: " + ls.title }
 func (ls *LibraryScreen) OnEnter() {
 	if !ls.loaded && !ls.loading {
 		ls.loading = true
-		go ls.loadData(0)
-		go ls.loadGenres()
+		go ls.detectAndLoad()
 	}
+}
+
+// detectAndLoad checks the collection type and sets item type filters before loading.
+func (ls *LibraryScreen) detectAndLoad() {
+	if ls.parentID != "" && len(ls.itemTypes) == 0 {
+		ct, err := ls.client.GetCollectionType(ls.parentID)
+		if err == nil && ct == "tvshows" {
+			ls.mu.Lock()
+			ls.collectionType = ct
+			ls.itemTypes = []string{"Series"}
+			ls.mu.Unlock()
+		}
+	}
+	go ls.loadGenres()
+	ls.loadData(0)
 }
 
 func (ls *LibraryScreen) OnExit() {}
@@ -275,7 +292,10 @@ func (ls *LibraryScreen) loadData(start int) {
 			ID:    item.ID,
 			Title: item.Name,
 		}
-		if item.Type == "Episode" && item.SeriesName != "" {
+		if item.Type == "Series" && item.RecursiveItemCount > 0 {
+			watched := item.RecursiveItemCount - item.UnplayedItemCount
+			ls.gridItems[i].Subtitle = fmt.Sprintf("%d/%d", watched, item.RecursiveItemCount)
+		} else if item.Type == "Episode" && item.SeriesName != "" {
 			ls.gridItems[i].Title = item.SeriesName
 			ep := fmt.Sprintf("S%dE%d", item.ParentIndexNumber, item.IndexNumber)
 			if item.Name != "" {
@@ -328,7 +348,7 @@ func (ls *LibraryScreen) loadMore() {
 
 // gridBaseY returns the Y position where the poster grid starts.
 func (ls *LibraryScreen) gridBaseY() float64 {
-	return float64(NavBarHeight) + filterBarHeight + 20
+	return float64(NavBarHeight*2) + filterBarHeight + 20
 }
 
 func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
@@ -420,11 +440,17 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 }
 
 func (ls *LibraryScreen) updateFilterBar() (*ScreenTransition, error) {
-	// Escape/Down from filter bar → return to grid
+	// Escape from filter bar → return to grid
 	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
 		ls.focusMode = focusGrid
 		ls.filterBar.Active = false
 		return nil, nil
+	}
+
+	// Up from filter bar (non-search) → focus navbar
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) && !ls.filterBar.IsSearchFocused() {
+		ls.filterBar.Active = false
+		return &ScreenTransition{Type: TransitionFocusNavBar}, nil
 	}
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) && !ls.filterBar.IsSearchFocused() {
@@ -510,8 +536,9 @@ func (ls *LibraryScreen) updateGrid() (*ScreenTransition, error) {
 
 func (ls *LibraryScreen) ensureVisible() {
 	row := ls.grid.FocusedRow()
-	rowH := float64(PosterHeight + PosterGap + FontSizeCaption + 8)
-	targetY := float64(row)*rowH - float64(ScreenHeight)/3
+	rowH := float64(PosterHeight + PosterGap + FontSizeSmall + FontSizeCaption + 16)
+	visibleH := float64(ScreenHeight) - ls.gridBaseY()
+	targetY := float64(row)*rowH - visibleH/2 + rowH/2
 	if targetY < 0 {
 		targetY = 0
 	}
@@ -524,15 +551,15 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 
 	ls.scrollY = Lerp(ls.scrollY, ls.targetScrollY, ScrollAnimSpeed)
 
-	// Title bar
-	DrawText(dst, ls.title, SectionPadding, 16, FontSizeTitle, ColorText)
+	// Title bar (below navbar)
+	DrawText(dst, ls.title, SectionPadding, NavBarHeight+16, FontSizeTitle, ColorText)
 	if ls.total > 0 {
 		countStr := fmt.Sprintf("%d items", ls.total)
-		DrawText(dst, countStr, float64(ScreenWidth)-200, 24, FontSizeSmall, ColorTextMuted)
+		DrawText(dst, countStr, float64(ScreenWidth)-200, NavBarHeight+24, FontSizeSmall, ColorTextMuted)
 	}
 
 	// Filter bar
-	ls.filterBar.Draw(dst, SectionPadding, float64(NavBarHeight))
+	ls.filterBar.Draw(dst, SectionPadding, float64(NavBarHeight*2))
 
 	if ls.loadError != "" && !ls.loaded {
 		errX := float64(ScreenWidth)/2 - 300

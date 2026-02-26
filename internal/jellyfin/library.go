@@ -37,6 +37,8 @@ type MediaItem struct {
 	ParentIndexNumber     int
 	Played                bool
 	PlaybackPositionTicks int64
+	RecursiveItemCount    int
+	UnplayedItemCount     int
 	UserData              *UserData
 	Genres                []string
 	Taglines              []string
@@ -167,6 +169,17 @@ func (c *Client) GetFilteredItems(parentID string, start, limit int, itemTypes [
 		total = int(*result.TotalRecordCount)
 	}
 	return convertItems(result.Items), total, nil
+}
+
+// GetCollectionType returns the collection type of a library view (e.g. "tvshows", "movies").
+func (c *Client) GetCollectionType(parentID string) (string, error) {
+	item, _, err := c.api.UserLibraryAPI.GetItem(c.ctx, parentID).
+		UserId(c.userID).
+		Execute()
+	if err != nil {
+		return "", fmt.Errorf("get collection type: %w", err)
+	}
+	return string(item.GetCollectionType()), nil
 }
 
 // GetGenres returns genre names for a library, sorted alphabetically.
@@ -325,6 +338,7 @@ func convertBaseItemDto(item *jellyfin.BaseItemDto) MediaItem {
 	mi.Genres = item.GetGenres()
 	mi.Taglines = item.GetTaglines()
 	mi.OfficialRating = item.GetOfficialRating()
+	mi.RecursiveItemCount = int(item.GetRecursiveItemCount())
 
 	if item.UserData.IsSet() {
 		udPtr := item.UserData.Get()
@@ -337,6 +351,7 @@ func convertBaseItemDto(item *jellyfin.BaseItemDto) MediaItem {
 			mi.Played = ud.Played
 			ud.IsFavorite = udPtr.GetIsFavorite()
 			mi.UserData = ud
+			mi.UnplayedItemCount = int(udPtr.GetUnplayedItemCount())
 		}
 	}
 	return mi

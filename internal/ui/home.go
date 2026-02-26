@@ -8,8 +8,6 @@ import (
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"github.com/hajimehoshi/ebiten/v2/vector"
 
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/jellyfin"
@@ -30,17 +28,13 @@ type HomeScreen struct {
 
 	sections     []*PosterGrid
 	sectionIndex int
-	focusMode    int // 0=search bar, 1=sections, 2=nav buttons, 3=library nav
-	navBtnIndex  int // 0=discovery, 1=settings (when focusMode==2)
-	libNavIndex  int // which library button is focused (when focusMode==3)
-	input        TextInput
 	loaded       bool
 	loading      bool
 	loadError    string
 	scrollY      float64
 	targetScrollY float64
 
-	// Library views for nav buttons
+	// Library views for nav buttons (still loaded for section labels)
 	libraryViews []struct{ ID, Name string }
 
 	// Per-section metadata for library browsing
@@ -48,12 +42,8 @@ type HomeScreen struct {
 
 	// Callbacks
 	OnItemSelected    func(item jellyfin.MediaItem)
-	OnSearch          func(query string)
-	OnSettings        func()
-	OnRequests        func()
-	OnAuthError       func()
 	OnLibraryBrowse   func(parentID, title string)
-	JellyseerrEnabled func() bool
+	OnAuthError       func()
 
 	authFailed bool
 	errDisplay ErrorDisplay
@@ -63,9 +53,8 @@ type HomeScreen struct {
 
 func NewHomeScreen(client *jellyfin.Client, imgCache *cache.ImageCache) *HomeScreen {
 	return &HomeScreen{
-		client:    client,
-		imgCache:  imgCache,
-		focusMode: 1, // start with sections focused
+		client:   client,
+		imgCache: imgCache,
 	}
 }
 
@@ -198,9 +187,6 @@ func (hs *HomeScreen) loadData() {
 	hs.mu.Lock()
 	hs.sections = sections
 	hs.sectionMeta = metas
-	if hs.libNavIndex >= len(hs.libraryViews) {
-		hs.libNavIndex = 0
-	}
 	if len(sections) > 0 {
 		sections[0].Active = true
 	}
@@ -293,70 +279,11 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 	if clicked && hs.errDisplay.HandleClick(mx, my, hs.loadError) {
 		return nil, nil
 	}
-	if clicked {
-		// Search bar click — focus the search bar for typing
-		searchX := float64(ScreenWidth)/2 - 200
-		searchY := 12.0
-		searchW := 400.0
-		searchH := 38.0
-		if PointInRect(mx, my, searchX, searchY, searchW, searchH) {
-			if hs.focusMode == 1 && len(hs.sections) > 0 {
-				hs.sections[hs.sectionIndex].Active = false
-			}
-			hs.focusMode = 0
-			hs.navBtnIndex = 0
-			return nil, nil
-		}
-		// Settings button click
-		settingsX := float64(ScreenWidth) - SectionPadding - 100
-		settingsY := 12.0
-		settingsW := 100.0
-		settingsH := 38.0
-		if PointInRect(mx, my, settingsX, settingsY, settingsW, settingsH) {
-			if hs.OnSettings != nil {
-				hs.OnSettings()
-			}
-			return nil, nil
-		}
-		// Discovery button click (only when Jellyseerr is configured)
-		if hs.JellyseerrEnabled != nil && hs.JellyseerrEnabled() {
-			reqX := settingsX - 120
-			reqY := 12.0
-			reqW := 110.0
-			reqH := 38.0
-			if PointInRect(mx, my, reqX, reqY, reqW, reqH) {
-				if hs.OnRequests != nil {
-					hs.OnRequests()
-				}
-				return nil, nil
-			}
-		}
-
-		// Library nav button clicks
-		libBtnX := 230.0
-		for _, view := range hs.libraryViews {
-			tw, _ := MeasureText(view.Name, FontSizeBody)
-			btnW := tw + 28
-			if PointInRect(mx, my, libBtnX, 12, btnW, 38) {
-				if hs.focusMode == 1 && len(hs.sections) > 0 {
-					hs.sections[hs.sectionIndex].Active = false
-				}
-				if hs.OnLibraryBrowse != nil {
-					hs.OnLibraryBrowse(view.ID, view.Name)
-				}
-				return nil, nil
-			}
-			libBtnX += btnW + 10
-		}
-	}
 	if clicked && hs.loaded && len(hs.sections) > 0 {
 		for i, section := range hs.sections {
 			if idx, ok := section.HandleClick(mx, my); ok {
 				// Set active section
-				if hs.focusMode == 1 {
-					hs.sections[hs.sectionIndex].Active = false
-				}
-				hs.focusMode = 1
+				hs.sections[hs.sectionIndex].Active = false
 				hs.sectionIndex = i
 				hs.sections[hs.sectionIndex].Active = true
 				section.Focused = idx
@@ -398,174 +325,6 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 		}
 	}
 
-	// Search bar focused — handle text input
-	if hs.focusMode == 0 {
-		hs.input.Update()
-
-		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && hs.input.Text != "" {
-			query := hs.input.Text
-			hs.input.Clear()
-			hs.focusMode = 1
-			if len(hs.sections) > 0 {
-				hs.sections[hs.sectionIndex].Active = true
-			}
-			if hs.OnSearch != nil {
-				hs.OnSearch(query)
-			}
-			return nil, nil
-		}
-
-		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
-			hs.focusMode = 1
-			if len(hs.sections) > 0 {
-				hs.sections[hs.sectionIndex].Active = true
-			}
-			return nil, nil
-		}
-
-		if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) && hs.loaded && len(hs.sections) > 0 {
-			hs.focusMode = 1
-			hs.sections[hs.sectionIndex].Active = true
-			return nil, nil
-		}
-
-		// Left arrow at start of input → move focus to library nav
-		if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) && hs.input.CursorAtStart() && len(hs.libraryViews) > 0 {
-			hs.libNavIndex = len(hs.libraryViews) - 1
-			hs.focusMode = 3
-			return nil, nil
-		}
-
-		// Right arrow at end of input text → move focus to nav buttons
-		if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) && hs.input.CursorAtEnd() {
-			if hs.JellyseerrEnabled != nil && hs.JellyseerrEnabled() {
-				hs.navBtnIndex = 0 // Discovery
-			} else {
-				hs.navBtnIndex = 1 // Settings
-			}
-			hs.focusMode = 2
-			return nil, nil
-		}
-
-		return nil, nil
-	}
-
-	// Nav buttons focused (right side: Discovery/Settings)
-	if hs.focusMode == 2 {
-		hasDiscovery := hs.JellyseerrEnabled != nil && hs.JellyseerrEnabled()
-
-		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-			if hs.navBtnIndex == 0 && hasDiscovery {
-				if hs.OnRequests != nil {
-					hs.OnRequests()
-				}
-			} else {
-				if hs.OnSettings != nil {
-					hs.OnSettings()
-				}
-			}
-			return nil, nil
-		}
-
-		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
-			hs.focusMode = 1
-			if len(hs.sections) > 0 {
-				hs.sections[hs.sectionIndex].Active = true
-			}
-			return nil, nil
-		}
-
-		if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
-			if hs.navBtnIndex == 0 && hasDiscovery {
-				hs.navBtnIndex = 1 // Settings
-			}
-			return nil, nil
-		}
-
-		if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
-			if hs.navBtnIndex == 1 && hasDiscovery {
-				hs.navBtnIndex = 0 // Discovery
-			} else {
-				hs.focusMode = 0 // Back to search bar
-			}
-			return nil, nil
-		}
-
-		if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) && hs.loaded && len(hs.sections) > 0 {
-			hs.focusMode = 1
-			hs.sections[hs.sectionIndex].Active = true
-			return nil, nil
-		}
-
-		return nil, nil
-	}
-
-	// Library nav buttons focused (left side: Movies, TV Shows, etc.)
-	if hs.focusMode == 3 && len(hs.libraryViews) > 0 {
-		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-			view := hs.libraryViews[hs.libNavIndex]
-			if hs.OnLibraryBrowse != nil {
-				hs.OnLibraryBrowse(view.ID, view.Name)
-			}
-			return nil, nil
-		}
-
-		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
-			hs.focusMode = 1
-			if len(hs.sections) > 0 {
-				hs.sections[hs.sectionIndex].Active = true
-			}
-			return nil, nil
-		}
-
-		if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
-			if hs.libNavIndex < len(hs.libraryViews)-1 {
-				hs.libNavIndex++
-			} else {
-				hs.focusMode = 0 // Move to search bar
-			}
-			return nil, nil
-		}
-
-		if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
-			if hs.libNavIndex > 0 {
-				hs.libNavIndex--
-			}
-			return nil, nil
-		}
-
-		if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) && hs.loaded && len(hs.sections) > 0 {
-			hs.focusMode = 1
-			hs.sections[hs.sectionIndex].Active = true
-			return nil, nil
-		}
-
-		return nil, nil
-	}
-
-	// Keyboard shortcuts (only when sections focused, not search bar)
-	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
-		if hs.OnSettings != nil {
-			hs.OnSettings()
-		}
-		return nil, nil
-	}
-
-	if inpututil.IsKeyJustPressed(ebiten.KeyR) && hs.JellyseerrEnabled != nil && hs.JellyseerrEnabled() {
-		if hs.OnRequests != nil {
-			hs.OnRequests()
-		}
-		return nil, nil
-	}
-
-	if inpututil.IsKeyJustPressed(ebiten.KeySlash) {
-		if len(hs.sections) > 0 {
-			hs.sections[hs.sectionIndex].Active = false
-		}
-		hs.focusMode = 0
-		return nil, nil
-	}
-
 	if !hs.loaded || len(hs.sections) == 0 {
 		return nil, nil
 	}
@@ -582,8 +341,8 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 			hs.sections[hs.sectionIndex].Active = true
 			hs.ensureSectionVisible()
 		} else {
-			currentSection.Active = false
-			hs.focusMode = 0
+			// Focus the global navbar
+			return &ScreenTransition{Type: TransitionFocusNavBar}, nil
 		}
 	case DirDown:
 		if hs.sectionIndex < len(hs.sections)-1 {
@@ -656,90 +415,10 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 		return
 	}
 
-	// Header
-	DrawText(dst, "JellyCouch", SectionPadding, 16, FontSizeTitle, ColorPrimary)
-
-	// Library nav buttons (between title and search bar)
-	libBtnX := 230.0
-	for i, view := range hs.libraryViews {
-		tw, _ := MeasureText(view.Name, FontSizeBody)
-		btnW := tw + 28
-		btnH := 38.0
-		btnY := 12.0
-		focused := hs.focusMode == 3 && i == hs.libNavIndex
-		if focused {
-			vector.DrawFilledRect(dst, float32(libBtnX), float32(btnY), float32(btnW), float32(btnH), ColorPrimary, false)
-			DrawTextCentered(dst, view.Name, libBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorBackground)
-		} else {
-			vector.DrawFilledRect(dst, float32(libBtnX), float32(btnY), float32(btnW), float32(btnH), ColorSurfaceHover, false)
-			vector.StrokeRect(dst, float32(libBtnX), float32(btnY), float32(btnW), float32(btnH), 1, ColorPrimary, false)
-			DrawTextCentered(dst, view.Name, libBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorText)
-		}
-		libBtnX += btnW + 10
-	}
-
-	// Search bar
-	searchX := float64(ScreenWidth)/2 - 200
-	searchY := 12.0
-	searchW := 400.0
-	searchH := 38.0
-	if hs.focusMode == 0 {
-		vector.DrawFilledRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), ColorSurfaceHover, false)
-		vector.StrokeRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), 2, ColorFocusBorder, false)
-		if hs.input.Text == "" {
-			DrawText(dst, "Search...", searchX+14, searchY+10, FontSizeBody, ColorTextMuted)
-		}
-		DrawText(dst, hs.input.DisplayText(), searchX+14, searchY+10, FontSizeBody, ColorText)
-	} else {
-		vector.DrawFilledRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), ColorSurface, false)
-		vector.StrokeRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), 1, ColorTextMuted, false)
-		if hs.input.Text != "" {
-			DrawText(dst, hs.input.Text, searchX+14, searchY+10, FontSizeBody, ColorText)
-		} else {
-			DrawText(dst, "Search library...", searchX+14, searchY+10, FontSizeBody, ColorTextMuted)
-		}
-	}
-
-	// Discovery button (only when Jellyseerr configured)
-	settingsX := float64(ScreenWidth) - SectionPadding - 100
-	if hs.JellyseerrEnabled != nil && hs.JellyseerrEnabled() {
-		reqX := settingsX - 120
-		reqY := 12.0
-		reqW := 110.0
-		reqH := 38.0
-		focused := hs.focusMode == 2 && hs.navBtnIndex == 0
-		if focused {
-			vector.DrawFilledRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), ColorPrimary, false)
-			DrawTextCentered(dst, "Discovery", reqX+reqW/2+8, reqY+reqH/2, FontSizeBody, ColorBackground)
-			drawCompassIcon(dst, float32(reqX+16), float32(reqY+reqH/2), 7, ColorBackground)
-		} else {
-			vector.DrawFilledRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), ColorSurfaceHover, false)
-			vector.StrokeRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), 1, ColorPrimary, false)
-			DrawTextCentered(dst, "Discovery", reqX+reqW/2+8, reqY+reqH/2, FontSizeBody, ColorText)
-			drawCompassIcon(dst, float32(reqX+16), float32(reqY+reqH/2), 7, ColorPrimary)
-		}
-	}
-
-	// Settings button
-	settingsY := 12.0
-	settingsW := 100.0
-	settingsH := 38.0
-	sfocused := hs.focusMode == 2 && hs.navBtnIndex == 1
-	if sfocused {
-		vector.DrawFilledRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), ColorPrimary, false)
-		DrawTextCentered(dst, "Settings", settingsX+settingsW/2+8, settingsY+settingsH/2, FontSizeBody, ColorBackground)
-		drawGearIcon(dst, float32(settingsX+16), float32(settingsY+settingsH/2), 7, ColorBackground)
-	} else {
-		vector.DrawFilledRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), ColorSurfaceHover, false)
-		vector.StrokeRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), 1, ColorTextSecondary, false)
-		DrawTextCentered(dst, "Settings", settingsX+settingsW/2+8, settingsY+settingsH/2, FontSizeBody, ColorText)
-		drawGearIcon(dst, float32(settingsX+16), float32(settingsY+settingsH/2), 7, ColorTextSecondary)
-	}
-
+	// Sections start below the navbar
 	y := float64(NavBarHeight+10) - hs.scrollY
 	for _, section := range hs.sections {
 		h := section.Draw(dst, SectionPadding, y)
 		y += h + SectionGap
 	}
 }
-

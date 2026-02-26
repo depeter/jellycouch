@@ -55,16 +55,48 @@ func main() {
 		game.Jellyseerr = jellyseerr.NewClient(cfg.Jellyseerr.URL, cfg.Jellyseerr.APIKey)
 	}
 
+	// Create and wire the global navbar
+	navbar := ui.NewNavBar()
+	navbar.OnNavigate = func(action, id, title string) {
+		switch action {
+		case "home":
+			game.Screens.ClearStack()
+			pushHomeScreen(game, cfg, imgCache)
+		case "library":
+			game.Screens.ClearStack()
+			pushHomeScreen(game, cfg, imgCache)
+			pushLibraryScreen(game, cfg, imgCache, id, title, nil)
+		case "discovery":
+			game.Screens.ClearStack()
+			pushHomeScreen(game, cfg, imgCache)
+			pushJellyseerrDiscoverScreen(game, cfg, imgCache)
+		case "settings":
+			game.Screens.ClearStack()
+			pushHomeScreen(game, cfg, imgCache)
+			pushSettingsScreen(game, cfg)
+		}
+	}
+	navbar.OnSearch = func(query string) {
+		game.Screens.ClearStack()
+		pushHomeScreen(game, cfg, imgCache)
+		pushSearchScreen(game, cfg, imgCache, query)
+	}
+	navbar.JellyseerrEnabled = func() bool {
+		return game.Jellyseerr != nil
+	}
+	game.Screens.NavBar = navbar
+
 	// Determine initial screen
 	if client == nil || cfg.Server.Token == "" {
-		pushLoginScreen(game, cfg, imgCache)
+		pushLoginScreen(game, cfg, imgCache, navbar)
 	} else {
 		// Validate token before showing home screen
 		if _, err := client.GetViews(); err != nil {
 			log.Printf("Token invalid, showing login: %v", err)
-			pushLoginScreen(game, cfg, imgCache)
+			pushLoginScreen(game, cfg, imgCache, navbar)
 		} else {
 			pushHomeScreen(game, cfg, imgCache)
+			loadNavBarViews(game.Client, navbar)
 		}
 	}
 
@@ -82,7 +114,26 @@ func main() {
 	}
 }
 
-func pushLoginScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache) {
+// loadNavBarViews fetches library views and populates the navbar buttons.
+func loadNavBarViews(client *jellyfin.Client, navbar *ui.NavBar) {
+	if client == nil {
+		return
+	}
+	go func() {
+		views, err := client.GetViews()
+		if err != nil {
+			log.Printf("NavBar: failed to load views: %v", err)
+			return
+		}
+		var libViews []struct{ ID, Name string }
+		for _, v := range views {
+			libViews = append(libViews, struct{ ID, Name string }{v.ID, v.Name})
+		}
+		navbar.LibraryViews = libViews
+	}()
+}
+
+func pushLoginScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCache, navbar *ui.NavBar) {
 	loginScreen := ui.NewLoginScreen(cfg.Server.URL, func(screen *ui.LoginScreen, server, user, pass string) {
 		screen.Busy = true
 		screen.Error = ""
@@ -103,6 +154,7 @@ func pushLoginScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCa
 			game.Client = c
 			screen.Busy = false
 			pushHomeScreen(game, cfg, imgCache)
+			loadNavBarViews(c, navbar)
 		}()
 	})
 	game.Screens.Replace(loginScreen)
@@ -113,23 +165,11 @@ func pushHomeScreen(game *app.Game, cfg *config.Config, imgCache *cache.ImageCac
 	home.OnItemSelected = func(item jellyfin.MediaItem) {
 		pushDetailScreen(game, cfg, imgCache, item)
 	}
-	home.OnSearch = func(query string) {
-		pushSearchScreen(game, cfg, imgCache, query)
-	}
-	home.OnSettings = func() {
-		pushSettingsScreen(game, cfg)
-	}
-	home.OnRequests = func() {
-		pushJellyseerrDiscoverScreen(game, cfg, imgCache)
-	}
 	home.OnLibraryBrowse = func(parentID, title string) {
 		pushLibraryScreen(game, cfg, imgCache, parentID, title, nil)
 	}
-	home.JellyseerrEnabled = func() bool {
-		return game.Jellyseerr != nil
-	}
 	home.OnAuthError = func() {
-		pushLoginScreen(game, cfg, imgCache)
+		pushLoginScreen(game, cfg, imgCache, game.Screens.NavBar)
 	}
 	game.Screens.Replace(home)
 }
@@ -173,6 +213,8 @@ func pushSettingsScreen(game *app.Game, cfg *config.Config) {
 		} else {
 			game.Jellyseerr = nil
 		}
+		// Reload navbar views in case server changed
+		loadNavBarViews(game.Client, game.Screens.NavBar)
 	})
 	game.Screens.Push(settings)
 }

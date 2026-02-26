@@ -358,6 +358,8 @@ func (jr *JellyseerrRequestScreen) Update() (*ScreenTransition, error) {
 	switch jr.focusMode {
 	case 0: // buttons
 		switch dir {
+		case DirUp:
+			return &ScreenTransition{Type: TransitionFocusNavBar}, nil
 		case DirLeft:
 			if jr.buttonIndex > 0 {
 				jr.buttonIndex--
@@ -645,7 +647,7 @@ func (jr *JellyseerrRequestScreen) Draw(dst *ebiten.Image) {
 	vector.DrawFilledRect(dst, 0, 0, float32(ScreenWidth), float32(ScreenHeight), ColorBackground, false)
 
 	x := float64(SectionPadding)
-	y := 30.0
+	y := float64(NavBarHeight) + 30.0
 
 	// Poster on the left
 	posterX := x

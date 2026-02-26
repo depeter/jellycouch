@@ -306,15 +306,15 @@ func (o *PlaybackOverlay) renderBar() {
 	b.WriteString("{\\an2\\bord0\\shad0\\fsp0}")
 
 	// Progress bar line
-	b.WriteString("{\\fs15\\bord1}" + assColorWhite + "}")
+	b.WriteString("{\\fs15\\bord1" + assColorWhite + "}")
 	b.WriteString(buildProgressBar(50) + "\\N")
 
 	// Time and volume line
-	b.WriteString("{\\fs17\\bord1}" + assColorWhite + "}")
+	b.WriteString("{\\fs17\\bord1" + assColorWhite + "}")
 	b.WriteString("${time-pos} / ${duration}")
 	b.WriteString("    ")
 	b.WriteString("${?mute==yes:Muted}${!mute:Vol: ${volume}%}")
-	b.WriteString("${?pause==yes:  \\N{\\fs14}" + assColorGray + "}Paused}")
+	b.WriteString("${?pause==yes:  \\N{\\fs14" + assColorGray + "$>Paused}")
 	b.WriteString("\\N")
 
 	// Button row
@@ -346,7 +346,7 @@ func (o *PlaybackOverlay) renderBar() {
 	b.WriteString("\\N")
 
 	// Hint line
-	b.WriteString("{\\fs13\\bord1}" + assColorDimGray + "}")
+	b.WriteString("{\\fs13\\bord1" + assColorDimGray + "}")
 	b.WriteString("\u2190 \u2192 Navigate   Enter Select   Esc Back")
 
 	o.player.ShowText(b.String(), int(o.hideDelay.Milliseconds()+1000))
@@ -366,7 +366,7 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 	if o.trackType == TrackAudio {
 		title = "Audio Tracks"
 	}
-	b.WriteString("{\\fs20\\bord1}" + assColorBlue + "}" + title + "\\N\\N")
+	b.WriteString("{\\fs20\\bord1" + assColorBlue + "}" + title + "\\N\\N")
 
 	// Track list
 	totalItems := len(o.tracks)
@@ -416,7 +416,7 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 	}
 
 	// Hint line
-	b.WriteString("\\N{\\fs13\\bord1}" + assColorDimGray + "}")
+	b.WriteString("\\N{\\fs13\\bord1" + assColorDimGray + "}")
 	b.WriteString("\u2191\u2193 Navigate   Enter Select   Esc Back")
 
 	o.player.ShowText(b.String(), 30000) // Long duration; we'll clear it manually

@@ -93,7 +93,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 	if clicked {
 		// Check search bar click
 		barX := float64(SectionPadding)
-		barY := 20.0
+		barY := float64(NavBarHeight) + 20.0
 		barW := float64(ScreenWidth - SectionPadding*2)
 		barH := 44.0
 		if PointInRect(mx, my, barX, barY, barW, barH) {
@@ -131,7 +131,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 	// Right-click: toggle watched state
 	rmx, rmy, rclicked := MouseJustRightClicked()
 	if rclicked && len(ss.gridItems) > 0 {
-		barY := 20.0
+		barY := float64(NavBarHeight) + 20.0
 		barH := 44.0
 		resultBaseY := barY + barH + 40 - ss.scrollY
 		for i := range ss.gridItems {
@@ -160,6 +160,10 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 
 		if enter && ss.input.Text != "" {
 			go ss.doSearch()
+		}
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
+			return &ScreenTransition{Type: TransitionFocusNavBar}, nil
 		}
 
 		if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) && len(ss.results) > 0 {
@@ -257,9 +261,9 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 	// Smooth scroll
 	ss.scrollY = Lerp(ss.scrollY, ss.targetScrollY, ScrollAnimSpeed)
 
-	// Search bar
+	// Search bar (below navbar)
 	barX := float32(SectionPadding)
-	barY := float32(20)
+	barY := float32(NavBarHeight + 20)
 	barW := float32(ScreenWidth - SectionPadding*2)
 	barH := float32(44)
 
