@@ -25,8 +25,7 @@ type JellyseerrSearchScreen struct {
 	searchErr string
 	searching bool
 
-	scrollY       float64
-	targetScrollY float64
+	ScrollState
 
 	OnResultSelected func(result jellyseerr.SearchResult)
 
@@ -69,14 +68,7 @@ func (js *JellyseerrSearchScreen) Update() (*ScreenTransition, error) {
 		return &ScreenTransition{Type: TransitionPop}, nil
 	}
 
-	// Mouse wheel scroll
-	_, wy := MouseWheelDelta()
-	if wy != 0 {
-		js.targetScrollY -= wy * ScrollWheelSpeed
-		if js.targetScrollY < 0 {
-			js.targetScrollY = 0
-		}
-	}
+	js.ScrollState.HandleMouseWheel()
 
 	// Mouse click handling
 	mx, my, clicked := MouseJustClicked()
@@ -100,7 +92,7 @@ func (js *JellyseerrSearchScreen) Update() (*ScreenTransition, error) {
 			return nil, nil
 		}
 		if len(js.gridItems) > 0 {
-			resultBaseY := barY + barH + 40 - js.scrollY
+			resultBaseY := barY + barH + 40 - js.ScrollY
 			if idx, ok := js.grid.HandleClick(mx, my, SectionPadding, resultBaseY); ok {
 				js.focusMode = 1
 				js.grid.Focused = idx
@@ -178,8 +170,7 @@ func (js *JellyseerrSearchScreen) doSearch() {
 	js.results = filtered
 	js.grid.SetTotal(len(filtered))
 	js.grid.Focused = 0
-	js.scrollY = 0
-	js.targetScrollY = 0
+	js.ScrollState.Reset()
 
 	js.gridItems = make([]GridItem, len(filtered))
 	for i, result := range filtered {
@@ -220,7 +211,7 @@ func (js *JellyseerrSearchScreen) Draw(dst *ebiten.Image) {
 	js.mu.Lock()
 	defer js.mu.Unlock()
 
-	js.scrollY = Lerp(js.scrollY, js.targetScrollY, ScrollAnimSpeed)
+	js.ScrollState.Animate()
 
 	// Title (below navbar)
 	DrawText(dst, "Search", SectionPadding, NavBarHeight+16, FontSizeTitle, ColorPrimary)
@@ -282,7 +273,7 @@ func (js *JellyseerrSearchScreen) Draw(dst *ebiten.Image) {
 	}
 
 	for i, item := range js.gridItems {
-		x, iy := js.grid.ItemRect(i, SectionPadding, y-js.scrollY)
+		x, iy := js.grid.ItemRect(i, SectionPadding, y-js.ScrollY)
 
 		if iy+PosterHeight < 0 || iy > float64(ScreenHeight) {
 			continue

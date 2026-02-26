@@ -26,8 +26,7 @@ type JellyseerrDiscoverScreen struct {
 	loaded       bool
 	loading      bool
 	loadError    string
-	scrollY      float64
-	targetScrollY float64
+	ScrollState
 
 	OnItemSelected func(result jellyseerr.SearchResult)
 	OnRequests     func()
@@ -207,14 +206,7 @@ func (ds *JellyseerrDiscoverScreen) Update() (*ScreenTransition, error) {
 		return &ScreenTransition{Type: TransitionPop}, nil
 	}
 
-	// Mouse wheel scroll
-	_, wy := MouseWheelDelta()
-	if wy != 0 {
-		ds.targetScrollY -= wy * ScrollWheelSpeed
-		if ds.targetScrollY < 0 {
-			ds.targetScrollY = 0
-		}
-	}
+	ds.ScrollState.HandleMouseWheel()
 
 	// Mouse click handling
 	mx, my, clicked := MouseJustClicked()
@@ -361,14 +353,14 @@ func (ds *JellyseerrDiscoverScreen) ensureSectionVisible() {
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
-	ds.targetScrollY = maxScroll
+	ds.TargetScrollY = maxScroll
 }
 
 func (ds *JellyseerrDiscoverScreen) Draw(dst *ebiten.Image) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
-	ds.scrollY = Lerp(ds.scrollY, ds.targetScrollY, ScrollAnimSpeed)
+	ds.ScrollState.Animate()
 
 	// Header (below navbar)
 	DrawText(dst, "Discovery", SectionPadding, NavBarHeight+16, FontSizeTitle, ColorPrimary)
@@ -406,7 +398,7 @@ func (ds *JellyseerrDiscoverScreen) Draw(dst *ebiten.Image) {
 		return
 	}
 
-	y := float64(NavBarHeight*2+10) - ds.scrollY
+	y := float64(NavBarHeight*2+10) - ds.ScrollY
 	for _, section := range ds.sections {
 		h := section.Draw(dst, SectionPadding, y)
 		y += h + SectionGap

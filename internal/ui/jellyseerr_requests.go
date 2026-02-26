@@ -32,8 +32,7 @@ type JellyseerrRequestsScreen struct {
 	loading     bool
 	loadError   string
 
-	scrollY       float64
-	targetScrollY float64
+	ScrollState
 
 	filterRects []ButtonRect
 
@@ -90,8 +89,7 @@ func (jr *JellyseerrRequestsScreen) loadRequests() {
 	jr.total = total
 	jr.grid.SetTotal(len(requests))
 	jr.grid.Focused = 0
-	jr.scrollY = 0
-	jr.targetScrollY = 0
+	jr.ScrollState.Reset()
 
 	jr.gridItems = make([]GridItem, len(requests))
 	for i, req := range requests {
@@ -226,14 +224,7 @@ func (jr *JellyseerrRequestsScreen) Update() (*ScreenTransition, error) {
 		return &ScreenTransition{Type: TransitionPop}, nil
 	}
 
-	// Mouse wheel scroll
-	_, wy := MouseWheelDelta()
-	if wy != 0 {
-		jr.targetScrollY -= wy * ScrollWheelSpeed
-		if jr.targetScrollY < 0 {
-			jr.targetScrollY = 0
-		}
-	}
+	jr.ScrollState.HandleMouseWheel()
 
 	// Mouse click
 	mx, my, clicked := MouseJustClicked()
@@ -262,7 +253,7 @@ func (jr *JellyseerrRequestsScreen) Update() (*ScreenTransition, error) {
 		}
 		// Check grid items
 		if len(jr.gridItems) > 0 {
-			baseY := float64(NavBarHeight) + 110.0 - jr.scrollY
+			baseY := float64(NavBarHeight) + 110.0 - jr.ScrollY
 			if idx, ok := jr.grid.HandleClick(mx, my, SectionPadding, baseY); ok {
 				jr.focusMode = 1
 				jr.grid.Focused = idx
@@ -333,7 +324,7 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
 
-	jr.scrollY = Lerp(jr.scrollY, jr.targetScrollY, ScrollAnimSpeed)
+	jr.ScrollState.Animate()
 
 	// Header (below navbar)
 	DrawText(dst, "My Requests", SectionPadding, NavBarHeight+16, FontSizeTitle, ColorPrimary)
@@ -393,7 +384,7 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 	DrawText(dst, fmt.Sprintf("%d requests", jr.total), SectionPadding, baseY-20, FontSizeSmall, ColorTextMuted)
 
 	for i, item := range jr.gridItems {
-		x, iy := jr.grid.ItemRect(i, SectionPadding, baseY-jr.scrollY)
+		x, iy := jr.grid.ItemRect(i, SectionPadding, baseY-jr.ScrollY)
 
 		if iy+PosterHeight < 0 || iy > float64(ScreenHeight) {
 			continue

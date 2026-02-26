@@ -99,8 +99,7 @@ type LibraryScreen struct {
 	loading     bool
 	loadingMore bool
 	loadError   string
-	scrollY     float64
-	targetScrollY float64
+	ScrollState
 
 	// debounce: track last applied search to detect changes
 	appliedSearch string
@@ -256,8 +255,7 @@ func (ls *LibraryScreen) applyFilters() {
 	ls.total = 0
 	ls.grid.Focused = 0
 	ls.grid.SetTotal(0)
-	ls.scrollY = 0
-	ls.targetScrollY = 0
+	ls.ScrollState.Reset()
 	ls.loaded = false
 	ls.loading = true
 	ls.loadError = ""
@@ -312,14 +310,7 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
-	// Mouse wheel scroll
-	_, wy := MouseWheelDelta()
-	if wy != 0 {
-		ls.targetScrollY -= wy * ScrollWheelSpeed
-		if ls.targetScrollY < 0 {
-			ls.targetScrollY = 0
-		}
-	}
+	ls.ScrollState.HandleMouseWheel()
 
 	// Mouse click handling
 	mx, my, clicked := MouseJustClicked()
@@ -347,7 +338,7 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 
 	// Grid mouse click
 	if clicked && ls.loaded {
-		gridBase := ls.gridBaseY() - ls.scrollY
+		gridBase := ls.gridBaseY() - ls.ScrollY
 		if idx, ok := ls.grid.HandleClick(mx, my, SectionPadding, gridBase); ok {
 			ls.focusMode = focusGrid
 			ls.filterBar.Active = false
@@ -362,7 +353,7 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 	// Right-click: toggle watched state
 	rmx, rmy, rclicked := MouseJustRightClicked()
 	if rclicked && ls.loaded {
-		gridBase := ls.gridBaseY() - ls.scrollY
+		gridBase := ls.gridBaseY() - ls.ScrollY
 		if idx, ok := ls.grid.HandleClick(rmx, rmy, SectionPadding, gridBase); ok {
 			if idx < len(ls.items) {
 				if ls.items[idx].Played {
@@ -487,14 +478,14 @@ func (ls *LibraryScreen) ensureVisible() {
 	if targetY < 0 {
 		targetY = 0
 	}
-	ls.targetScrollY = targetY
+	ls.TargetScrollY = targetY
 }
 
 func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
-	ls.scrollY = Lerp(ls.scrollY, ls.targetScrollY, ScrollAnimSpeed)
+	ls.ScrollState.Animate()
 
 	// Title bar (below navbar)
 	DrawText(dst, ls.title, SectionPadding, NavBarHeight+16, FontSizeTitle, ColorText)
@@ -529,7 +520,7 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 	}
 
 	// Draw grid
-	baseY := ls.gridBaseY() - ls.scrollY
+	baseY := ls.gridBaseY() - ls.ScrollY
 	for i, item := range ls.gridItems {
 		x, y := ls.grid.ItemRect(i, SectionPadding, baseY)
 

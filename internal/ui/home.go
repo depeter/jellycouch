@@ -30,8 +30,7 @@ type HomeScreen struct {
 	loaded       bool
 	loading      bool
 	loadError    string
-	scrollY      float64
-	targetScrollY float64
+	ScrollState
 
 	// Library views for nav buttons (still loaded for section labels)
 	libraryViews []struct{ ID, Name string }
@@ -219,14 +218,7 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 		return nil, nil
 	}
 
-	// Mouse wheel scroll (always active)
-	_, wy := MouseWheelDelta()
-	if wy != 0 {
-		hs.targetScrollY -= wy * ScrollWheelSpeed
-		if hs.targetScrollY < 0 {
-			hs.targetScrollY = 0
-		}
-	}
+	hs.ScrollState.HandleMouseWheel()
 
 	// Mouse click handling
 	mx, my, clicked := MouseJustClicked()
@@ -338,15 +330,14 @@ func (hs *HomeScreen) ensureSectionVisible() {
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
-	hs.targetScrollY = maxScroll
+	hs.TargetScrollY = maxScroll
 }
 
 func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
-	// Smooth scroll
-	hs.scrollY = Lerp(hs.scrollY, hs.targetScrollY, ScrollAnimSpeed)
+	hs.ScrollState.Animate()
 
 	if !hs.loaded {
 		DrawTextCentered(dst, "Loading...", float64(ScreenWidth)/2, float64(ScreenHeight)/2,
@@ -370,7 +361,7 @@ func (hs *HomeScreen) Draw(dst *ebiten.Image) {
 	}
 
 	// Sections start below the navbar
-	y := float64(NavBarHeight+10) - hs.scrollY
+	y := float64(NavBarHeight+10) - hs.ScrollY
 	for _, section := range hs.sections {
 		h := section.Draw(dst, SectionPadding, y)
 		y += h + SectionGap

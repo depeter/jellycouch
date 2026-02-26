@@ -25,8 +25,7 @@ type SearchScreen struct {
 	searchError string
 
 	searching bool
-	scrollY      float64
-	targetScrollY float64
+	ScrollState
 
 	OnItemSelected func(item jellyfin.MediaItem)
 
@@ -76,14 +75,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 		return &ScreenTransition{Type: TransitionPop}, nil
 	}
 
-	// Mouse wheel scroll
-	_, wy := MouseWheelDelta()
-	if wy != 0 {
-		ss.targetScrollY -= wy * ScrollWheelSpeed
-		if ss.targetScrollY < 0 {
-			ss.targetScrollY = 0
-		}
-	}
+	ss.ScrollState.HandleMouseWheel()
 
 	// Mouse click handling
 	mx, my, clicked := MouseJustClicked()
@@ -110,7 +102,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 		}
 		// Check result items click
 		if len(ss.gridItems) > 0 {
-			resultBaseY := barY + barH + 40 - ss.scrollY // 40 = gap + result count
+			resultBaseY := barY + barH + 40 - ss.ScrollY // 40 = gap + result count
 			if idx, ok := ss.grid.HandleClick(mx, my, SectionPadding, resultBaseY); ok {
 				ss.focusMode = 1
 				ss.grid.Focused = idx
@@ -127,7 +119,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 	if rclicked && len(ss.gridItems) > 0 {
 		barY := float64(NavBarHeight) + 20.0
 		barH := 44.0
-		resultBaseY := barY + barH + 40 - ss.scrollY
+		resultBaseY := barY + barH + 40 - ss.ScrollY
 		if idx, ok := ss.grid.HandleClick(rmx, rmy, SectionPadding, resultBaseY); ok {
 			if idx < len(ss.results) {
 				if ss.results[idx].Played {
@@ -200,8 +192,7 @@ func (ss *SearchScreen) doSearch() {
 	ss.results = items
 	ss.grid.SetTotal(len(items))
 	ss.grid.Focused = 0
-	ss.scrollY = 0
-	ss.targetScrollY = 0
+	ss.ScrollState.Reset()
 
 	ss.gridItems = make([]GridItem, len(items))
 	for i, item := range items {
@@ -214,8 +205,7 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
-	// Smooth scroll
-	ss.scrollY = Lerp(ss.scrollY, ss.targetScrollY, ScrollAnimSpeed)
+	ss.ScrollState.Animate()
 
 	// Search bar (below navbar)
 	barX := float32(SectionPadding)
@@ -280,7 +270,7 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 	}
 
 	for i, item := range ss.gridItems {
-		x, iy := ss.grid.ItemRect(i, SectionPadding, y-ss.scrollY)
+		x, iy := ss.grid.ItemRect(i, SectionPadding, y-ss.ScrollY)
 
 		// Skip offscreen
 		if iy+PosterHeight < 0 || iy > float64(ScreenHeight) {
