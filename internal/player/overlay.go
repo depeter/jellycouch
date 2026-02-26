@@ -27,6 +27,12 @@ const (
 	OverlayNextUp                  // "Up Next" countdown banner (top-left)
 )
 
+// OSD overlay slot IDs for persistent overlays (via osd-overlay command).
+const (
+	osdIDClock     = 1
+	osdIDPausedBar = 2
+)
+
 // TrackType distinguishes subtitle vs audio tracks.
 type TrackType int
 
@@ -162,6 +168,9 @@ type PlaybackOverlay struct {
 	showNextBtn    bool             // whether to show BtnNext at all
 	imgOverlayShown bool            // tracks whether overlay-add is active
 
+	// Paused persistent OSD state
+	pausedOsdShown bool
+
 	// Track selection state
 	trackType     TrackType
 	tracks        []Track
@@ -265,6 +274,13 @@ func (o *PlaybackOverlay) visibleIndex() int {
 
 // Show displays the control bar and resets the auto-hide timer.
 func (o *PlaybackOverlay) Show() {
+	// Remove paused bar (full bar replaces it), but keep clock
+	o.player.OsdOverlayRemove(osdIDPausedBar)
+	if o.player.Paused() {
+		o.renderClock()
+	} else {
+		o.hidePausedOsd()
+	}
 	o.Mode = OverlayBar
 	o.lastInput = time.Now()
 	o.focusZone = ZoneButtons
@@ -285,6 +301,10 @@ func (o *PlaybackOverlay) Hide() {
 		o.player.OverlayRemove(0)
 		o.imgOverlayShown = false
 	}
+	// If paused, immediately show the minimal paused info
+	if o.player.Paused() {
+		o.renderPausedInfo()
+	}
 }
 
 // SetNextUp configures the next episode info for the "Up Next" banner.
@@ -295,6 +315,8 @@ func (o *PlaybackOverlay) SetNextUp(name string, index int) {
 
 // Update checks the auto-hide timer and next-up trigger. Call from the game loop.
 func (o *PlaybackOverlay) Update() {
+	paused := o.player.Paused()
+
 	if o.Mode == OverlayBar {
 		if time.Since(o.lastInput) > o.hideDelay {
 			o.Hide()
@@ -303,7 +325,23 @@ func (o *PlaybackOverlay) Update() {
 		// Periodically re-render to keep progress bar current
 		if time.Since(o.lastRender) > time.Second {
 			o.renderBar()
+			// Keep clock visible while bar is shown and paused
+			if paused {
+				o.renderClock()
+			}
 		}
+	}
+
+	// Paused + hidden: show persistent minimal info, updated every second
+	if paused && o.Mode == OverlayHidden {
+		if time.Since(o.lastRender) > time.Second {
+			o.renderPausedInfo()
+		}
+	}
+
+	// Not paused: ensure persistent overlays are removed
+	if !paused && o.pausedOsdShown {
+		o.hidePausedOsd()
 	}
 
 	// Check if we should activate the next-up banner
@@ -816,6 +854,47 @@ func (o *PlaybackOverlay) buildProgressBar(width int) string {
 	}
 
 	return strings.Repeat("\u2501", filled) + strings.Repeat("\u2500", width-filled)
+}
+
+// renderPausedInfo renders the minimal bottom progress bar + time/duration
+// and top-right clock as persistent OSD overlays while paused.
+func (o *PlaybackOverlay) renderPausedInfo() {
+	o.lastRender = time.Now()
+
+	pos := o.player.Position()
+	dur := o.player.Duration()
+
+	// Bottom bar: progress + time/duration
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("{\\an2\\bord2\\fs%d%s}", o.scale(9), assColorGray))
+	b.WriteString(o.buildProgressBar(o.barWidth()))
+	b.WriteString(fmt.Sprintf("\\N{\\fs%d%s}", o.scale(11), assColorWhite))
+	b.WriteString(formatDuration(pos) + " / " + formatDuration(dur))
+	o.player.OsdOverlay(osdIDPausedBar, b.String(), o.screenW, o.screenH)
+
+	// Top-right clock
+	o.renderClock()
+	o.pausedOsdShown = true
+}
+
+// renderClock renders only the top-right wall clock overlay.
+func (o *PlaybackOverlay) renderClock() {
+	clock := time.Now().Format("15:04")
+	ass := fmt.Sprintf("{\\an9\\bord2\\fs%d%s}%s", o.scale(14), assColorWhite, clock)
+	o.player.OsdOverlay(osdIDClock, ass, o.screenW, o.screenH)
+	o.pausedOsdShown = true
+}
+
+// hidePausedOsd removes both persistent paused overlays.
+func (o *PlaybackOverlay) hidePausedOsd() {
+	o.player.OsdOverlayRemove(osdIDClock)
+	o.player.OsdOverlayRemove(osdIDPausedBar)
+	o.pausedOsdShown = false
+}
+
+// Cleanup removes all persistent overlays. Call before discarding the overlay.
+func (o *PlaybackOverlay) Cleanup() {
+	o.hidePausedOsd()
 }
 
 // formatDuration formats seconds into "H:MM:SS" or "MM:SS".

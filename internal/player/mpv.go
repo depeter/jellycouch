@@ -315,6 +315,21 @@ func (p *Player) OverlayRemove(id int) {
 	})
 }
 
+// OsdOverlay sends an osd-overlay command to display persistent ASS content.
+// id identifies the overlay slot (use different IDs for independent overlays).
+func (p *Player) OsdOverlay(id int, assData string, resX, resY int) {
+	p.do(func(m *mpv.Mpv) error {
+		return osdOverlaySet(m, id, assData, resX, resY)
+	})
+}
+
+// OsdOverlayRemove removes a persistent osd-overlay by its slot ID.
+func (p *Player) OsdOverlayRemove(id int) {
+	p.do(func(m *mpv.Mpv) error {
+		return osdOverlayRemove(m, id)
+	})
+}
+
 // ShowText displays a text message on mpv's OSD for the given duration (ms).
 func (p *Player) ShowText(text string, durationMS int) {
 	p.do(func(m *mpv.Mpv) error {

@@ -155,6 +155,7 @@ func (g *Game) PlayURL(url string) {
 // StopPlayback transitions back to browse mode.
 func (g *Game) StopPlayback() {
 	if g.overlay != nil {
+		g.overlay.Cleanup()
 		g.overlay.Hide()
 		g.overlay = nil
 	}
