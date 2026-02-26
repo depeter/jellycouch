@@ -283,6 +283,33 @@ func (p *Player) ShowProgress() {
 	})
 }
 
+// OverlayAdd displays a raw BGRA image overlay on the mpv window.
+// id is an overlay slot (0-63), x/y are pixel coordinates, filePath points to
+// a file containing raw BGRA pixel data, and w/h are the image dimensions.
+func (p *Player) OverlayAdd(id, x, y int, filePath string, w, h int) {
+	stride := w * 4
+	p.do(func(m *mpv.Mpv) error {
+		return m.CommandString(mpvCmd("overlay-add",
+			fmt.Sprintf("%d", id),
+			fmt.Sprintf("%d", x),
+			fmt.Sprintf("%d", y),
+			filePath,
+			"0",
+			"bgra",
+			fmt.Sprintf("%d", w),
+			fmt.Sprintf("%d", h),
+			fmt.Sprintf("%d", stride),
+		))
+	})
+}
+
+// OverlayRemove removes a previously added image overlay by slot id.
+func (p *Player) OverlayRemove(id int) {
+	p.do(func(m *mpv.Mpv) error {
+		return m.CommandString(mpvCmd("overlay-remove", fmt.Sprintf("%d", id)))
+	})
+}
+
 // ShowText displays a text message on mpv's OSD for the given duration (ms).
 func (p *Player) ShowText(text string, durationMS int) {
 	p.do(func(m *mpv.Mpv) error {

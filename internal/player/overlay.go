@@ -3,8 +3,19 @@ package player
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
+
+// NextEpisodeInfo holds pre-fetched metadata about the next episode.
+type NextEpisodeInfo struct {
+	Title         string
+	SeasonNumber  int
+	EpisodeNumber int
+	ImagePath     string // path to raw BGRA temp file
+	ImageW, ImageH int
+	ItemID        string // Jellyfin item ID for direct playback
+}
 
 // OverlayMode represents the current state of the playback overlay.
 type OverlayMode int
@@ -144,6 +155,13 @@ type PlaybackOverlay struct {
 	nextUpIndex  int
 	nextUpActive bool
 
+	// Next episode state
+	nextEpMu       sync.Mutex
+	nextEpInfo     *NextEpisodeInfo // pre-fetched info (nil = still loading)
+	noNextEp       bool             // explicitly no next episode
+	showNextBtn    bool             // whether to show BtnNext at all
+	imgOverlayShown bool            // tracks whether overlay-add is active
+
 	// Track selection state
 	trackType     TrackType
 	tracks        []Track
@@ -188,16 +206,51 @@ func (o *PlaybackOverlay) barWidth() int {
 }
 
 // visibleButtons returns the set of buttons that should be shown, filtering
-// out BtnNext when no OnNextEpisode callback is set.
+// out BtnNext when showNextBtn is false.
 func (o *PlaybackOverlay) visibleButtons() []ControlButton {
 	all := []ControlButton{
-		BtnSeekBack60, BtnSeekBack10, BtnPlayPause,
-		BtnSeekFwd10, BtnSeekFwd60, BtnSubtitles, BtnAudio, BtnStop,
+		BtnSeekBack60, BtnSeekBack10, BtnPlayPause, BtnStop,
+		BtnSeekFwd10, BtnSeekFwd60, BtnSubtitles, BtnAudio,
 	}
-	if o.OnNextEpisode != nil {
+	if o.showNextBtn {
 		all = append(all, BtnNext)
 	}
 	return all
+}
+
+// SetShowNextButton controls whether the Next button appears in the bar.
+func (o *PlaybackOverlay) SetShowNextButton(show bool) {
+	o.showNextBtn = show
+}
+
+// SetNextEpisode stores pre-fetched next episode info for the tooltip.
+func (o *PlaybackOverlay) SetNextEpisode(info *NextEpisodeInfo) {
+	o.nextEpMu.Lock()
+	defer o.nextEpMu.Unlock()
+	o.nextEpInfo = info
+	o.noNextEp = false
+}
+
+// SetNoNextEpisode marks that there is no next episode available.
+func (o *PlaybackOverlay) SetNoNextEpisode() {
+	o.nextEpMu.Lock()
+	defer o.nextEpMu.Unlock()
+	o.nextEpInfo = nil
+	o.noNextEp = true
+}
+
+// NextEpInfo returns the pre-fetched next episode info (nil if not yet loaded).
+func (o *PlaybackOverlay) NextEpInfo() *NextEpisodeInfo {
+	o.nextEpMu.Lock()
+	defer o.nextEpMu.Unlock()
+	return o.nextEpInfo
+}
+
+// NoNextEp returns true if there is explicitly no next episode.
+func (o *PlaybackOverlay) NoNextEp() bool {
+	o.nextEpMu.Lock()
+	defer o.nextEpMu.Unlock()
+	return o.noNextEp
 }
 
 // visibleIndex returns the index of focusedBtn in visibleButtons, or 0.
@@ -228,6 +281,10 @@ func (o *PlaybackOverlay) Hide() {
 	}
 	o.Mode = OverlayHidden
 	o.player.ShowText("", 1)
+	if o.imgOverlayShown {
+		o.player.OverlayRemove(0)
+		o.imgOverlayShown = false
+	}
 }
 
 // SetNextUp configures the next episode info for the "Up Next" banner.
@@ -457,7 +514,10 @@ func (o *PlaybackOverlay) activateButton() {
 			o.OnStop()
 		}
 	case BtnNext:
-		if o.OnNextEpisode != nil {
+		o.nextEpMu.Lock()
+		hasNext := o.nextEpInfo != nil && !o.noNextEp
+		o.nextEpMu.Unlock()
+		if hasNext && o.OnNextEpisode != nil {
 			o.OnNextEpisode()
 		}
 	}
@@ -495,6 +555,25 @@ const (
 func (o *PlaybackOverlay) renderBar() {
 	o.lastRender = time.Now()
 
+	// Snapshot next-episode state under lock
+	o.nextEpMu.Lock()
+	epInfo := o.nextEpInfo
+	noNext := o.noNextEp
+	o.nextEpMu.Unlock()
+
+	// Manage image overlay for next-episode tooltip
+	nextFocused := o.focusedBtn == BtnNext && o.showNextBtn && o.focusZone == ZoneButtons
+	if nextFocused && epInfo != nil && epInfo.ImagePath != "" {
+		// Position thumbnail centered above the bar area
+		imgX := (o.screenW - epInfo.ImageW) / 2
+		imgY := o.screenH - o.screenH*35/100 // ~35% from bottom
+		o.player.OverlayAdd(0, imgX, imgY, epInfo.ImagePath, epInfo.ImageW, epInfo.ImageH)
+		o.imgOverlayShown = true
+	} else if o.imgOverlayShown {
+		o.player.OverlayRemove(0)
+		o.imgOverlayShown = false
+	}
+
 	var b strings.Builder
 
 	// ASS override prefix
@@ -503,6 +582,19 @@ func (o *PlaybackOverlay) renderBar() {
 	// Semi-transparent background strip at the bottom
 	// Using \an2 for bottom-center alignment
 	b.WriteString("{\\an2\\bord0\\shad0\\fsp0}")
+
+	// Next episode tooltip line (above progress bar)
+	if nextFocused {
+		if epInfo != nil {
+			tooltip := fmt.Sprintf("Up Next: S%dE%d \u00B7 %s",
+				epInfo.SeasonNumber, epInfo.EpisodeNumber, epInfo.Title)
+			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(11), assColorWhite))
+			b.WriteString(tooltip + "\\N")
+		} else if noNext {
+			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(11), assColorDimGray))
+			b.WriteString("No next episode\\N")
+		}
+	}
 
 	// Progress bar line (thin horizontal line characters)
 	barColor := assColorGray
@@ -522,16 +614,20 @@ func (o *PlaybackOverlay) renderBar() {
 
 	// Button row
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(12)))
+	playPauseLabel := "\u258E\u258E" // pause icon while playing
+	if o.player.Paused() {
+		playPauseLabel = "\u25B6" // play icon while paused
+	}
 	btnLabels := map[ControlButton]string{
 		BtnSeekBack60: "\u25C0\u25C0",
 		BtnSeekBack10: "\u25C0",
-		BtnPlayPause:  "\u25B6\u258E\u258E",
+		BtnPlayPause:  playPauseLabel,
 		BtnSeekFwd10:  "\u25B6",
 		BtnSeekFwd60:  "\u25B6\u25B6",
-		BtnSubtitles:  "Subs",
-		BtnAudio:      "Audio",
-		BtnStop:       "Stop",
-		BtnNext:       "Next",
+		BtnSubtitles:  "\u2630",
+		BtnAudio:      "\u266A",
+		BtnStop:       "\u25A0",
+		BtnNext:       "\u23ED",
 	}
 
 	for i, btn := range o.visibleButtons() {
@@ -539,7 +635,10 @@ func (o *PlaybackOverlay) renderBar() {
 			b.WriteString("{" + assColorDimGray + "}  \u2502  ")
 		}
 		label := btnLabels[btn]
-		if btn == o.focusedBtn {
+		if btn == BtnNext && noNext {
+			// Dimmed next button when no next episode
+			b.WriteString("{" + assColorDimGray + "}" + label)
+		} else if btn == o.focusedBtn {
 			b.WriteString("{" + assColorBlue + "\\b1}[ " + label + " ]{\\b0}")
 		} else {
 			b.WriteString("{" + assColorGray + "}" + label)

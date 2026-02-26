@@ -152,6 +152,18 @@ func (ic *ImageCache) diskPath(url string) string {
 	return filepath.Join(ic.cacheDir, name[:2], name)
 }
 
+// LoadDecodedImage downloads and decodes an image from URL, returning a
+// standard image.Image. Uses the same disk cache as LoadAsync but does not
+// store the result in the in-memory ebiten cache.
+func (ic *ImageCache) LoadDecodedImage(url string) (image.Image, error) {
+	return ic.loadImage(url)
+}
+
+// CacheDir returns the disk cache directory path.
+func (ic *ImageCache) CacheDir() string {
+	return ic.cacheDir
+}
+
 // Clear removes all cached images from memory.
 func (ic *ImageCache) Clear() {
 	ic.memory = sync.Map{}
