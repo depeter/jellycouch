@@ -13,6 +13,7 @@ const (
 	OverlayHidden      OverlayMode = iota
 	OverlayBar                     // Control bar visible at bottom
 	OverlayTrackSelect             // Track selection panel (modal)
+	OverlayNextUp                  // "Up Next" countdown banner (top-left)
 )
 
 // TrackType distinguishes subtitle vs audio tracks.
@@ -136,6 +137,12 @@ type PlaybackOverlay struct {
 	// Callbacks
 	OnStop        func()
 	OnNextEpisode func()
+	OnStartNextUp func()
+
+	// Next-up state
+	nextUpName   string
+	nextUpIndex  int
+	nextUpActive bool
 
 	// Track selection state
 	trackType     TrackType
@@ -212,13 +219,24 @@ func (o *PlaybackOverlay) Show() {
 	o.renderBar()
 }
 
-// Hide clears the OSD and returns to hidden mode.
+// Hide clears the OSD and returns to hidden or next-up mode.
 func (o *PlaybackOverlay) Hide() {
+	if o.nextUpActive {
+		o.Mode = OverlayNextUp
+		o.renderNextUp()
+		return
+	}
 	o.Mode = OverlayHidden
 	o.player.ShowText("", 1)
 }
 
-// Update checks the auto-hide timer. Call from the game loop.
+// SetNextUp configures the next episode info for the "Up Next" banner.
+func (o *PlaybackOverlay) SetNextUp(name string, index int) {
+	o.nextUpName = name
+	o.nextUpIndex = index
+}
+
+// Update checks the auto-hide timer and next-up trigger. Call from the game loop.
 func (o *PlaybackOverlay) Update() {
 	if o.Mode == OverlayBar {
 		if time.Since(o.lastInput) > o.hideDelay {
@@ -228,6 +246,26 @@ func (o *PlaybackOverlay) Update() {
 		// Periodically re-render to keep progress bar current
 		if time.Since(o.lastRender) > time.Second {
 			o.renderBar()
+		}
+	}
+
+	// Check if we should activate the next-up banner
+	if o.nextUpName != "" && !o.nextUpActive {
+		pos := o.player.Position()
+		dur := o.player.Duration()
+		if dur > 0 && dur-pos <= 60 {
+			o.nextUpActive = true
+			if o.Mode == OverlayHidden {
+				o.Mode = OverlayNextUp
+				o.renderNextUp()
+			}
+		}
+	}
+
+	// Re-render next-up banner every second to update countdown
+	if o.Mode == OverlayNextUp {
+		if time.Since(o.lastRender) > time.Second {
+			o.renderNextUp()
 		}
 	}
 }
@@ -509,6 +547,38 @@ func (o *PlaybackOverlay) renderBar() {
 	}
 
 	o.player.ShowText(b.String(), int(o.hideDelay.Milliseconds()+1000))
+}
+
+// renderNextUp renders the "Up Next" countdown banner at top-left.
+func (o *PlaybackOverlay) renderNextUp() {
+	o.lastRender = time.Now()
+
+	pos := o.player.Position()
+	dur := o.player.Duration()
+	remaining := int(dur - pos)
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	var b strings.Builder
+	b.WriteString("${osd-ass-cc/0}")
+
+	// Top-left alignment
+	b.WriteString("{\\an7\\bord0\\shad0}")
+
+	// "Up Next" header
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(13), assColorGray))
+	b.WriteString("Up Next\\N")
+
+	// Episode name with countdown
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s\\b1}", o.scale(15), assColorWhite))
+	b.WriteString(fmt.Sprintf("Episode %d starting in %ds...{\\b0}\\N", o.nextUpIndex, remaining))
+
+	// Start button
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s\\b1}", o.scale(13), assColorBlue))
+	b.WriteString("[ Start ]")
+
+	o.player.ShowText(b.String(), 2000)
 }
 
 // renderTrackPanel renders the track selection panel ASS.

@@ -33,6 +33,7 @@ type Game struct {
 	overlay     *player.PlaybackOverlay
 	currentItem *jellyfin.MediaItem
 	nextEpCh    chan *jellyfin.MediaItem
+	nextEpItem  *jellyfin.MediaItem
 }
 
 // NewGame creates the Game with all dependencies.
@@ -96,11 +97,15 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 
 	g.currentItem = item
 	g.nextEpCh = make(chan *jellyfin.MediaItem, 1)
+	g.nextEpItem = nil
 
 	g.overlay = player.NewPlaybackOverlay(g.Player, g.Width, g.Height)
 	g.overlay.OnStop = func() { g.StopPlayback() }
 	if item != nil && item.Type == "Episode" {
-		g.overlay.OnNextEpisode = func() { g.findAndQueueNextEpisode() }
+		g.overlay.OnNextEpisode = func() { g.playNextEpisode() }
+		g.overlay.OnStartNextUp = func() { g.playNextEpisode() }
+		// Pre-fetch next episode in the background
+		g.prefetchNextEpisode()
 	}
 	g.overlay.Show()
 
@@ -164,11 +169,12 @@ func (g *Game) StopPlayback() {
 		}
 	}
 	g.currentItem = nil
+	g.nextEpItem = nil
 	g.State = StateBrowse
 }
 
-// findAndQueueNextEpisode looks up the next episode and sends it on nextEpCh.
-func (g *Game) findAndQueueNextEpisode() {
+// prefetchNextEpisode looks up the next episode in the background and stores it.
+func (g *Game) prefetchNextEpisode() {
 	item := g.currentItem
 	if item == nil || item.Type != "Episode" || item.SeriesID == "" {
 		return
@@ -188,6 +194,21 @@ func (g *Game) findAndQueueNextEpisode() {
 		}
 		ch <- full
 	}()
+}
+
+// playNextEpisode plays the pre-fetched next episode, or does an async lookup as fallback.
+func (g *Game) playNextEpisode() {
+	if g.nextEpItem != nil {
+		next := g.nextEpItem
+		g.StopPlayback()
+		g.StartPlayback(next.ID, 0, next)
+		return
+	}
+	// Fallback: create a fresh channel and trigger async lookup
+	if g.nextEpCh == nil {
+		g.nextEpCh = make(chan *jellyfin.MediaItem, 1)
+	}
+	g.prefetchNextEpisode()
 }
 
 // lookupNextEpisode finds the next episode after the given one.
@@ -241,27 +262,37 @@ func (g *Game) Update() error {
 
 	case StatePlay:
 		if g.playbackEnded {
-			g.State = StateBrowse
 			g.playbackEnded = false
+			if g.nextEpItem != nil {
+				next := g.nextEpItem
+				g.StopPlayback()
+				g.StartPlayback(next.ID, 0, next)
+				return nil
+			}
+			g.State = StateBrowse
 			return nil
 		}
 
-		// Update overlay auto-hide timer
+		// Update overlay auto-hide timer and next-up trigger
 		if g.overlay != nil {
 			g.overlay.Update()
 		}
 
-		// Check for next-episode result
+		// Check for pre-fetched next-episode result
 		if g.nextEpCh != nil {
 			select {
 			case nextItem := <-g.nextEpCh:
+				g.nextEpCh = nil
 				if nextItem != nil {
-					g.StopPlayback()
-					g.StartPlayback(nextItem.ID, 0, nextItem)
-					return nil
-				}
-				// nil means no next episode
-				if g.Player != nil {
+					if g.nextEpItem != nil {
+						// Already have a stored result — this shouldn't happen, ignore
+					} else {
+						g.nextEpItem = nextItem
+						if g.overlay != nil {
+							g.overlay.SetNextUp(nextItem.Name, nextItem.IndexNumber)
+						}
+					}
+				} else if g.Player != nil {
 					g.Player.ShowText("No next episode", 3000)
 				}
 			default:
@@ -282,6 +313,8 @@ func (g *Game) Update() error {
 			case player.OverlayBar:
 				g.overlay.Hide()
 				return nil
+			case player.OverlayNextUp:
+				// Back on next-up banner — fall through to stop playback
 			default:
 				// OverlayHidden — fall through to stop playback
 			}
@@ -344,6 +377,19 @@ func (g *Game) handlePlaybackInput() {
 	if g.overlay != nil && g.overlay.Mode == player.OverlayTrackSelect {
 		g.overlay.HandleTrackInput(dir, enterPressed, false)
 		return
+	}
+
+	// === Next-up banner mode ===
+	if g.overlay != nil && g.overlay.Mode == player.OverlayNextUp {
+		if enterPressed && g.overlay.OnStartNextUp != nil {
+			g.overlay.OnStartNextUp()
+			return
+		}
+		// I key or directional input — show control bar
+		if inpututil.IsKeyJustPressed(ebiten.KeyI) || dir != player.DirNone {
+			g.overlay.Show()
+			return
+		}
 	}
 
 	// === Control bar visible mode ===
