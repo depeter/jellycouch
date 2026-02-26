@@ -124,76 +124,7 @@ func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 		item.Y = iy
 
 		isFocused := pg.Active && i == pg.Focused
-
-		// Focus highlight
-		if isFocused {
-			vector.DrawFilledRect(dst,
-				float32(ix-PosterFocusPad), float32(iy-PosterFocusPad),
-				float32(PosterWidth+PosterFocusPad*2), float32(PosterHeight+PosterFocusPad*2),
-				ColorFocusBorder, false)
-		}
-
-		// Poster image or placeholder
-		if item.Image != nil {
-			DrawImageCover(dst, item.Image, ix, iy, PosterWidth, PosterHeight)
-		} else {
-			// Placeholder
-			vector.DrawFilledRect(dst, float32(ix), float32(iy),
-				float32(PosterWidth), float32(PosterHeight),
-				ColorSurface, false)
-			DrawTextCentered(dst, item.Title,
-				ix+PosterWidth/2, iy+PosterHeight/2,
-				FontSizeSmall, ColorTextMuted)
-		}
-
-		// Progress bar at bottom of poster
-		if item.Progress > 0 && item.Progress < 1.0 {
-			barH := float32(4)
-			barY := float32(iy + PosterHeight - float64(barH))
-			// Background
-			vector.DrawFilledRect(dst, float32(ix), barY,
-				float32(PosterWidth), barH,
-				color.RGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x80}, false)
-			// Progress fill
-			vector.DrawFilledRect(dst, float32(ix), barY,
-				float32(float64(PosterWidth)*item.Progress), barH,
-				ColorPrimary, false)
-		}
-
-		// Watched checkmark badge (top-right corner)
-		if item.Watched {
-			badgeR := float32(10)
-			badgeCX := float32(ix+PosterWidth) - badgeR - 4
-			badgeCY := float32(iy) + badgeR + 4
-			// Green circle background
-			vector.DrawFilledCircle(dst, badgeCX, badgeCY, badgeR, ColorSuccess, false)
-			// Checkmark drawn with vector lines
-			drawCheckmark(dst, badgeCX, badgeCY, badgeR*0.5, ColorText)
-		}
-
-		// Request status badge (full-width banner at bottom of poster)
-		if item.RequestStatus > 0 && item.Progress == 0 {
-			drawRequestBadge(dst, item.RequestStatus, ix, iy)
-		}
-
-		// Rating badge (top-left corner)
-		if item.Rating > 0 {
-			drawRatingBadge(dst, item.Rating, ix, iy)
-		}
-
-		// Title below poster
-		titleColor := ColorTextSecondary
-		if isFocused {
-			titleColor = ColorText
-		}
-		title := truncateText(item.Title, PosterWidth, FontSizeSmall)
-		DrawText(dst, title, ix, iy+PosterHeight+6, FontSizeSmall, titleColor)
-
-		// Subtitle below title
-		if item.Subtitle != "" {
-			sub := truncateText(item.Subtitle, PosterWidth, FontSizeCaption)
-			DrawText(dst, sub, ix, iy+PosterHeight+6+FontSizeSmall+4, FontSizeCaption, ColorTextMuted)
-		}
+		drawPosterItem(dst, *item, ix, iy, isFocused)
 	}
 
 	// Check if last item extends beyond view
@@ -269,12 +200,6 @@ func DrawImageCover(dst *ebiten.Image, src *ebiten.Image, x, y, w, h float64) {
 	sub.DrawImage(src, op)
 }
 
-// DrawFilledRoundRect draws a filled rectangle with rounded corners.
-func DrawFilledRoundRect(dst *ebiten.Image, x, y, w, h, radius float32, clr color.Color) {
-	// Ebitengine v2 vector doesn't have native round rect, so use regular rect
-	vector.DrawFilledRect(dst, x, y, w, h, clr, false)
-}
-
 // CreatePlaceholderImage creates a solid color placeholder image.
 func CreatePlaceholderImage(w, h int, clr color.Color) *ebiten.Image {
 	img := ebiten.NewImage(w, h)
@@ -335,6 +260,75 @@ func drawRatingBadge(dst *ebiten.Image, rating float64, x, y float64) {
 	// Rating number text
 	DrawText(dst, label, float64(starCX)+starSize+4, by+padY, FontSizeSmall,
 		color.RGBA{R: 0xFF, G: 0xD7, B: 0x00, A: 0xFF})
+}
+
+// drawPosterItem draws a single poster grid item with all decorations:
+// focus border, image/placeholder, progress bar, watched badge, request badge, rating, title, subtitle.
+func drawPosterItem(dst *ebiten.Image, item GridItem, x, y float64, focused bool) {
+	// Focus highlight
+	if focused {
+		vector.DrawFilledRect(dst,
+			float32(x-PosterFocusPad), float32(y-PosterFocusPad),
+			float32(PosterWidth+PosterFocusPad*2), float32(PosterHeight+PosterFocusPad*2),
+			ColorFocusBorder, false)
+	}
+
+	// Poster image or placeholder
+	if item.Image != nil {
+		DrawImageCover(dst, item.Image, x, y, PosterWidth, PosterHeight)
+	} else {
+		vector.DrawFilledRect(dst, float32(x), float32(y),
+			float32(PosterWidth), float32(PosterHeight),
+			ColorSurface, false)
+		DrawTextCentered(dst, item.Title,
+			x+PosterWidth/2, y+PosterHeight/2,
+			FontSizeSmall, ColorTextMuted)
+	}
+
+	// Progress bar at bottom of poster
+	if item.Progress > 0 && item.Progress < 1.0 {
+		barH := float32(4)
+		barY := float32(y + PosterHeight - float64(barH))
+		vector.DrawFilledRect(dst, float32(x), barY,
+			float32(PosterWidth), barH,
+			color.RGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x80}, false)
+		vector.DrawFilledRect(dst, float32(x), barY,
+			float32(float64(PosterWidth)*item.Progress), barH,
+			ColorPrimary, false)
+	}
+
+	// Watched checkmark badge (top-right corner with green circle)
+	if item.Watched {
+		badgeR := float32(10)
+		badgeCX := float32(x+PosterWidth) - badgeR - 4
+		badgeCY := float32(y) + badgeR + 4
+		vector.DrawFilledCircle(dst, badgeCX, badgeCY, badgeR, ColorSuccess, false)
+		drawCheckmark(dst, badgeCX, badgeCY, badgeR*0.5, ColorText)
+	}
+
+	// Request status badge (full-width banner at bottom of poster)
+	if item.RequestStatus > 0 && item.Progress == 0 {
+		drawRequestBadge(dst, item.RequestStatus, x, y)
+	}
+
+	// Rating badge (top-left corner)
+	if item.Rating > 0 {
+		drawRatingBadge(dst, item.Rating, x, y)
+	}
+
+	// Title below poster
+	titleColor := ColorTextSecondary
+	if focused {
+		titleColor = ColorText
+	}
+	title := truncateText(item.Title, PosterWidth, FontSizeSmall)
+	DrawText(dst, title, x, y+PosterHeight+6, FontSizeSmall, titleColor)
+
+	// Subtitle below title
+	if item.Subtitle != "" {
+		sub := truncateText(item.Subtitle, PosterWidth, FontSizeCaption)
+		DrawText(dst, sub, x, y+PosterHeight+6+FontSizeSmall+4, FontSizeCaption, ColorTextMuted)
+	}
 }
 
 // GridItemFromMediaItem converts a Jellyfin MediaItem to a GridItem.
