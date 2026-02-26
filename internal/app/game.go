@@ -251,7 +251,7 @@ func (g *Game) handlePlaybackInput() {
 	// === Control bar visible mode ===
 	if g.overlay != nil && g.overlay.Mode == player.OverlayBar {
 		// Arrow keys and Enter go to bar navigation
-		if dir == player.DirLeft || dir == player.DirRight || enterPressed {
+		if dir != player.DirNone || enterPressed {
 			g.overlay.HandleBarInput(dir, enterPressed, false)
 		}
 

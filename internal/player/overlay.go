@@ -97,6 +97,24 @@ const (
 	DirDown
 )
 
+// FocusZone identifies which part of the overlay has input focus.
+type FocusZone int
+
+const (
+	ZoneButtons  FocusZone = iota
+	ZoneProgress
+)
+
+// seekAccel tracks acceleration state for rapid seek presses.
+type seekAccel struct {
+	lastDir   Direction
+	lastPress time.Time
+	stepIndex int
+}
+
+// seekSteps defines the escalating seek amounts in seconds.
+var seekSteps = [...]float64{10, 30, 60, 300, 600}
+
 // PlaybackOverlay manages the Kodi-style OSD rendered via mpv's show-text.
 type PlaybackOverlay struct {
 	player    *Player
@@ -106,6 +124,9 @@ type PlaybackOverlay struct {
 
 	// Control bar state
 	focusedBtn ControlButton
+	focusZone  FocusZone
+	accel      seekAccel
+	lastRender time.Time
 
 	// Track selection state
 	trackType     TrackType
@@ -127,6 +148,8 @@ func NewPlaybackOverlay(p *Player) *PlaybackOverlay {
 func (o *PlaybackOverlay) Show() {
 	o.Mode = OverlayBar
 	o.lastInput = time.Now()
+	o.focusZone = ZoneButtons
+	o.accel = seekAccel{}
 	o.renderBar()
 }
 
@@ -138,8 +161,15 @@ func (o *PlaybackOverlay) Hide() {
 
 // Update checks the auto-hide timer. Call from the game loop.
 func (o *PlaybackOverlay) Update() {
-	if o.Mode == OverlayBar && time.Since(o.lastInput) > o.hideDelay {
-		o.Hide()
+	if o.Mode == OverlayBar {
+		if time.Since(o.lastInput) > o.hideDelay {
+			o.Hide()
+			return
+		}
+		// Periodically re-render to keep progress bar current
+		if time.Since(o.lastRender) > time.Second {
+			o.renderBar()
+		}
 	}
 }
 
@@ -148,36 +178,93 @@ func (o *PlaybackOverlay) Update() {
 func (o *PlaybackOverlay) HandleBarInput(dir Direction, enter, back bool) bool {
 	o.lastInput = time.Now()
 
-	if back || dir == DirUp {
+	if back {
 		o.Hide()
 		return true
 	}
 
-	if dir == DirLeft {
-		if o.focusedBtn > 0 {
-			o.focusedBtn--
-		} else {
-			o.focusedBtn = btnCount - 1
+	switch o.focusZone {
+	case ZoneButtons:
+		if dir == DirUp {
+			o.focusZone = ZoneProgress
+			o.accel = seekAccel{}
+			o.renderBar()
+			return true
 		}
-		o.renderBar()
-		return true
-	}
 
-	if dir == DirRight {
-		o.focusedBtn++
-		if o.focusedBtn >= btnCount {
-			o.focusedBtn = 0
+		if dir == DirLeft {
+			if o.focusedBtn > 0 {
+				o.focusedBtn--
+			} else {
+				o.focusedBtn = btnCount - 1
+			}
+			o.renderBar()
+			return true
 		}
-		o.renderBar()
-		return true
-	}
 
-	if enter {
-		o.activateButton()
-		return true
+		if dir == DirRight {
+			o.focusedBtn++
+			if o.focusedBtn >= btnCount {
+				o.focusedBtn = 0
+			}
+			o.renderBar()
+			return true
+		}
+
+		if enter {
+			o.activateButton()
+			return true
+		}
+
+	case ZoneProgress:
+		if dir == DirUp {
+			o.Hide()
+			return true
+		}
+
+		if dir == DirDown {
+			o.focusZone = ZoneButtons
+			o.renderBar()
+			return true
+		}
+
+		if dir == DirLeft {
+			o.seekWithAcceleration(DirLeft)
+			return true
+		}
+
+		if dir == DirRight {
+			o.seekWithAcceleration(DirRight)
+			return true
+		}
 	}
 
 	return false
+}
+
+// seekWithAcceleration performs a seek with escalating step sizes on rapid presses.
+func (o *PlaybackOverlay) seekWithAcceleration(dir Direction) {
+	now := time.Now()
+
+	if dir != o.accel.lastDir || o.accel.lastPress.IsZero() || now.Sub(o.accel.lastPress) > time.Second {
+		// Direction changed, first press, or gap > 1s: reset
+		o.accel.stepIndex = 0
+	} else {
+		// Same direction within 1s: escalate
+		if o.accel.stepIndex < len(seekSteps)-1 {
+			o.accel.stepIndex++
+		}
+	}
+
+	o.accel.lastDir = dir
+	o.accel.lastPress = now
+
+	amount := seekSteps[o.accel.stepIndex]
+	if dir == DirLeft {
+		amount = -amount
+	}
+	o.player.Seek(amount)
+	o.renderBar()
 }
 
 // OpenTrackPanel fetches tracks and opens the selection panel.
@@ -296,6 +383,8 @@ const (
 
 // renderBar renders the control bar ASS and sends it to mpv.
 func (o *PlaybackOverlay) renderBar() {
+	o.lastRender = time.Now()
+
 	var b strings.Builder
 
 	// ASS override prefix
@@ -306,8 +395,12 @@ func (o *PlaybackOverlay) renderBar() {
 	b.WriteString("{\\an2\\bord0\\shad0\\fsp0}")
 
 	// Progress bar line
-	b.WriteString("{\\fs15\\bord1" + assColorWhite + "}")
-	b.WriteString(buildProgressBar(50) + "\\N")
+	barColor := assColorGray
+	if o.focusZone == ZoneProgress {
+		barColor = assColorBlue
+	}
+	b.WriteString("{\\fs15\\bord1" + barColor + "}")
+	b.WriteString(o.buildProgressBar(60) + "\\N")
 
 	// Time and volume line
 	b.WriteString("{\\fs17\\bord1" + assColorWhite + "}")
@@ -323,11 +416,11 @@ func (o *PlaybackOverlay) renderBar() {
 		btn   ControlButton
 		label string
 	}{
-		{BtnSeekBack60, "\u25C0\u25C060"},
-		{BtnSeekBack10, "\u25C010"},
+		{BtnSeekBack60, "\u25C0\u25C0"},
+		{BtnSeekBack10, "\u25C0"},
 		{BtnPlayPause, "\u25B6\u258E\u258E"},
-		{BtnSeekFwd10, "10\u25B6"},
-		{BtnSeekFwd60, "60\u25B6\u25B6"},
+		{BtnSeekFwd10, "\u25B6"},
+		{BtnSeekFwd60, "\u25B6\u25B6"},
 		{BtnSubtitles, "Subs"},
 		{BtnAudio, "Audio"},
 	}
@@ -342,12 +435,6 @@ func (o *PlaybackOverlay) renderBar() {
 			b.WriteString("{" + assColorGray + "}" + btn.label)
 		}
 	}
-
-	b.WriteString("\\N")
-
-	// Hint line
-	b.WriteString("{\\fs13\\bord1" + assColorDimGray + "}")
-	b.WriteString("\u2190 \u2192 Navigate   Enter Select   Esc Back")
 
 	o.player.ShowText(b.String(), int(o.hideDelay.Milliseconds()+1000))
 }
@@ -415,21 +502,26 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 		b.WriteString("\\N")
 	}
 
-	// Hint line
-	b.WriteString("\\N{\\fs13\\bord1" + assColorDimGray + "}")
-	b.WriteString("\u2191\u2193 Navigate   Enter Select   Esc Back")
-
 	o.player.ShowText(b.String(), 30000) // Long duration; we'll clear it manually
 }
 
-// buildProgressBar creates a Unicode block progress bar.
-func buildProgressBar(width int) string {
-	// We can't get live position in ASS static text, but mpv property expansion
-	// doesn't work inside individual characters. Use a fixed-width bar and
-	// let the time display show actual position.
-	// Instead, use mpv's osd-bar for the actual progress and just show time.
-	// Return empty — the time line already shows position.
-	return ""
+// buildProgressBar creates a Unicode block progress bar using current position/duration.
+func (o *PlaybackOverlay) buildProgressBar(width int) string {
+	pos := o.player.Position()
+	dur := o.player.Duration()
+
+	filled := 0
+	if dur > 0 {
+		frac := pos / dur
+		if frac < 0 {
+			frac = 0
+		} else if frac > 1 {
+			frac = 1
+		}
+		filled = int(frac*float64(width) + 0.5)
+	}
+
+	return strings.Repeat("\u2588", filled) + strings.Repeat("\u2500", width-filled)
 }
 
 // formatDuration formats seconds into "H:MM:SS" or "MM:SS".
