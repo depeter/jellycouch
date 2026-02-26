@@ -105,9 +105,6 @@ func main() {
 	ebiten.SetWindowTitle("JellyCouch")
 	ebiten.SetWindowIcon(icon.Generate())
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
-	if cfg.UI.Fullscreen {
-		ebiten.SetFullscreen(true)
-	}
 
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)

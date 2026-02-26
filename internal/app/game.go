@@ -38,18 +38,21 @@ type Game struct {
 	nextEpCh       chan *jellyfin.MediaItem
 	nextEpItem     *jellyfin.MediaItem // pre-fetched next episode for direct playback
 	nextEpBGRAPath string              // temp file for thumbnail overlay
+
+	startFullscreen bool // apply fullscreen on first Update() frame
 }
 
 // NewGame creates the Game with all dependencies.
 func NewGame(cfg *config.Config, client *jellyfin.Client, imgCache *cache.ImageCache) *Game {
 	g := &Game{
-		Config:  cfg,
-		Client:  client,
-		Cache:   imgCache,
-		Screens: ui.NewScreenManager(),
-		State:   StateBrowse,
-		Width:   cfg.UI.Width,
-		Height:  cfg.UI.Height,
+		Config:          cfg,
+		Client:          client,
+		Cache:           imgCache,
+		Screens:         ui.NewScreenManager(),
+		State:           StateBrowse,
+		Width:           cfg.UI.Width,
+		Height:          cfg.UI.Height,
+		startFullscreen: cfg.UI.Fullscreen,
 	}
 	return g
 }
@@ -320,6 +323,12 @@ func (g *Game) lookupNextEpisode(item *jellyfin.MediaItem) *jellyfin.MediaItem {
 }
 
 func (g *Game) Update() error {
+	// Apply fullscreen on first frame (unreliable before RunGame on Linux)
+	if g.startFullscreen {
+		g.startFullscreen = false
+		ebiten.SetFullscreen(true)
+	}
+
 	// Alt+Enter toggles fullscreen (works in all modes)
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && ebiten.IsKeyPressed(ebiten.KeyAlt) {
 		ebiten.SetFullscreen(!ebiten.IsFullscreen())
@@ -445,7 +454,7 @@ func (g *Game) handlePlaybackInput() {
 	} else if keyJustPressed(kb.SeekBackwardLarge) {
 		dir = player.DirDown
 	}
-	enterPressed := inpututil.IsKeyJustPressed(ebiten.KeyEnter) && !ebiten.IsKeyPressed(ebiten.KeyAlt)
+	enterPressed := inpututil.IsKeyJustPressed(ebiten.KeyEnter) && !ui.IsModifierPressed()
 
 	// === Track select mode (modal — blocks everything) ===
 	if g.overlay != nil && g.overlay.Mode == player.OverlayTrackSelect {

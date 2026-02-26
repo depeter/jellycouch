@@ -16,6 +16,14 @@ const (
 	DirRight
 )
 
+// IsModifierPressed reports whether any modifier key (Alt, Ctrl, Shift, Meta) is held.
+func IsModifierPressed() bool {
+	return ebiten.IsKeyPressed(ebiten.KeyAlt) ||
+		ebiten.IsKeyPressed(ebiten.KeyControl) ||
+		ebiten.IsKeyPressed(ebiten.KeyShift) ||
+		ebiten.IsKeyPressed(ebiten.KeyMeta)
+}
+
 // InputState returns the current navigation direction and action keys pressed this frame.
 func InputState() (dir Direction, enter, back bool) {
 	if inputRepeating(ebiten.KeyArrowUp) {
@@ -27,7 +35,7 @@ func InputState() (dir Direction, enter, back bool) {
 	} else if inputRepeating(ebiten.KeyArrowRight) {
 		dir = DirRight
 	}
-	enter = inpututil.IsKeyJustPressed(ebiten.KeyEnter)
+	enter = inpututil.IsKeyJustPressed(ebiten.KeyEnter) && !IsModifierPressed()
 	back = inpututil.IsKeyJustPressed(ebiten.KeyEscape) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyBackspace) ||
 		inpututil.IsMouseButtonJustPressed(ebiten.MouseButton3) ||
