@@ -88,7 +88,7 @@ func DefaultConfig() *Config {
 			Volume:        100,
 		},
 		UI: UIConfig{
-			Fullscreen: false,
+			Fullscreen: true,
 			Width:      1920,
 			Height:     1080,
 		},

@@ -578,9 +578,6 @@ func (o *PlaybackOverlay) btnCenterX(target ControlButton) int {
 			totalRunes += 5 // "  │  "
 		}
 		labelLen := btnLabels[btn]
-		if btn == o.focusedBtn {
-			labelLen += 4 // "[ " + " ]"
-		}
 		if btn == target {
 			targetStart = totalRunes
 			targetLen = labelLen
@@ -695,7 +692,7 @@ func (o *PlaybackOverlay) renderBar() {
 			// Dimmed next button when no next episode
 			b.WriteString("{" + assColorDimGray + "}" + label)
 		} else if btn == o.focusedBtn {
-			b.WriteString("{" + assColorBlue + "\\b1}[ " + label + " ]{\\b0}")
+			b.WriteString("{" + assColorBlue + "\\b1}" + label + "{\\b0}")
 		} else {
 			b.WriteString("{" + assColorGray + "}" + label)
 		}
