@@ -376,10 +376,7 @@ func (ds *DetailScreen) Draw(dst *ebiten.Image) {
 		if ds.episodeGrid != nil && len(ds.episodes) > 0 {
 			ds.episodeRects = make([]ButtonRect, len(ds.episodes))
 			for i, ep := range ds.episodes {
-				col := i % ds.episodeGrid.Cols
-				row := i / ds.episodeGrid.Cols
-				ex := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-				ey := y + float64(row)*(GridRowHeight)
+				ex, ey := ds.episodeGrid.ItemRect(i, SectionPadding, y)
 
 				ds.episodeRects[i] = ButtonRect{X: ex, Y: ey, W: PosterWidth, H: PosterHeight}
 

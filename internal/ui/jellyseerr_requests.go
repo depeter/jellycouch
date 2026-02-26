@@ -263,17 +263,11 @@ func (jr *JellyseerrRequestsScreen) Update() (*ScreenTransition, error) {
 		// Check grid items
 		if len(jr.gridItems) > 0 {
 			baseY := float64(NavBarHeight) + 110.0 - jr.scrollY
-			for i := range jr.gridItems {
-				col := i % jr.grid.Cols
-				row := i / jr.grid.Cols
-				x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-				iy := baseY + float64(row)*(GridRowHeight)
-				if PointInRect(mx, my, x, iy, PosterWidth, PosterHeight) {
-					jr.focusMode = 1
-					jr.grid.Focused = i
-					jr.selectRequest(i)
-					return nil, nil
-				}
+			if idx, ok := jr.grid.HandleClick(mx, my, SectionPadding, baseY); ok {
+				jr.focusMode = 1
+				jr.grid.Focused = idx
+				jr.selectRequest(idx)
+				return nil, nil
 			}
 		}
 	}
@@ -399,10 +393,7 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 	DrawText(dst, fmt.Sprintf("%d requests", jr.total), SectionPadding, baseY-20, FontSizeSmall, ColorTextMuted)
 
 	for i, item := range jr.gridItems {
-		col := i % jr.grid.Cols
-		row := i / jr.grid.Cols
-		x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-		iy := baseY + float64(row)*(GridRowHeight) - jr.scrollY
+		x, iy := jr.grid.ItemRect(i, SectionPadding, baseY-jr.scrollY)
 
 		if iy+PosterHeight < 0 || iy > float64(ScreenHeight) {
 			continue

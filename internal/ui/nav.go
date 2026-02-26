@@ -171,6 +171,26 @@ func (fg *FocusGrid) SetTotal(total int) {
 	}
 }
 
+// ItemRect returns the (x, y) position of item i in the grid layout.
+func (fg *FocusGrid) ItemRect(i int, baseX, baseY float64) (x, y float64) {
+	col := i % fg.Cols
+	row := i / fg.Cols
+	x = baseX + float64(col)*(PosterWidth+PosterGap)
+	y = baseY + float64(row)*GridRowHeight
+	return
+}
+
+// HandleClick checks if (mx, my) hits any grid item and returns its index.
+func (fg *FocusGrid) HandleClick(mx, my int, baseX, baseY float64) (index int, ok bool) {
+	for i := 0; i < fg.Total; i++ {
+		x, y := fg.ItemRect(i, baseX, baseY)
+		if PointInRect(mx, my, x, y, PosterWidth, PosterHeight) {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
 // Lerp for smooth scrolling
 func Lerp(a, b, t float64) float64 {
 	return a + (b-a)*t

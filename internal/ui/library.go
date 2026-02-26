@@ -348,20 +348,14 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 	// Grid mouse click
 	if clicked && ls.loaded {
 		gridBase := ls.gridBaseY() - ls.scrollY
-		for i := range ls.gridItems {
-			col := i % ls.grid.Cols
-			row := i / ls.grid.Cols
-			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-			y := gridBase + float64(row)*(GridRowHeight)
-			if PointInRect(mx, my, x, y, PosterWidth, PosterHeight) {
-				ls.focusMode = focusGrid
-				ls.filterBar.Active = false
-				ls.grid.Focused = i
-				if i < len(ls.items) && ls.OnItemSelected != nil {
-					ls.OnItemSelected(ls.items[i])
-				}
-				return nil, nil
+		if idx, ok := ls.grid.HandleClick(mx, my, SectionPadding, gridBase); ok {
+			ls.focusMode = focusGrid
+			ls.filterBar.Active = false
+			ls.grid.Focused = idx
+			if idx < len(ls.items) && ls.OnItemSelected != nil {
+				ls.OnItemSelected(ls.items[idx])
 			}
+			return nil, nil
 		}
 	}
 
@@ -369,23 +363,17 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 	rmx, rmy, rclicked := MouseJustRightClicked()
 	if rclicked && ls.loaded {
 		gridBase := ls.gridBaseY() - ls.scrollY
-		for i := range ls.gridItems {
-			col := i % ls.grid.Cols
-			row := i / ls.grid.Cols
-			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-			y := gridBase + float64(row)*(GridRowHeight)
-			if PointInRect(rmx, rmy, x, y, PosterWidth, PosterHeight) {
-				if i < len(ls.items) {
-					if ls.items[i].Played {
-						go ls.client.MarkUnplayed(ls.items[i].ID)
-					} else {
-						go ls.client.MarkPlayed(ls.items[i].ID)
-					}
-					ls.items[i].Played = !ls.items[i].Played
-					ls.gridItems[i].Watched = ls.items[i].Played
+		if idx, ok := ls.grid.HandleClick(rmx, rmy, SectionPadding, gridBase); ok {
+			if idx < len(ls.items) {
+				if ls.items[idx].Played {
+					go ls.client.MarkUnplayed(ls.items[idx].ID)
+				} else {
+					go ls.client.MarkPlayed(ls.items[idx].ID)
 				}
-				return nil, nil
+				ls.items[idx].Played = !ls.items[idx].Played
+				ls.gridItems[idx].Watched = ls.items[idx].Played
 			}
+			return nil, nil
 		}
 	}
 
@@ -543,11 +531,7 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 	// Draw grid
 	baseY := ls.gridBaseY() - ls.scrollY
 	for i, item := range ls.gridItems {
-		col := i % ls.grid.Cols
-		row := i / ls.grid.Cols
-
-		x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-		y := baseY + float64(row)*(GridRowHeight)
+		x, y := ls.grid.ItemRect(i, SectionPadding, baseY)
 
 		// Skip offscreen
 		if y+PosterHeight < 0 || y > float64(ScreenHeight) {

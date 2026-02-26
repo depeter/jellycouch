@@ -101,19 +101,13 @@ func (js *JellyseerrSearchScreen) Update() (*ScreenTransition, error) {
 		}
 		if len(js.gridItems) > 0 {
 			resultBaseY := barY + barH + 40 - js.scrollY
-			for i := range js.gridItems {
-				col := i % js.grid.Cols
-				row := i / js.grid.Cols
-				x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-				iy := resultBaseY + float64(row)*(GridRowHeight)
-				if PointInRect(mx, my, x, iy, PosterWidth, PosterHeight) {
-					js.focusMode = 1
-					js.grid.Focused = i
-					if i < len(js.results) && js.OnResultSelected != nil {
-						js.OnResultSelected(js.results[i])
-					}
-					return nil, nil
+			if idx, ok := js.grid.HandleClick(mx, my, SectionPadding, resultBaseY); ok {
+				js.focusMode = 1
+				js.grid.Focused = idx
+				if idx < len(js.results) && js.OnResultSelected != nil {
+					js.OnResultSelected(js.results[idx])
 				}
+				return nil, nil
 			}
 		}
 	}
@@ -288,10 +282,7 @@ func (js *JellyseerrSearchScreen) Draw(dst *ebiten.Image) {
 	}
 
 	for i, item := range js.gridItems {
-		col := i % js.grid.Cols
-		row := i / js.grid.Cols
-		x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-		iy := y + float64(row)*(GridRowHeight) - js.scrollY
+		x, iy := js.grid.ItemRect(i, SectionPadding, y-js.scrollY)
 
 		if iy+PosterHeight < 0 || iy > float64(ScreenHeight) {
 			continue

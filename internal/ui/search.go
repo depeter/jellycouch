@@ -111,19 +111,13 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 		// Check result items click
 		if len(ss.gridItems) > 0 {
 			resultBaseY := barY + barH + 40 - ss.scrollY // 40 = gap + result count
-			for i := range ss.gridItems {
-				col := i % ss.grid.Cols
-				row := i / ss.grid.Cols
-				x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-				iy := resultBaseY + float64(row)*(GridRowHeight)
-				if PointInRect(mx, my, x, iy, PosterWidth, PosterHeight) {
-					ss.focusMode = 1
-					ss.grid.Focused = i
-					if i < len(ss.results) && ss.OnItemSelected != nil {
-						ss.OnItemSelected(ss.results[i])
-					}
-					return nil, nil
+			if idx, ok := ss.grid.HandleClick(mx, my, SectionPadding, resultBaseY); ok {
+				ss.focusMode = 1
+				ss.grid.Focused = idx
+				if idx < len(ss.results) && ss.OnItemSelected != nil {
+					ss.OnItemSelected(ss.results[idx])
 				}
+				return nil, nil
 			}
 		}
 	}
@@ -134,23 +128,17 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 		barY := float64(NavBarHeight) + 20.0
 		barH := 44.0
 		resultBaseY := barY + barH + 40 - ss.scrollY
-		for i := range ss.gridItems {
-			col := i % ss.grid.Cols
-			row := i / ss.grid.Cols
-			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-			iy := resultBaseY + float64(row)*(GridRowHeight)
-			if PointInRect(rmx, rmy, x, iy, PosterWidth, PosterHeight) {
-				if i < len(ss.results) {
-					if ss.results[i].Played {
-						go ss.client.MarkUnplayed(ss.results[i].ID)
-					} else {
-						go ss.client.MarkPlayed(ss.results[i].ID)
-					}
-					ss.results[i].Played = !ss.results[i].Played
-					ss.gridItems[i].Watched = ss.results[i].Played
+		if idx, ok := ss.grid.HandleClick(rmx, rmy, SectionPadding, resultBaseY); ok {
+			if idx < len(ss.results) {
+				if ss.results[idx].Played {
+					go ss.client.MarkUnplayed(ss.results[idx].ID)
+				} else {
+					go ss.client.MarkPlayed(ss.results[idx].ID)
 				}
-				return nil, nil
+				ss.results[idx].Played = !ss.results[idx].Played
+				ss.gridItems[idx].Watched = ss.results[idx].Played
 			}
+			return nil, nil
 		}
 	}
 
@@ -292,11 +280,7 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 	}
 
 	for i, item := range ss.gridItems {
-		col := i % ss.grid.Cols
-		row := i / ss.grid.Cols
-
-		x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-		iy := y + float64(row)*(GridRowHeight) - ss.scrollY
+		x, iy := ss.grid.ItemRect(i, SectionPadding, y-ss.scrollY)
 
 		// Skip offscreen
 		if iy+PosterHeight < 0 || iy > float64(ScreenHeight) {
