@@ -457,76 +457,52 @@ func (g *Game) handlePlaybackInput() {
 	}
 	enterPressed := inpututil.IsKeyJustPressed(ebiten.KeyEnter) && !ui.IsModifierPressed()
 
-	// === Track select mode (modal — blocks everything) ===
-	if g.overlay != nil && g.overlay.Mode == player.OverlayTrackSelect {
-		g.overlay.HandleTrackInput(dir, enterPressed, false)
+	if g.overlay == nil {
 		return
 	}
 
-	// === Next-up banner mode ===
-	if g.overlay != nil && g.overlay.Mode == player.OverlayNextUp {
-		if enterPressed && g.overlay.OnStartNextUp != nil {
-			g.overlay.OnStartNextUp()
-			return
-		}
-		// I key or directional input — show control bar
-		if inpututil.IsKeyJustPressed(ebiten.KeyI) || dir != player.DirNone {
-			g.overlay.Show()
-			return
-		}
+	switch g.overlay.Mode {
+	case player.OverlayTrackSelect:
+		g.handleInputTrackSelect(dir, enterPressed)
+	case player.OverlayNextUp:
+		g.handleInputNextUp(dir, enterPressed)
+	case player.OverlayBar:
+		g.handleInputBar(dir, enterPressed, kb)
+	default:
+		g.handleInputHidden(enterPressed, kb)
 	}
+}
 
-	// === Control bar visible mode ===
-	if g.overlay != nil && g.overlay.Mode == player.OverlayBar {
-		// Arrow keys and Enter go to bar navigation
-		if dir != player.DirNone || enterPressed {
-			g.overlay.HandleBarInput(dir, enterPressed, false)
-		}
+// handleInputTrackSelect handles input when the track selection modal is open.
+func (g *Game) handleInputTrackSelect(dir player.Direction, enter bool) {
+	g.overlay.HandleTrackInput(dir, enter, false)
+}
 
-		// Play/pause with Space
-		if keyJustPressed(kb.PlayPause) {
-			g.Player.TogglePause()
-			g.overlay.Show() // re-render and reset timer
-		}
-
-		// Volume controls still work while bar is visible
-		if keyJustPressed(kb.VolumeUp) {
-			g.Player.AdjustVolume(player.VolumeStep)
-			g.overlay.Show()
-		}
-		if keyJustPressed(kb.VolumeDown) {
-			g.Player.AdjustVolume(-player.VolumeStep)
-			g.overlay.Show()
-		}
-		if keyJustPressed(kb.Mute) {
-			g.Player.ToggleMute()
-			g.overlay.Show()
-		}
-
-		// S/A keys open track panels directly
-		if keyJustPressed(kb.SubCycle) {
-			g.overlay.OpenTrackPanel(player.TrackSub)
-		}
-		if keyJustPressed(kb.AudioCycle) {
-			g.overlay.OpenTrackPanel(player.TrackAudio)
-		}
-
-		if keyJustPressed(kb.Fullscreen) {
-			ebiten.SetFullscreen(!ebiten.IsFullscreen())
-		}
-
-		// I key — just reset the timer
-		if inpututil.IsKeyJustPressed(ebiten.KeyI) {
-			g.overlay.Show()
-		}
-
-		// Mouse input (same as hidden mode)
-		g.handlePlaybackMouse()
+// handleInputNextUp handles input when the "Up Next" banner is showing.
+func (g *Game) handleInputNextUp(dir player.Direction, enter bool) {
+	if enter && g.overlay.OnStartNextUp != nil {
+		g.overlay.OnStartNextUp()
 		return
 	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyI) || dir != player.DirNone {
+		g.overlay.Show()
+	}
+}
 
-	// === Hidden mode — seek/volume without showing full overlay ===
+// handleInputBar handles input when the control bar is visible.
+func (g *Game) handleInputBar(dir player.Direction, enter bool, kb *config.KeybindConfig) {
+	if dir != player.DirNone || enter {
+		g.overlay.HandleBarInput(dir, enter, false)
+	}
+	g.handleCommonPlaybackKeys(kb, true)
+	if inpututil.IsKeyJustPressed(ebiten.KeyI) {
+		g.overlay.Show()
+	}
+	g.handlePlaybackMouse()
+}
 
+// handleInputHidden handles input when the overlay is hidden.
+func (g *Game) handleInputHidden(enter bool, kb *config.KeybindConfig) {
 	if keyJustPressed(kb.PlayPause) {
 		g.Player.TogglePause()
 		g.overlay.Show()
@@ -547,41 +523,54 @@ func (g *Game) handlePlaybackInput() {
 		g.Player.Seek(-player.SeekLarge)
 		g.Player.ShowProgress()
 	}
+	g.handleCommonPlaybackKeys(kb, false)
+	if enter {
+		g.overlay.Show()
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyI) {
+		g.overlay.Show()
+	}
+	g.handlePlaybackMouse()
+}
+
+// handleCommonPlaybackKeys handles volume, track, and fullscreen keys shared
+// between bar-visible and hidden modes. When barVisible is true, actions
+// re-show the overlay bar; otherwise they show a brief progress indicator.
+func (g *Game) handleCommonPlaybackKeys(kb *config.KeybindConfig, barVisible bool) {
+	show := func() {
+		if barVisible {
+			g.overlay.Show()
+		} else {
+			g.Player.ShowProgress()
+		}
+	}
 	if keyJustPressed(kb.VolumeUp) {
 		g.Player.AdjustVolume(player.VolumeStep)
-		g.Player.ShowProgress()
+		show()
 	}
 	if keyJustPressed(kb.VolumeDown) {
 		g.Player.AdjustVolume(-player.VolumeStep)
-		g.Player.ShowProgress()
+		show()
 	}
 	if keyJustPressed(kb.Mute) {
 		g.Player.ToggleMute()
-		g.Player.ShowProgress()
+		show()
 	}
 	if keyJustPressed(kb.SubCycle) {
-		g.overlay.Show()
+		if !barVisible {
+			g.overlay.Show()
+		}
 		g.overlay.OpenTrackPanel(player.TrackSub)
 	}
 	if keyJustPressed(kb.AudioCycle) {
-		g.overlay.Show()
+		if !barVisible {
+			g.overlay.Show()
+		}
 		g.overlay.OpenTrackPanel(player.TrackAudio)
 	}
 	if keyJustPressed(kb.Fullscreen) {
 		ebiten.SetFullscreen(!ebiten.IsFullscreen())
 	}
-
-	// Enter/OK — show OSD (in hidden mode, Enter shows bar rather than pause)
-	if enterPressed {
-		g.overlay.Show()
-	}
-
-	// I key — show info overlay
-	if inpututil.IsKeyJustPressed(ebiten.KeyI) {
-		g.overlay.Show()
-	}
-
-	g.handlePlaybackMouse()
 }
 
 // handlePlaybackMouse handles mouse input during playback (same in all overlay modes).
