@@ -12,6 +12,7 @@ import (
 
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/config"
+	"github.com/depeter/jellycouch/internal/constants"
 	"github.com/depeter/jellycouch/internal/jellyfin"
 	"github.com/depeter/jellycouch/internal/jellyseerr"
 	"github.com/depeter/jellycouch/internal/player"
@@ -92,7 +93,7 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 	streamURL := g.Client.GetStreamURL(itemID)
 	var startSec float64
 	if resumeTicks > 0 {
-		startSec = float64(resumeTicks) / 10_000_000
+		startSec = float64(resumeTicks) / constants.TicksPerSecond
 	}
 	if err := g.Player.LoadFile(streamURL, itemID, startSec); err != nil {
 		log.Printf("Failed to load file: %v", err)
@@ -164,7 +165,7 @@ func (g *Game) StopPlayback() {
 	}
 	if g.Player != nil && g.Player.Playing() {
 		itemID := g.Player.ItemID()
-		posTicks := int64(g.Player.Position() * 10_000_000)
+		posTicks := int64(g.Player.Position() * constants.TicksPerSecond)
 		g.Player.Stop()
 		if itemID != "" {
 			go g.Client.ReportPlaybackStopped(itemID, posTicks)
@@ -490,11 +491,11 @@ func (g *Game) handlePlaybackInput() {
 
 		// Volume controls still work while bar is visible
 		if keyJustPressed(kb.VolumeUp) {
-			g.Player.AdjustVolume(5)
+			g.Player.AdjustVolume(player.VolumeStep)
 			g.overlay.Show()
 		}
 		if keyJustPressed(kb.VolumeDown) {
-			g.Player.AdjustVolume(-5)
+			g.Player.AdjustVolume(-player.VolumeStep)
 			g.overlay.Show()
 		}
 		if keyJustPressed(kb.Mute) {
@@ -531,27 +532,27 @@ func (g *Game) handlePlaybackInput() {
 		g.overlay.Show()
 	}
 	if keyJustPressed(kb.SeekForward) {
-		g.Player.Seek(10)
+		g.Player.Seek(player.SeekSmall)
 		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.SeekBackward) {
-		g.Player.Seek(-10)
+		g.Player.Seek(-player.SeekSmall)
 		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.SeekForwardLarge) {
-		g.Player.Seek(60)
+		g.Player.Seek(player.SeekLarge)
 		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.SeekBackwardLarge) {
-		g.Player.Seek(-60)
+		g.Player.Seek(-player.SeekLarge)
 		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.VolumeUp) {
-		g.Player.AdjustVolume(5)
+		g.Player.AdjustVolume(player.VolumeStep)
 		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.VolumeDown) {
-		g.Player.AdjustVolume(-5)
+		g.Player.AdjustVolume(-player.VolumeStep)
 		g.Player.ShowProgress()
 	}
 	if keyJustPressed(kb.Mute) {
@@ -598,12 +599,12 @@ func (g *Game) handlePlaybackMouse() {
 	}
 	_, scrollY := ebiten.Wheel()
 	if scrollY > 0 {
-		g.Player.AdjustVolume(5)
+		g.Player.AdjustVolume(player.VolumeStep)
 		if g.overlay != nil {
 			g.overlay.Show()
 		}
 	} else if scrollY < 0 {
-		g.Player.AdjustVolume(-5)
+		g.Player.AdjustVolume(-player.VolumeStep)
 		if g.overlay != nil {
 			g.overlay.Show()
 		}

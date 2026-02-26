@@ -210,7 +210,7 @@ func (ds *JellyseerrDiscoverScreen) Update() (*ScreenTransition, error) {
 	// Mouse wheel scroll
 	_, wy := MouseWheelDelta()
 	if wy != 0 {
-		ds.targetScrollY -= wy * 60
+		ds.targetScrollY -= wy * ScrollWheelSpeed
 		if ds.targetScrollY < 0 {
 			ds.targetScrollY = 0
 		}
@@ -355,7 +355,7 @@ func (ds *JellyseerrDiscoverScreen) Update() (*ScreenTransition, error) {
 }
 
 func (ds *JellyseerrDiscoverScreen) ensureSectionVisible() {
-	sectionHeight := float64(PosterHeight + FontSizeSmall + FontSizeCaption + 24 + PosterFocusPad*2 + SectionTitleH + SectionGap)
+	sectionHeight := float64(SectionFullHeight)
 	targetY := float64(ds.sectionIndex) * sectionHeight
 	maxScroll := targetY - float64(ScreenHeight)/4
 	if maxScroll < 0 {

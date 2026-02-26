@@ -125,6 +125,13 @@ const (
 	ZoneProgress
 )
 
+// Playback control constants.
+const (
+	SeekSmall  = 10  // seconds for small seek
+	SeekLarge  = 60  // seconds for large seek
+	VolumeStep = 5   // percent per volume adjustment
+)
+
 // seekAccel tracks acceleration state for rapid seek presses.
 type seekAccel struct {
 	lastDir   Direction
@@ -529,19 +536,19 @@ func (o *PlaybackOverlay) HandleTrackInput(dir Direction, enter, back bool) bool
 func (o *PlaybackOverlay) activateButton() {
 	switch o.focusedBtn {
 	case BtnSeekBack60:
-		o.player.Seek(-60)
+		o.player.Seek(-SeekLarge)
 		o.renderBar()
 	case BtnSeekBack10:
-		o.player.Seek(-10)
+		o.player.Seek(-SeekSmall)
 		o.renderBar()
 	case BtnPlayPause:
 		o.player.TogglePause()
 		o.renderBar()
 	case BtnSeekFwd10:
-		o.player.Seek(10)
+		o.player.Seek(SeekSmall)
 		o.renderBar()
 	case BtnSeekFwd60:
-		o.player.Seek(60)
+		o.player.Seek(SeekLarge)
 		o.renderBar()
 	case BtnSubtitles:
 		o.OpenTrackPanel(TrackSub)

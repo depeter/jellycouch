@@ -98,7 +98,7 @@ func (pg *PosterGrid) Draw(dst *ebiten.Image, baseX, baseY float64) float64 {
 	baseY += SectionTitleH
 
 	// Create a clipping sub-image for the poster row
-	rowHeight := float64(PosterHeight + FontSizeSmall + FontSizeCaption + 24 + PosterFocusPad*2)
+	rowHeight := float64(SectionRowHeight)
 
 	hasLeft := pg.OffsetX > 1
 	hasRight := false

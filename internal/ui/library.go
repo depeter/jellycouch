@@ -358,7 +358,7 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 	// Mouse wheel scroll
 	_, wy := MouseWheelDelta()
 	if wy != 0 {
-		ls.targetScrollY -= wy * 60
+		ls.targetScrollY -= wy * ScrollWheelSpeed
 		if ls.targetScrollY < 0 {
 			ls.targetScrollY = 0
 		}
@@ -395,7 +395,7 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 			col := i % ls.grid.Cols
 			row := i / ls.grid.Cols
 			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-			y := gridBase + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
+			y := gridBase + float64(row)*(GridRowHeight)
 			if PointInRect(mx, my, x, y, PosterWidth, PosterHeight) {
 				ls.focusMode = focusGrid
 				ls.filterBar.Active = false
@@ -416,7 +416,7 @@ func (ls *LibraryScreen) Update() (*ScreenTransition, error) {
 			col := i % ls.grid.Cols
 			row := i / ls.grid.Cols
 			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-			y := gridBase + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
+			y := gridBase + float64(row)*(GridRowHeight)
 			if PointInRect(rmx, rmy, x, y, PosterWidth, PosterHeight) {
 				if i < len(ls.items) {
 					if ls.items[i].Played {
@@ -590,7 +590,7 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 		row := i / ls.grid.Cols
 
 		x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-		y := baseY + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
+		y := baseY + float64(row)*(GridRowHeight)
 
 		// Skip offscreen
 		if y+PosterHeight < 0 || y > float64(ScreenHeight) {
@@ -604,7 +604,7 @@ func (ls *LibraryScreen) Draw(dst *ebiten.Image) {
 	// Loading more indicator at bottom
 	if ls.loadingMore {
 		totalRows := (len(ls.items) + ls.grid.Cols - 1) / ls.grid.Cols
-		bottomY := baseY + float64(totalRows)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16) + 20
+		bottomY := baseY + float64(totalRows)*(GridRowHeight) + 20
 		DrawTextCentered(dst, "Loading more...", float64(ScreenWidth)/2, bottomY,
 			FontSizeBody, ColorTextSecondary)
 	}

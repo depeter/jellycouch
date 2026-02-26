@@ -79,7 +79,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 	// Mouse wheel scroll
 	_, wy := MouseWheelDelta()
 	if wy != 0 {
-		ss.targetScrollY -= wy * 60
+		ss.targetScrollY -= wy * ScrollWheelSpeed
 		if ss.targetScrollY < 0 {
 			ss.targetScrollY = 0
 		}
@@ -115,7 +115,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 				col := i % ss.grid.Cols
 				row := i / ss.grid.Cols
 				x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-				iy := resultBaseY + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
+				iy := resultBaseY + float64(row)*(GridRowHeight)
 				if PointInRect(mx, my, x, iy, PosterWidth, PosterHeight) {
 					ss.focusMode = 1
 					ss.grid.Focused = i
@@ -138,7 +138,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 			col := i % ss.grid.Cols
 			row := i / ss.grid.Cols
 			x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-			iy := resultBaseY + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
+			iy := resultBaseY + float64(row)*(GridRowHeight)
 			if PointInRect(rmx, rmy, x, iy, PosterWidth, PosterHeight) {
 				if i < len(ss.results) {
 					if ss.results[i].Played {
@@ -328,7 +328,7 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 		row := i / ss.grid.Cols
 
 		x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-		iy := y + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16) - ss.scrollY
+		iy := y + float64(row)*(GridRowHeight) - ss.scrollY
 
 		// Skip offscreen
 		if iy+PosterHeight < 0 || iy > float64(ScreenHeight) {

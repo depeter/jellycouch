@@ -47,4 +47,15 @@ const (
 
 	ScreenWidth     = 1920
 	ScreenHeight    = 1080
+
+	// Computed grid layout constants
+	// GridRowHeight is the height of a single row in a FocusGrid (poster + gap + labels).
+	GridRowHeight = PosterHeight + PosterGap + FontSizeSmall + FontSizeCaption + 16
+	// SectionRowHeight is the height of a PosterGrid row including focus padding.
+	SectionRowHeight = PosterHeight + FontSizeSmall + FontSizeCaption + 24 + PosterFocusPad*2
+	// SectionFullHeight is a PosterGrid section including title and gap.
+	SectionFullHeight = SectionRowHeight + SectionTitleH + SectionGap
+
+	// ScrollWheelSpeed is pixels per mouse wheel scroll unit.
+	ScrollWheelSpeed = 60
 )

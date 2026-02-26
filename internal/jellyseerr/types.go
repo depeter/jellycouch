@@ -1,5 +1,7 @@
 package jellyseerr
 
+import "github.com/depeter/jellycouch/internal/constants"
+
 // Media status values from Jellyseerr API.
 const (
 	StatusUnknown            = 1
@@ -55,7 +57,7 @@ func (sr SearchResult) PosterURL() string {
 	if sr.PosterPath == "" {
 		return ""
 	}
-	return "https://image.tmdb.org/t/p/w300" + sr.PosterPath
+	return constants.TMDBPosterW300 + sr.PosterPath
 }
 
 // MediaInfo contains request/availability status for a media item.

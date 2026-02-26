@@ -268,7 +268,7 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 	// Mouse wheel scroll (always active)
 	_, wy := MouseWheelDelta()
 	if wy != 0 {
-		hs.targetScrollY -= wy * 60
+		hs.targetScrollY -= wy * ScrollWheelSpeed
 		if hs.targetScrollY < 0 {
 			hs.targetScrollY = 0
 		}
@@ -378,7 +378,7 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 }
 
 func (hs *HomeScreen) ensureSectionVisible() {
-	sectionHeight := float64(PosterHeight + FontSizeSmall + FontSizeCaption + 24 + PosterFocusPad*2 + SectionTitleH + SectionGap)
+	sectionHeight := float64(SectionFullHeight)
 	targetY := float64(hs.sectionIndex) * sectionHeight
 	maxScroll := targetY - float64(ScreenHeight)/4
 	if maxScroll < 0 {

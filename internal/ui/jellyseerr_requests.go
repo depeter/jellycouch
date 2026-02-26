@@ -10,6 +10,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 
 	"github.com/depeter/jellycouch/internal/cache"
+	"github.com/depeter/jellycouch/internal/constants"
 	"github.com/depeter/jellycouch/internal/jellyseerr"
 )
 
@@ -152,7 +153,7 @@ func (jr *JellyseerrRequestsScreen) fetchDetailForRequest(idx int, mediaType str
 	}
 
 	if posterPath != "" {
-		posterURL := "https://image.tmdb.org/t/p/w300" + posterPath
+		posterURL := constants.TMDBPosterW300 + posterPath
 		if img := jr.imgCache.Get(posterURL); img != nil {
 			jr.gridItems[idx].Image = img
 		} else {
@@ -228,7 +229,7 @@ func (jr *JellyseerrRequestsScreen) Update() (*ScreenTransition, error) {
 	// Mouse wheel scroll
 	_, wy := MouseWheelDelta()
 	if wy != 0 {
-		jr.targetScrollY -= wy * 60
+		jr.targetScrollY -= wy * ScrollWheelSpeed
 		if jr.targetScrollY < 0 {
 			jr.targetScrollY = 0
 		}
@@ -266,7 +267,7 @@ func (jr *JellyseerrRequestsScreen) Update() (*ScreenTransition, error) {
 				col := i % jr.grid.Cols
 				row := i / jr.grid.Cols
 				x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-				iy := baseY + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
+				iy := baseY + float64(row)*(GridRowHeight)
 				if PointInRect(mx, my, x, iy, PosterWidth, PosterHeight) {
 					jr.focusMode = 1
 					jr.grid.Focused = i
@@ -401,7 +402,7 @@ func (jr *JellyseerrRequestsScreen) Draw(dst *ebiten.Image) {
 		col := i % jr.grid.Cols
 		row := i / jr.grid.Cols
 		x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-		iy := baseY + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16) - jr.scrollY
+		iy := baseY + float64(row)*(GridRowHeight) - jr.scrollY
 
 		if iy+PosterHeight < 0 || iy > float64(ScreenHeight) {
 			continue

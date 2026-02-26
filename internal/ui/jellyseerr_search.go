@@ -72,7 +72,7 @@ func (js *JellyseerrSearchScreen) Update() (*ScreenTransition, error) {
 	// Mouse wheel scroll
 	_, wy := MouseWheelDelta()
 	if wy != 0 {
-		js.targetScrollY -= wy * 60
+		js.targetScrollY -= wy * ScrollWheelSpeed
 		if js.targetScrollY < 0 {
 			js.targetScrollY = 0
 		}
@@ -105,7 +105,7 @@ func (js *JellyseerrSearchScreen) Update() (*ScreenTransition, error) {
 				col := i % js.grid.Cols
 				row := i / js.grid.Cols
 				x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-				iy := resultBaseY + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16)
+				iy := resultBaseY + float64(row)*(GridRowHeight)
 				if PointInRect(mx, my, x, iy, PosterWidth, PosterHeight) {
 					js.focusMode = 1
 					js.grid.Focused = i
@@ -291,7 +291,7 @@ func (js *JellyseerrSearchScreen) Draw(dst *ebiten.Image) {
 		col := i % js.grid.Cols
 		row := i / js.grid.Cols
 		x := SectionPadding + float64(col)*(PosterWidth+PosterGap)
-		iy := y + float64(row)*(PosterHeight+PosterGap+FontSizeSmall+FontSizeCaption+16) - js.scrollY
+		iy := y + float64(row)*(GridRowHeight) - js.scrollY
 
 		if iy+PosterHeight < 0 || iy > float64(ScreenHeight) {
 			continue
