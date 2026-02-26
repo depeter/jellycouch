@@ -219,9 +219,9 @@ func (g *Game) prefetchNextEpisode(item *jellyfin.MediaItem) {
 	// Try to fetch a thumbnail image
 	imgURL := ""
 	if _, ok := full.ImageTags["Thumb"]; ok {
-		imgURL = g.Client.GetImageURL(full.ID, jellyfin.ImageThumb, 240, 0)
+		imgURL = g.Client.GetImageURL(full.ID, jellyfin.ImageThumb, 480, 0)
 	} else if _, ok := full.ImageTags["Primary"]; ok {
-		imgURL = g.Client.GetImageURL(full.ID, jellyfin.ImagePrimary, 240, 0)
+		imgURL = g.Client.GetImageURL(full.ID, jellyfin.ImagePrimary, 480, 0)
 	}
 
 	if imgURL != "" {

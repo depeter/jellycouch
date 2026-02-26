@@ -564,9 +564,12 @@ func (o *PlaybackOverlay) renderBar() {
 	// Manage image overlay for next-episode tooltip
 	nextFocused := o.focusedBtn == BtnNext && o.showNextBtn && o.focusZone == ZoneButtons
 	if nextFocused && epInfo != nil && epInfo.ImagePath != "" {
-		// Position thumbnail centered above the bar area
+		// Position thumbnail centered, just above the ASS bar.
+		// The bar (buttons + time + progress + tooltip text) occupies roughly
+		// the bottom 18% of the screen. Place the image above that with a gap.
+		barTopY := o.screenH - o.screenH*20/100
 		imgX := (o.screenW - epInfo.ImageW) / 2
-		imgY := o.screenH - o.screenH*35/100 // ~35% from bottom
+		imgY := barTopY - epInfo.ImageH - o.screenH*1/100
 		o.player.OverlayAdd(0, imgX, imgY, epInfo.ImagePath, epInfo.ImageW, epInfo.ImageH)
 		o.imgOverlayShown = true
 	} else if o.imgOverlayShown {
@@ -588,10 +591,10 @@ func (o *PlaybackOverlay) renderBar() {
 		if epInfo != nil {
 			tooltip := fmt.Sprintf("Up Next: S%dE%d \u00B7 %s",
 				epInfo.SeasonNumber, epInfo.EpisodeNumber, epInfo.Title)
-			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(11), assColorWhite))
+			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(13), assColorWhite))
 			b.WriteString(tooltip + "\\N")
 		} else if noNext {
-			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(11), assColorDimGray))
+			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(13), assColorDimGray))
 			b.WriteString("No next episode\\N")
 		}
 	}
