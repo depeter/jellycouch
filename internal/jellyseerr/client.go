@@ -10,6 +10,20 @@ import (
 	"time"
 )
 
+// API endpoint paths.
+const (
+	pathSearch         = "/api/v1/search"
+	pathTrending       = "/api/v1/discover/trending"
+	pathDiscoverMovies = "/api/v1/discover/movies"
+	pathDiscoverTV     = "/api/v1/discover/tv"
+	pathRequest        = "/api/v1/request"
+	pathRequestCount   = "/api/v1/request/count"
+	pathMovie          = "/api/v1/movie"
+	pathTV             = "/api/v1/tv"
+	pathRadarr         = "/api/v1/settings/radarr"
+	pathSonarr         = "/api/v1/settings/sonarr"
+)
+
 // Client is a lightweight HTTP client for the Jellyseerr API.
 type Client struct {
 	baseURL    string
