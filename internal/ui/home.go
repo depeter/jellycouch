@@ -189,8 +189,14 @@ func (hs *HomeScreen) convertItemsForGrid(grid *PosterGrid, items []jellyfin.Med
 		result[i].Watched = item.Played
 		result[i].Rating = float64(item.CommunityRating)
 
+		// For episodes, show series poster instead of episode thumbnail
+		posterID := item.ID
+		if item.Type == "Episode" && item.SeriesID != "" {
+			posterID = item.SeriesID
+		}
+
 		// Async load poster image — capture grid pointer and item ID for race-safe callback
-		url := hs.client.GetPosterURL(item.ID)
+		url := hs.client.GetPosterURL(posterID)
 		itemID := item.ID
 		hs.imgCache.LoadAsync(url, func(img *ebiten.Image) {
 			hs.mu.Lock()

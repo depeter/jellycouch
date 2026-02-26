@@ -133,14 +133,14 @@ func NewLibraryScreen(client *jellyfin.Client, imgCache *cache.ImageCache, paren
 	}
 
 	filterBar := NewFilterBar([]FilterOption{
-		{Label: "Sort", Options: sortLabels, Selected: 0},
+		{Label: "Sort", Options: sortLabels, Selected: 2},       // Date Added (New)
 		{Label: "Genre", Options: []string{"All"}, Selected: 0},
-		{Label: "Status", Options: statusLabels, Selected: 0},
+		{Label: "Status", Options: statusLabels, Selected: 1}, // Unplayed
 		{Label: "Letter", Options: letterOptions, Selected: 0},
 		{Label: "Year", Options: yearLabels, Selected: 0},
 	})
 
-	return &LibraryScreen{
+	ls := &LibraryScreen{
 		client:    client,
 		imgCache:  imgCache,
 		parentID:  parentID,
@@ -150,6 +150,8 @@ func NewLibraryScreen(client *jellyfin.Client, imgCache *cache.ImageCache, paren
 		filterBar: filterBar,
 		focusMode: focusGrid,
 	}
+	ls.filter = ls.buildFilter()
+	return ls
 }
 
 func (ls *LibraryScreen) Name() string { return "Library: " + ls.title }
