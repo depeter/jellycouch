@@ -551,6 +551,54 @@ const (
 	assColorBarBg   = "\\1c&H333333&"
 )
 
+// btnCenterX estimates the pixel X coordinate of a button's center in the
+// rendered button row. The row uses \an2 (bottom-center) so it's centered on
+// screen. We walk the visible buttons counting rune widths (including
+// separators and focus brackets) to find where the target lands.
+func (o *PlaybackOverlay) btnCenterX(target ControlButton) int {
+	btnLabels := map[ControlButton]int{
+		BtnSeekBack60: 2, // ◀◀
+		BtnSeekBack10: 1, // ◀
+		BtnPlayPause:  2, // ❚❚ or ▶ (use 2 as worst case)
+		BtnSeekFwd10:  1, // ▶
+		BtnSeekFwd60:  2, // ▶▶
+		BtnSubtitles:  1, // ☰
+		BtnAudio:      1, // ♪
+		BtnStop:       1, // ■
+		BtnNext:       1, // ⏭
+	}
+
+	vis := o.visibleButtons()
+	totalRunes := 0
+	targetStart := 0
+	targetLen := 0
+
+	for i, btn := range vis {
+		if i > 0 {
+			totalRunes += 5 // "  │  "
+		}
+		labelLen := btnLabels[btn]
+		if btn == o.focusedBtn {
+			labelLen += 4 // "[ " + " ]"
+		}
+		if btn == target {
+			targetStart = totalRunes
+			targetLen = labelLen
+		}
+		totalRunes += labelLen
+	}
+
+	// Approximate character width: OSD ASS \fs maps to pixel height,
+	// average glyph width is roughly 55% of that for the default font.
+	fontSize := float64(o.scale(12))
+	charW := fontSize * 0.55
+	barWidthPx := float64(totalRunes) * charW
+	targetCenterRune := float64(targetStart) + float64(targetLen)/2.0
+	barStartX := (float64(o.screenW) - barWidthPx) / 2.0
+
+	return int(barStartX + targetCenterRune*charW)
+}
+
 // renderBar renders the control bar ASS and sends it to mpv.
 func (o *PlaybackOverlay) renderBar() {
 	o.lastRender = time.Now()
@@ -564,12 +612,17 @@ func (o *PlaybackOverlay) renderBar() {
 	// Manage image overlay for next-episode tooltip
 	nextFocused := o.focusedBtn == BtnNext && o.showNextBtn && o.focusZone == ZoneButtons
 	if nextFocused && epInfo != nil && epInfo.ImagePath != "" {
-		// Position thumbnail centered, just above the ASS bar.
-		// The bar (buttons + time + progress + tooltip text) occupies roughly
-		// the bottom 18% of the screen. Place the image above that with a gap.
-		barTopY := o.screenH - o.screenH*20/100
-		imgX := (o.screenW - epInfo.ImageW) / 2
-		imgY := barTopY - epInfo.ImageH - o.screenH*1/100
+		// Position thumbnail centered above the Next button.
+		centerX := o.btnCenterX(BtnNext)
+		imgX := centerX - epInfo.ImageW/2
+		// Clamp to screen bounds
+		if imgX < 0 {
+			imgX = 0
+		} else if imgX+epInfo.ImageW > o.screenW {
+			imgX = o.screenW - epInfo.ImageW
+		}
+		// Place above the bar area (~20% from bottom) with a small gap
+		imgY := o.screenH - o.screenH*20/100 - epInfo.ImageH
 		o.player.OverlayAdd(0, imgX, imgY, epInfo.ImagePath, epInfo.ImageW, epInfo.ImageH)
 		o.imgOverlayShown = true
 	} else if o.imgOverlayShown {
