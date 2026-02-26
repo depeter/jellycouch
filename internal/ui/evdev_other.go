@@ -2,7 +2,12 @@
 
 package ui
 
-// evdevBackJustPressed is a no-op on non-Linux platforms.
-func evdevBackJustPressed() bool {
+// EvdevBackJustPressed is a no-op on non-Linux platforms.
+func EvdevBackJustPressed() bool {
 	return false
+}
+
+// EvdevRecentEvents is a no-op on non-Linux platforms.
+func EvdevRecentEvents() []EvdevEvent {
+	return nil
 }
