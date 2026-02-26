@@ -52,6 +52,26 @@ type UserData struct {
 	IsFavorite            bool
 }
 
+// Shared field/image-type lists used across multiple API calls.
+var (
+	defaultFields = []jellyfin.ItemFields{
+		jellyfin.ITEMFIELDS_OVERVIEW,
+		jellyfin.ITEMFIELDS_PRIMARY_IMAGE_ASPECT_RATIO,
+		jellyfin.ITEMFIELDS_GENRES,
+		jellyfin.ITEMFIELDS_TAGLINES,
+	}
+	defaultImageTypes = []jellyfin.ImageType{
+		jellyfin.IMAGETYPE_PRIMARY,
+		jellyfin.IMAGETYPE_BACKDROP,
+	}
+	// metadataFields includes overview and metadata but not aspect ratio / image types.
+	metadataFields = []jellyfin.ItemFields{
+		jellyfin.ITEMFIELDS_OVERVIEW,
+		jellyfin.ITEMFIELDS_GENRES,
+		jellyfin.ITEMFIELDS_TAGLINES,
+	}
+)
+
 // GetViews returns the user's media libraries (Movies, TV Shows, Music, etc.)
 func (c *Client) GetViews() ([]MediaItem, error) {
 	result, _, err := c.api.UserViewsAPI.GetUserViews(c.reqCtx()).UserId(c.userID).Execute()
@@ -66,8 +86,8 @@ func (c *Client) GetLatestMedia(parentID string, limit int) ([]MediaItem, error)
 	req := c.api.UserLibraryAPI.GetLatestMedia(c.reqCtx()).
 		UserId(c.userID).
 		Limit(int32(limit)).
-		Fields([]jellyfin.ItemFields{jellyfin.ITEMFIELDS_OVERVIEW, jellyfin.ITEMFIELDS_PRIMARY_IMAGE_ASPECT_RATIO, jellyfin.ITEMFIELDS_GENRES, jellyfin.ITEMFIELDS_TAGLINES}).
-		EnableImageTypes([]jellyfin.ImageType{jellyfin.IMAGETYPE_PRIMARY, jellyfin.IMAGETYPE_BACKDROP}).
+		Fields(defaultFields).
+		EnableImageTypes(defaultImageTypes).
 		ImageTypeLimit(1)
 	if parentID != "" {
 		req = req.ParentId(parentID)
@@ -85,8 +105,8 @@ func (c *Client) GetItems(parentID string, start, limit int, itemTypes []string)
 		UserId(c.userID).
 		StartIndex(int32(start)).
 		Limit(int32(limit)).
-		Fields([]jellyfin.ItemFields{jellyfin.ITEMFIELDS_OVERVIEW, jellyfin.ITEMFIELDS_PRIMARY_IMAGE_ASPECT_RATIO, jellyfin.ITEMFIELDS_GENRES, jellyfin.ITEMFIELDS_TAGLINES}).
-		EnableImageTypes([]jellyfin.ImageType{jellyfin.IMAGETYPE_PRIMARY, jellyfin.IMAGETYPE_BACKDROP}).
+		Fields(defaultFields).
+		EnableImageTypes(defaultImageTypes).
 		ImageTypeLimit(1).
 		Recursive(true).
 		SortBy([]jellyfin.ItemSortBy{jellyfin.ITEMSORTBY_SORT_NAME}).
@@ -127,8 +147,8 @@ func (c *Client) GetFilteredItems(parentID string, start, limit int, itemTypes [
 		UserId(c.userID).
 		StartIndex(int32(start)).
 		Limit(int32(limit)).
-		Fields([]jellyfin.ItemFields{jellyfin.ITEMFIELDS_PRIMARY_IMAGE_ASPECT_RATIO, jellyfin.ITEMFIELDS_GENRES, jellyfin.ITEMFIELDS_TAGLINES}).
-		EnableImageTypes([]jellyfin.ImageType{jellyfin.IMAGETYPE_PRIMARY}).
+		Fields(defaultFields).
+		EnableImageTypes(defaultImageTypes).
 		ImageTypeLimit(1).
 		Recursive(true).
 		SortBy([]jellyfin.ItemSortBy{sortBy}).
@@ -212,7 +232,7 @@ func (c *Client) GetGenres(parentID string, itemTypes []string) ([]string, error
 func (c *Client) GetSeasons(seriesID string) ([]MediaItem, error) {
 	result, _, err := c.api.TvShowsAPI.GetSeasons(c.ctx, seriesID).
 		UserId(c.userID).
-		Fields([]jellyfin.ItemFields{jellyfin.ITEMFIELDS_OVERVIEW, jellyfin.ITEMFIELDS_GENRES, jellyfin.ITEMFIELDS_TAGLINES}).
+		Fields(metadataFields).
 		Execute()
 	if err != nil {
 		return nil, fmt.Errorf("get seasons: %w", err)
@@ -224,7 +244,7 @@ func (c *Client) GetSeasons(seriesID string) ([]MediaItem, error) {
 func (c *Client) GetEpisodes(seriesID string, seasonID string) ([]MediaItem, error) {
 	req := c.api.TvShowsAPI.GetEpisodes(c.ctx, seriesID).
 		UserId(c.userID).
-		Fields([]jellyfin.ItemFields{jellyfin.ITEMFIELDS_OVERVIEW, jellyfin.ITEMFIELDS_GENRES, jellyfin.ITEMFIELDS_TAGLINES}).
+		Fields(metadataFields).
 		SeasonId(seasonID)
 	result, _, err := req.Execute()
 	if err != nil {
@@ -238,8 +258,8 @@ func (c *Client) GetResumeItems(limit int) ([]MediaItem, error) {
 	result, _, err := c.api.ItemsAPI.GetResumeItems(c.reqCtx()).
 		UserId(c.userID).
 		Limit(int32(limit)).
-		Fields([]jellyfin.ItemFields{jellyfin.ITEMFIELDS_OVERVIEW, jellyfin.ITEMFIELDS_GENRES, jellyfin.ITEMFIELDS_TAGLINES}).
-		EnableImageTypes([]jellyfin.ImageType{jellyfin.IMAGETYPE_PRIMARY, jellyfin.IMAGETYPE_BACKDROP}).
+		Fields(defaultFields).
+		EnableImageTypes(defaultImageTypes).
 		ImageTypeLimit(1).
 		Execute()
 	if err != nil {
@@ -253,7 +273,7 @@ func (c *Client) GetNextUp(limit int) ([]MediaItem, error) {
 	result, _, err := c.api.TvShowsAPI.GetNextUp(c.reqCtx()).
 		UserId(c.userID).
 		Limit(int32(limit)).
-		Fields([]jellyfin.ItemFields{jellyfin.ITEMFIELDS_OVERVIEW, jellyfin.ITEMFIELDS_GENRES, jellyfin.ITEMFIELDS_TAGLINES}).
+		Fields(metadataFields).
 		EnableImageTypes([]jellyfin.ImageType{jellyfin.IMAGETYPE_PRIMARY}).
 		Execute()
 	if err != nil {
@@ -269,7 +289,7 @@ func (c *Client) SearchItems(query string, limit int) ([]MediaItem, error) {
 		SearchTerm(query).
 		Limit(int32(limit)).
 		Recursive(true).
-		Fields([]jellyfin.ItemFields{jellyfin.ITEMFIELDS_OVERVIEW, jellyfin.ITEMFIELDS_GENRES, jellyfin.ITEMFIELDS_TAGLINES}).
+		Fields(metadataFields).
 		EnableImageTypes([]jellyfin.ImageType{jellyfin.IMAGETYPE_PRIMARY}).
 		IncludeItemTypes([]jellyfin.BaseItemKind{
 			jellyfin.BASEITEMKIND_MOVIE,
