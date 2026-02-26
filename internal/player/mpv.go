@@ -234,8 +234,13 @@ func (p *Player) LoadFile(url string, itemID string, startSeconds float64) error
 	p.paused = false
 	p.mu.Unlock()
 	return p.do(func(m *mpv.Mpv) error {
+		// Set or clear start position before loading the file.
+		// Using the options/ property prefix is more reliable than
+		// passing start= as a loadfile option via command_string.
 		if startSeconds > 0 {
-			return m.CommandString(mpvCmd("loadfile", url, "replace", fmt.Sprintf("start=%.1f", startSeconds)))
+			must(m.SetPropertyString("options/start", fmt.Sprintf("%.1f", startSeconds)))
+		} else {
+			must(m.SetPropertyString("options/start", "none"))
 		}
 		return m.CommandString(mpvCmd("loadfile", url))
 	})
