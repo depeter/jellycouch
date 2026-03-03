@@ -158,7 +158,7 @@ func (dp *DetailPanel) Draw(dst *ebiten.Image) {
 	for i, label := range dp.Buttons {
 		tw, _ := MeasureText(label, FontSizeBody)
 		w := tw + 40
-		h := float64(36)
+		h := float64(ButtonHeight)
 		bx := float32(btnX)
 		by := float32(y)
 

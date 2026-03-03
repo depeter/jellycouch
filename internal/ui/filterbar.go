@@ -156,7 +156,7 @@ func (fb *FilterBar) HandleClick(mx, my int) (int, bool) {
 }
 
 const (
-	filterBarHeight  = 38.0
+	filterBarHeight  = 42.0
 	filterBarPadding = 8.0
 	filterPillGap    = 12.0
 	filterPillPadX   = 14.0

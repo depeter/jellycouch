@@ -79,7 +79,7 @@ func (js *JellyseerrSearchScreen) Update() (*ScreenTransition, error) {
 		barX := float64(SectionPadding)
 		barY := float64(NavBarHeight) + 20.0
 		barW := float64(ScreenWidth - SectionPadding*2)
-		barH := 44.0
+		barH := 48.0
 		if PointInRect(mx, my, barX, barY, barW, barH) {
 			if js.input.Text != "" && PointInRect(mx, my, barX+barW-40, barY, 40, barH) {
 				js.input.Clear()
@@ -220,7 +220,7 @@ func (js *JellyseerrSearchScreen) Draw(dst *ebiten.Image) {
 	barX := float32(SectionPadding)
 	barY := float32(NavBarHeight + 58)
 	barW := float32(ScreenWidth - SectionPadding*2)
-	barH := float32(44)
+	barH := float32(48)
 
 	bgColor := ColorSurface
 	if js.focusMode == 0 {

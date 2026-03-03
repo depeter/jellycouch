@@ -472,7 +472,7 @@ func (ls *LibraryScreen) updateGrid() (*ScreenTransition, error) {
 
 func (ls *LibraryScreen) ensureVisible() {
 	row := ls.grid.FocusedRow()
-	rowH := float64(PosterHeight + PosterGap + FontSizeSmall + FontSizeCaption + 16)
+	rowH := float64(GridRowHeight)
 	visibleH := float64(ScreenHeight) - ls.gridBaseY()
 	targetY := float64(row)*rowH - visibleH/2 + rowH/2
 	if targetY < 0 {

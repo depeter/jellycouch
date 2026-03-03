@@ -745,7 +745,7 @@ func (jr *JellyseerrRequestScreen) Draw(dst *ebiten.Image) {
 	for i, label := range jr.buttons {
 		tw, _ := MeasureText(label, FontSizeBody)
 		w := tw + 40
-		h := 36.0
+		h := float64(ButtonHeight)
 
 		jr.buttonRects[i] = ButtonRect{X: btnX, Y: btnY, W: w, H: h}
 
@@ -780,7 +780,7 @@ func (jr *JellyseerrRequestScreen) Draw(dst *ebiten.Image) {
 
 		for i, season := range jr.tvDetail.Seasons {
 			isFocused := jr.focusMode == 2 && i == jr.seasonFocused
-			rowH := 32.0
+			rowH := 38.0
 
 			if isFocused {
 				vector.DrawFilledRect(dst, float32(x-8), float32(optY-4),
@@ -813,7 +813,7 @@ func (jr *JellyseerrRequestScreen) Draw(dst *ebiten.Image) {
 
 // drawOptions draws the option rows and returns the Y position after the last row.
 func (jr *JellyseerrRequestScreen) drawOptions(dst *ebiten.Image, x, y float64) float64 {
-	rowH := 32.0
+	rowH := 38.0
 	optW := 500.0
 
 	for row := 0; row < jr.optionRowCount(); row++ {

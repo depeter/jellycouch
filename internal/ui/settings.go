@@ -317,7 +317,7 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 
 		for ii, item := range sec.Items {
 			isFocused := si == ss.sectionIndex && ii == ss.itemIndex
-			rowH := float32(40)
+			rowH := float32(44)
 			rowX := float64(SectionPadding - 8)
 			rowW := float64(ScreenWidth - SectionPadding*2 + 16)
 

@@ -11,8 +11,8 @@ var (
 	ColorPrimaryDark   = color.RGBA{R: 0x00, G: 0x78, B: 0xA8, A: 0xFF}
 	ColorAccent        = color.RGBA{R: 0xAA, G: 0x5C, B: 0xC3, A: 0xFF} // Purple accent
 	ColorText          = color.RGBA{R: 0xE0, G: 0xE0, B: 0xE0, A: 0xFF}
-	ColorTextSecondary = color.RGBA{R: 0x90, G: 0x90, B: 0x9C, A: 0xFF}
-	ColorTextMuted     = color.RGBA{R: 0x60, G: 0x60, B: 0x6C, A: 0xFF}
+	ColorTextSecondary = color.RGBA{R: 0xB0, G: 0xB0, B: 0xBA, A: 0xFF}
+	ColorTextMuted     = color.RGBA{R: 0x80, G: 0x80, B: 0x8C, A: 0xFF}
 	ColorFocusBorder   = color.RGBA{R: 0x00, G: 0xA4, B: 0xDC, A: 0xFF}
 	ColorOverlay       = color.RGBA{R: 0x00, G: 0x00, B: 0x00, A: 0xC0}
 	ColorError         = color.RGBA{R: 0xE0, G: 0x40, B: 0x40, A: 0xFF}
@@ -25,22 +25,23 @@ const (
 	PosterWidth     = 220
 	PosterHeight    = 330
 	PosterGap       = 28
-	PosterFocusPad  = 8
+	PosterFocusPad  = 10
 
 	BackdropHeight  = 400
 
 	SectionPadding  = 40
 	SectionGap      = 30
-	SectionTitleH   = 36
+	SectionTitleH   = 40
 
-	NavBarHeight    = 60
+	NavBarHeight    = 68
 	NavBarPadding   = 20
+	ButtonHeight    = 44
 
-	FontSizeTitle   = 28
-	FontSizeHeading = 22
-	FontSizeBody    = 16
-	FontSizeSmall   = 13
-	FontSizeCaption = 11
+	FontSizeTitle   = 32
+	FontSizeHeading = 26
+	FontSizeBody    = 18
+	FontSizeSmall   = 16
+	FontSizeCaption = 14
 
 	FocusAnimSpeed  = 0.15
 	ScrollAnimSpeed = 0.12

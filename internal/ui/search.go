@@ -87,7 +87,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 		barX := float64(SectionPadding)
 		barY := float64(NavBarHeight) + 20.0
 		barW := float64(ScreenWidth - SectionPadding*2)
-		barH := 44.0
+		barH := 48.0
 		if PointInRect(mx, my, barX, barY, barW, barH) {
 			// Check clear button click (right edge of search bar)
 			if ss.input.Text != "" && PointInRect(mx, my, barX+barW-40, barY, 40, barH) {
@@ -118,7 +118,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 	rmx, rmy, rclicked := MouseJustRightClicked()
 	if rclicked && len(ss.gridItems) > 0 {
 		barY := float64(NavBarHeight) + 20.0
-		barH := 44.0
+		barH := 48.0
 		resultBaseY := barY + barH + 40 - ss.ScrollY
 		if idx, ok := ss.grid.HandleClick(rmx, rmy, SectionPadding, resultBaseY); ok {
 			if idx < len(ss.results) {
@@ -206,7 +206,7 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 	barX := float32(SectionPadding)
 	barY := float32(NavBarHeight + 20)
 	barW := float32(ScreenWidth - SectionPadding*2)
-	barH := float32(44)
+	barH := float32(48)
 
 	bgColor := ColorSurface
 	if ss.focusMode == 0 {

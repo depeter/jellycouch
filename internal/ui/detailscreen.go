@@ -365,7 +365,7 @@ func (ds *DetailScreen) Draw(dst *ebiten.Image) {
 			y += FontSizeBody + 4
 			if ep.Overview != "" {
 				maxW := float64(ScreenWidth) - SectionPadding*2 - 200
-				h := DrawTextWrapped(dst, ep.Overview, SectionPadding, y, maxW, FontSizeSmall, ColorTextSecondary)
+				h := DrawTextWrapped(dst, ep.Overview, SectionPadding, y, maxW, FontSizeBody, ColorTextSecondary)
 				y += h + 8
 			}
 		}

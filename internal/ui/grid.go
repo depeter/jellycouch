@@ -288,7 +288,7 @@ func drawPosterItem(dst *ebiten.Image, item GridItem, x, y float64, focused bool
 
 	// Progress bar at bottom of poster
 	if item.Progress > 0 && item.Progress < 1.0 {
-		barH := float32(4)
+		barH := float32(6)
 		barY := float32(y + PosterHeight - float64(barH))
 		vector.DrawFilledRect(dst, float32(x), barY,
 			float32(PosterWidth), barH,
@@ -300,7 +300,7 @@ func drawPosterItem(dst *ebiten.Image, item GridItem, x, y float64, focused bool
 
 	// Watched checkmark badge (top-right corner with green circle)
 	if item.Watched {
-		badgeR := float32(10)
+		badgeR := float32(14)
 		badgeCX := float32(x+PosterWidth) - badgeR - 4
 		badgeCY := float32(y) + badgeR + 4
 		vector.DrawFilledCircle(dst, badgeCX, badgeCY, badgeR, ColorSuccess, false)
