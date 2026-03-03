@@ -255,7 +255,7 @@ func (o *PlaybackOverlay) renderBar() {
 
 	// Button row
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(19)))
-	playPauseLabel := "${?pause==yes:\u25B6}${!pause:\u23F8}"
+	playPauseLabel := "${?pause==yes:\u25B6}${!pause==yes:\u25AE\u25AE}"
 	btnLabelMap := map[ControlButton]string{
 		BtnSeekBack60: "\u25C0\u25C0",
 		BtnSeekBack10: "\u25C0",
