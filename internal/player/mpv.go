@@ -128,6 +128,7 @@ func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 
 	// Enable yt-dlp for YouTube URLs (trailers, etc.)
 	must(m.SetOptionString("ytdl", "yes"))
+	must(m.SetOptionString("ytdl-format", "bestvideo[height<=?1080]+bestaudio/best"))
 
 	if err := m.Initialize(); err != nil {
 		initErr <- fmt.Errorf("mpv init: %w", err)

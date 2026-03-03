@@ -38,8 +38,9 @@ type DetailScreen struct {
 	focusMode  int
 	loaded     bool
 
-	OnPlay    func(item jellyfin.MediaItem, resumeTicks int64)
-	OnLibrary func(parentID, title string)
+	OnPlay         func(item jellyfin.MediaItem, resumeTicks int64)
+	OnPlayTrailer  func(url string)
+	OnLibrary      func(parentID, title string)
 
 	mu sync.Mutex
 }
@@ -75,6 +76,9 @@ func NewDetailScreen(client *jellyfin.Client, imgCache *cache.ImageCache, item j
 	buttons := []string{"Play"}
 	if item.PlaybackPositionTicks > 0 {
 		buttons = append([]string{"Resume"}, buttons...)
+	}
+	if item.TrailerURL != "" {
+		buttons = append(buttons, "Trailer")
 	}
 	if item.Type == "Series" {
 		buttons = append(buttons, "Browse Seasons")
@@ -281,6 +285,10 @@ func (ds *DetailScreen) handleButtonPress() {
 	case "Resume":
 		if ds.OnPlay != nil {
 			ds.OnPlay(ds.item, ds.item.PlaybackPositionTicks)
+		}
+	case "Trailer":
+		if ds.OnPlayTrailer != nil {
+			ds.OnPlayTrailer(ds.item.TrailerURL)
 		}
 	case "Browse Seasons":
 		if ds.OnLibrary != nil {

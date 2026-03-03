@@ -67,6 +67,9 @@ func (sf *screenFactory) pushDetail(item jellyfin.MediaItem) {
 	detail.OnPlay = func(item jellyfin.MediaItem, resumeTicks int64) {
 		sf.game.StartPlayback(item.ID, resumeTicks, &item)
 	}
+	detail.OnPlayTrailer = func(url string) {
+		sf.game.PlayURL(url)
+	}
 	detail.OnLibrary = func(parentID, title string) {
 		sf.pushLibrary(parentID, title, nil)
 	}

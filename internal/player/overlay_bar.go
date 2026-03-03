@@ -250,7 +250,7 @@ func (o *PlaybackOverlay) renderBar() {
 	b.WriteString("${time-pos} / ${duration}")
 	b.WriteString("    ")
 	b.WriteString("${?mute==yes:Muted}${!mute:Vol: ${volume}%}")
-	b.WriteString(fmt.Sprintf("${?pause==yes:  \\N{\\fs%d%s$>Paused}", o.scale(10), assColorGray))
+	b.WriteString(fmt.Sprintf("${?pause==yes:  \\N{\\fs%d%s}Paused}", o.scale(10), assColorGray))
 	b.WriteString("\\N")
 
 	// Button row

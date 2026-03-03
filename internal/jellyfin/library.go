@@ -43,6 +43,7 @@ type MediaItem struct {
 	Genres                []string
 	Taglines              []string
 	OfficialRating        string
+	TrailerURL            string
 }
 
 type UserData struct {
@@ -59,6 +60,7 @@ var (
 		jellyfin.ITEMFIELDS_PRIMARY_IMAGE_ASPECT_RATIO,
 		jellyfin.ITEMFIELDS_GENRES,
 		jellyfin.ITEMFIELDS_TAGLINES,
+		jellyfin.ITEMFIELDS_REMOTE_TRAILERS,
 	}
 	defaultImageTypes = []jellyfin.ImageType{
 		jellyfin.IMAGETYPE_PRIMARY,
@@ -382,6 +384,11 @@ func convertBaseItemDto(item *jellyfin.BaseItemDto) MediaItem {
 	mi.Genres = item.GetGenres()
 	mi.Taglines = item.GetTaglines()
 	mi.OfficialRating = item.GetOfficialRating()
+	if trailers := item.GetRemoteTrailers(); len(trailers) > 0 {
+		if u, ok := trailers[0].GetUrlOk(); ok && u != nil {
+			mi.TrailerURL = *u
+		}
+	}
 	mi.RecursiveItemCount = int(item.GetRecursiveItemCount())
 
 	if item.UserData.IsSet() {

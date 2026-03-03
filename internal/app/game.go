@@ -50,6 +50,11 @@ type Game struct {
 
 	startFullscreen bool // apply fullscreen on first Update() frame
 
+	// Cursor auto-hide during playback
+	lastMouseX, lastMouseY int
+	cursorIdleFrames       int
+	cursorHidden           bool
+
 	webCmd    *exec.Cmd
 	webExited chan struct{}
 }
@@ -140,6 +145,8 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 
 	g.State = StatePlay
 	g.playbackEnded.Store(false)
+	g.cursorIdleFrames = 0
+	g.cursorHidden = false
 }
 
 // PlayURL plays an arbitrary URL (e.g. YouTube trailer) via mpv without Jellyfin progress reporting.
@@ -160,6 +167,7 @@ func (g *Game) PlayURL(url string) {
 		log.Printf("Failed to set window ID: %v", err)
 	}
 
+	log.Printf("PlayURL: loading %s", url)
 	if err := g.Player.LoadFile(url, "", 0); err != nil {
 		log.Printf("Failed to load URL: %v", err)
 		return
@@ -174,6 +182,8 @@ func (g *Game) PlayURL(url string) {
 
 	g.State = StatePlay
 	g.playbackEnded.Store(false)
+	g.cursorIdleFrames = 0
+	g.cursorHidden = false
 }
 
 // StopPlayback transitions back to browse mode.
@@ -214,6 +224,10 @@ func (g *Game) StopPlayback() {
 	g.nextEpItem = nil
 	g.currentItem = nil
 	g.State = StateBrowse
+	if g.cursorHidden {
+		ebiten.SetCursorMode(ebiten.CursorModeVisible)
+		g.cursorHidden = false
+	}
 }
 
 // prefetchNextEpisode looks up the next episode and pre-fetches its metadata
@@ -433,6 +447,24 @@ actionsDrained:
 		// Update overlay auto-hide timer and next-up trigger
 		if g.overlay != nil {
 			g.overlay.Update()
+		}
+
+		// Auto-hide cursor after 3 seconds of no mouse movement
+		const cursorHideDelay = 180 // ~3s at 60fps
+		mx, my := ebiten.CursorPosition()
+		if mx != g.lastMouseX || my != g.lastMouseY {
+			g.lastMouseX, g.lastMouseY = mx, my
+			g.cursorIdleFrames = 0
+			if g.cursorHidden {
+				ebiten.SetCursorMode(ebiten.CursorModeVisible)
+				g.cursorHidden = false
+			}
+		} else {
+			g.cursorIdleFrames++
+			if !g.cursorHidden && g.cursorIdleFrames >= cursorHideDelay {
+				ebiten.SetCursorMode(ebiten.CursorModeHidden)
+				g.cursorHidden = true
+			}
 		}
 
 		// Apply prefetched next-episode result from goroutine (race-free)
