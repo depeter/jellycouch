@@ -229,7 +229,7 @@ func drawRequestBadge(dst *ebiten.Image, status int, x, y float64) {
 		return
 	}
 	badgeColor := statusBadgeColor(status)
-	bh := FontSizeSmall + 8.0
+	bh := FontSizeSmall + 10.0
 	bannerY := y + PosterHeight - bh
 	vector.DrawFilledRect(dst, float32(x), float32(bannerY),
 		float32(PosterWidth), float32(bh), badgeColor, false)
@@ -241,12 +241,12 @@ func drawRatingBadge(dst *ebiten.Image, rating float64, x, y float64) {
 	label := fmt.Sprintf("%.1f", rating)
 	tw, _ := MeasureText(label, FontSizeSmall)
 	starSize := FontSizeSmall * 0.45
-	padX := 6.0
-	padY := 3.0
+	padX := 8.0
+	padY := 4.0
 	bw := starSize*2 + 4 + tw + padX*2
 	bh := FontSizeSmall + padY*2
-	bx := x + 4
-	by := y + 4
+	bx := x + 6
+	by := y + 6
 
 	// Semi-transparent dark background
 	vector.DrawFilledRect(dst, float32(bx), float32(by),
@@ -288,7 +288,7 @@ func drawPosterItem(dst *ebiten.Image, item GridItem, x, y float64, focused bool
 
 	// Progress bar at bottom of poster
 	if item.Progress > 0 && item.Progress < 1.0 {
-		barH := float32(6)
+		barH := float32(8)
 		barY := float32(y + PosterHeight - float64(barH))
 		vector.DrawFilledRect(dst, float32(x), barY,
 			float32(PosterWidth), barH,
@@ -300,9 +300,9 @@ func drawPosterItem(dst *ebiten.Image, item GridItem, x, y float64, focused bool
 
 	// Watched checkmark badge (top-right corner with green circle)
 	if item.Watched {
-		badgeR := float32(14)
-		badgeCX := float32(x+PosterWidth) - badgeR - 4
-		badgeCY := float32(y) + badgeR + 4
+		badgeR := float32(18)
+		badgeCX := float32(x+PosterWidth) - badgeR - 6
+		badgeCY := float32(y) + badgeR + 6
 		vector.DrawFilledCircle(dst, badgeCX, badgeCY, badgeR, ColorSuccess, false)
 		drawCheckmark(dst, badgeCX, badgeCY, badgeR*0.5, ColorText)
 	}
@@ -323,12 +323,12 @@ func drawPosterItem(dst *ebiten.Image, item GridItem, x, y float64, focused bool
 		titleColor = ColorText
 	}
 	title := truncateText(item.Title, PosterWidth, FontSizeSmall)
-	DrawText(dst, title, x, y+PosterHeight+6, FontSizeSmall, titleColor)
+	DrawText(dst, title, x, y+PosterHeight+8, FontSizeSmall, titleColor)
 
 	// Subtitle below title
 	if item.Subtitle != "" {
 		sub := truncateText(item.Subtitle, PosterWidth, FontSizeCaption)
-		DrawText(dst, sub, x, y+PosterHeight+6+FontSizeSmall+4, FontSizeCaption, ColorTextMuted)
+		DrawText(dst, sub, x, y+PosterHeight+8+FontSizeSmall+6, FontSizeCaption, ColorTextMuted)
 	}
 }
 

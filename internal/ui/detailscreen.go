@@ -317,7 +317,7 @@ func (ds *DetailScreen) Draw(dst *ebiten.Image) {
 
 	// Episode list for TV shows
 	if len(ds.seasons) > 0 || (ds.episodeGrid != nil && len(ds.episodes) > 0) {
-		y := float64(BackdropHeight + 250)
+		y := float64(BackdropHeight + 280)
 
 		// Season tabs
 		if len(ds.seasons) > 0 {
@@ -329,25 +329,25 @@ func (ds *DetailScreen) Draw(dst *ebiten.Image) {
 					label = fmt.Sprintf("Season %d", season.IndexNumber)
 				}
 				w, _ := MeasureText(label, FontSizeBody)
-				tabH := FontSizeBody + 12.0
+				tabH := FontSizeBody + 16.0
 
-				ds.seasonTabRects[i] = ButtonRect{X: tabX - 4, Y: y - 4, W: w + 8, H: tabH}
+				ds.seasonTabRects[i] = ButtonRect{X: tabX - 6, Y: y - 6, W: w + 12, H: tabH}
 
 				if i == ds.selectedSeason {
 					if ds.focusMode == 2 {
 						// Highlighted background when season tabs are focused
-						vector.DrawFilledRect(dst, float32(tabX-8), float32(y-6),
-							float32(w+16), float32(tabH+4), ColorSurfaceHover, false)
+						vector.DrawFilledRect(dst, float32(tabX-12), float32(y-8),
+							float32(w+24), float32(tabH+6), ColorSurfaceHover, false)
 					}
 					DrawText(dst, label, tabX, y, FontSizeBody, ColorPrimary)
-					vector.DrawFilledRect(dst, float32(tabX-4), float32(y+FontSizeBody+2),
+					vector.DrawFilledRect(dst, float32(tabX-4), float32(y+FontSizeBody+4),
 						float32(w+8), 2, ColorPrimary, false)
 				} else {
 					DrawText(dst, label, tabX, y, FontSizeBody, ColorTextMuted)
 				}
-				tabX += w + 24
+				tabX += w + 32
 			}
-			y += FontSizeBody + 16
+			y += FontSizeBody + 20
 		}
 
 		// Loading indicator
@@ -362,11 +362,11 @@ func (ds *DetailScreen) Draw(dst *ebiten.Image) {
 			ep := ds.episodes[ds.episodeGrid.Focused]
 			epTitle := fmt.Sprintf("E%d: %s", ep.IndexNumber, ep.Name)
 			DrawText(dst, epTitle, SectionPadding, y, FontSizeBody, ColorText)
-			y += FontSizeBody + 4
+			y += FontSizeBody + 8
 			if ep.Overview != "" {
 				maxW := float64(ScreenWidth) - SectionPadding*2 - 200
 				h := DrawTextWrapped(dst, ep.Overview, SectionPadding, y, maxW, FontSizeBody, ColorTextSecondary)
-				y += h + 8
+				y += h + 12
 			}
 		}
 

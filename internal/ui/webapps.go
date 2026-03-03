@@ -50,8 +50,8 @@ func (s *WebAppsScreen) Update() (*ScreenTransition, error) {
 	// Mouse click
 	if mx, my, clicked := MouseJustClicked(); clicked {
 		for i := range s.apps {
-			rowY := NavBarHeight + 60 + float64(i)*60
-			if PointInRect(mx, my, SectionPadding, rowY, float64(ScreenWidth)-SectionPadding*2, 50) {
+			rowY := NavBarHeight + 80 + float64(i)*80
+			if PointInRect(mx, my, SectionPadding, rowY, float64(ScreenWidth)-SectionPadding*2, 70) {
 				s.focusIndex = i
 				if s.OnLaunch != nil {
 					s.OnLaunch(s.apps[i].URL)
@@ -65,18 +65,18 @@ func (s *WebAppsScreen) Update() (*ScreenTransition, error) {
 
 func (s *WebAppsScreen) Draw(dst *ebiten.Image) {
 	// Title
-	DrawText(dst, "Web Apps", SectionPadding, NavBarHeight+20, FontSizeTitle, ColorText)
+	DrawText(dst, "Web Apps", SectionPadding, NavBarHeight+24, FontSizeTitle, ColorText)
 
 	if len(s.apps) == 0 {
 		DrawText(dst, "No web apps available.",
-			SectionPadding, NavBarHeight+80, FontSizeBody, ColorTextMuted)
+			SectionPadding, NavBarHeight+100, FontSizeBody, ColorTextMuted)
 		return
 	}
 
 	for i, app := range s.apps {
-		rowY := NavBarHeight + 60 + float64(i)*60
+		rowY := NavBarHeight + 80 + float64(i)*80
 		rowW := float64(ScreenWidth) - SectionPadding*2
-		rowH := 50.0
+		rowH := 70.0
 		focused := i == s.focusIndex
 
 		if focused {
@@ -90,8 +90,8 @@ func (s *WebAppsScreen) Draw(dst *ebiten.Image) {
 		}
 
 		// App name
-		DrawText(dst, app.Name, SectionPadding+16, rowY+10, FontSizeBody, ColorText)
+		DrawText(dst, app.Name, SectionPadding+20, rowY+14, FontSizeBody, ColorText)
 		// URL in muted color
-		DrawText(dst, app.URL, SectionPadding+16, rowY+30, FontSizeSmall, ColorTextMuted)
+		DrawText(dst, app.URL, SectionPadding+20, rowY+44, FontSizeSmall, ColorTextMuted)
 	}
 }

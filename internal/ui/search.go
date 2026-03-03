@@ -85,12 +85,12 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 	if clicked {
 		// Check search bar click
 		barX := float64(SectionPadding)
-		barY := float64(NavBarHeight) + 20.0
+		barY := float64(NavBarHeight) + 24.0
 		barW := float64(ScreenWidth - SectionPadding*2)
-		barH := 48.0
+		barH := 68.0
 		if PointInRect(mx, my, barX, barY, barW, barH) {
 			// Check clear button click (right edge of search bar)
-			if ss.input.Text != "" && PointInRect(mx, my, barX+barW-40, barY, 40, barH) {
+			if ss.input.Text != "" && PointInRect(mx, my, barX+barW-48, barY, 48, barH) {
 				ss.input.Clear()
 				ss.results = nil
 				ss.gridItems = nil
@@ -102,7 +102,7 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 		}
 		// Check result items click
 		if len(ss.gridItems) > 0 {
-			resultBaseY := barY + barH + 40 - ss.ScrollY // 40 = gap + result count
+			resultBaseY := barY + barH + 48 - ss.ScrollY // 48 = gap + result count
 			if idx, ok := ss.grid.HandleClick(mx, my, SectionPadding, resultBaseY); ok {
 				ss.focusMode = 1
 				ss.grid.Focused = idx
@@ -118,8 +118,8 @@ func (ss *SearchScreen) Update() (*ScreenTransition, error) {
 	rmx, rmy, rclicked := MouseJustRightClicked()
 	if rclicked && len(ss.gridItems) > 0 {
 		barY := float64(NavBarHeight) + 20.0
-		barH := 48.0
-		resultBaseY := barY + barH + 40 - ss.ScrollY
+		barH := 68.0
+		resultBaseY := barY + barH + 48 - ss.ScrollY
 		if idx, ok := ss.grid.HandleClick(rmx, rmy, SectionPadding, resultBaseY); ok {
 			if idx < len(ss.results) {
 				ss.results[idx].Played = ToggleWatched(ss.client, ss.results[idx].ID, ss.results[idx].Played)
@@ -204,9 +204,9 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 
 	// Search bar (below navbar)
 	barX := float32(SectionPadding)
-	barY := float32(NavBarHeight + 20)
+	barY := float32(NavBarHeight + 24)
 	barW := float32(ScreenWidth - SectionPadding*2)
-	barH := float32(48)
+	barH := float32(68)
 
 	bgColor := ColorSurface
 	if ss.focusMode == 0 {
@@ -224,23 +224,23 @@ func (ss *SearchScreen) Draw(dst *ebiten.Image) {
 		displayQuery = ss.input.Text
 	}
 	if ss.input.Text == "" && ss.focusMode != 0 {
-		DrawText(dst, "Search...", float64(barX+12), float64(barY+12), FontSizeBody, ColorTextMuted)
+		DrawText(dst, "Search...", float64(barX+18), float64(barY+20), FontSizeBody, ColorTextMuted)
 	} else if ss.input.Text == "" && ss.focusMode == 0 {
-		DrawText(dst, "Search...", float64(barX+12), float64(barY+12), FontSizeBody, ColorTextMuted)
-		DrawText(dst, displayQuery, float64(barX+12), float64(barY+12), FontSizeBody, ColorText)
+		DrawText(dst, "Search...", float64(barX+18), float64(barY+20), FontSizeBody, ColorTextMuted)
+		DrawText(dst, displayQuery, float64(barX+18), float64(barY+20), FontSizeBody, ColorText)
 	} else {
-		DrawText(dst, displayQuery, float64(barX+12), float64(barY+12), FontSizeBody, ColorText)
+		DrawText(dst, displayQuery, float64(barX+18), float64(barY+20), FontSizeBody, ColorText)
 	}
 
 	// Clear button
 	if ss.input.Text != "" {
-		clearX := float64(barX+barW) - 32
-		clearY := float64(barY) + 10
+		clearX := float64(barX+barW) - 40
+		clearY := float64(barY) + 14
 		drawXMark(dst, float32(clearX), float32(clearY)+float32(barH)/2-10, 5, ColorTextMuted)
 	}
 
 	if ss.searching {
-		DrawText(dst, "Searching...", float64(barX+barW-120), float64(barY+12), FontSizeSmall, ColorTextSecondary)
+		DrawText(dst, "Searching...", float64(barX+barW-160), float64(barY+20), FontSizeSmall, ColorTextSecondary)
 	}
 
 	// Result count / error below search bar

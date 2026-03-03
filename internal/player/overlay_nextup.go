@@ -75,13 +75,13 @@ func (o *PlaybackOverlay) renderNextUp() {
 	b.WriteString("${osd-ass-cc/0}")
 	b.WriteString("{\\an7\\bord0\\shad0}")
 
-	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(13), assColorGray))
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(20), assColorGray))
 	b.WriteString("Up Next\\N")
 
-	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s\\b1}", o.scale(15), assColorWhite))
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s\\b1}", o.scale(23), assColorWhite))
 	b.WriteString(fmt.Sprintf("Episode %d starting in %ds...{\\b0}\\N", o.nextUpIndex, remaining))
 
-	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s\\b1}", o.scale(13), assColorBlue))
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s\\b1}", o.scale(20), assColorBlue))
 	b.WriteString("[ Start ]")
 
 	o.player.ShowText(b.String(), 2000)

@@ -148,16 +148,16 @@ func drawXMark(dst *ebiten.Image, cx, cy, size float32, clr color.Color) {
 func drawNavButton(dst *ebiten.Image, label string, x, y, w, h float32, focused bool, iconFn func(*ebiten.Image, float32, float32, float32, color.Color), accentColor color.Color) {
 	if focused {
 		vector.DrawFilledRect(dst, x, y, w, h, ColorPrimary, false)
-		DrawTextCentered(dst, label, float64(x+w/2+8), float64(y+h/2), FontSizeBody, ColorBackground)
+		DrawTextCentered(dst, label, float64(x+w/2+12), float64(y+h/2), FontSizeBody, ColorBackground)
 		if iconFn != nil {
-			iconFn(dst, x+16, y+h/2, 7, ColorBackground)
+			iconFn(dst, x+22, y+h/2, 10, ColorBackground)
 		}
 	} else {
 		vector.DrawFilledRect(dst, x, y, w, h, ColorSurfaceHover, false)
 		vector.StrokeRect(dst, x, y, w, h, 1, accentColor, false)
-		DrawTextCentered(dst, label, float64(x+w/2+8), float64(y+h/2), FontSizeBody, ColorText)
+		DrawTextCentered(dst, label, float64(x+w/2+12), float64(y+h/2), FontSizeBody, ColorText)
 		if iconFn != nil {
-			iconFn(dst, x+16, y+h/2, 7, accentColor)
+			iconFn(dst, x+22, y+h/2, 10, accentColor)
 		}
 	}
 }

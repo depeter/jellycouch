@@ -82,17 +82,17 @@ func (dp *DetailPanel) Draw(dst *ebiten.Image) {
 	}
 
 	// Gradient overlay at bottom of backdrop
-	vector.DrawFilledRect(dst, 0, float32(BackdropHeight-100), float32(sw), 100,
+	vector.DrawFilledRect(dst, 0, float32(BackdropHeight-120), float32(sw), 120,
 		ColorOverlay, false)
 	// Solid background below backdrop to cover image bleed and ensure readable text
 	vector.DrawFilledRect(dst, 0, float32(BackdropHeight), float32(sw), float32(ScreenHeight-BackdropHeight),
 		ColorBackground, false)
 
 	// Metadata area below backdrop
-	y := float64(BackdropHeight) + 20
+	y := float64(BackdropHeight) + 24
 
 	DrawText(dst, dp.Title, SectionPadding, y, FontSizeTitle, ColorText)
-	y += FontSizeTitle + 8
+	y += FontSizeTitle + 12
 
 	meta := ""
 	if dp.Year != "" {
@@ -125,7 +125,7 @@ func (dp *DetailPanel) Draw(dst *ebiten.Image) {
 		var metaEndX float64
 		if meta != "" {
 			tw, _ := MeasureText(meta, FontSizeBody)
-			metaEndX = SectionPadding + tw + 20
+			metaEndX = SectionPadding + tw + 28
 		} else {
 			metaEndX = SectionPadding
 		}
@@ -136,20 +136,20 @@ func (dp *DetailPanel) Draw(dst *ebiten.Image) {
 		DrawText(dst, ratingText, float64(starCX+starR+4), y, FontSizeBody, ColorTextSecondary)
 	}
 	if meta != "" || dp.RatingValue > 0 {
-		y += FontSizeBody + 12
+		y += FontSizeBody + 16
 	}
 
 	// Tagline
 	if dp.Tagline != "" {
 		DrawText(dst, dp.Tagline, SectionPadding, y, FontSizeBody, ColorTextMuted)
-		y += FontSizeBody + 8
+		y += FontSizeBody + 12
 	}
 
 	// Overview (wrapped text)
 	if dp.Overview != "" {
-		maxW := sw - SectionPadding*2 - 400 // leave room on right
+		maxW := sw - SectionPadding*2 - 500 // leave room on right
 		h := DrawTextWrapped(dst, dp.Overview, SectionPadding, y, maxW, FontSizeBody, ColorTextSecondary)
-		y += h + 16
+		y += h + 20
 	}
 
 	// Action buttons — measure properly
@@ -157,7 +157,7 @@ func (dp *DetailPanel) Draw(dst *ebiten.Image) {
 	btnX := float64(SectionPadding)
 	for i, label := range dp.Buttons {
 		tw, _ := MeasureText(label, FontSizeBody)
-		w := tw + 40
+		w := tw + 56
 		h := float64(ButtonHeight)
 		bx := float32(btnX)
 		by := float32(y)
@@ -171,7 +171,7 @@ func (dp *DetailPanel) Draw(dst *ebiten.Image) {
 			vector.DrawFilledRect(dst, bx, by, float32(w), float32(h), ColorSurface, false)
 			DrawTextCentered(dst, label, btnX+w/2, float64(by)+h/2, FontSizeBody, ColorTextSecondary)
 		}
-		btnX += w + 12
+		btnX += w + 16
 	}
 }
 

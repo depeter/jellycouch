@@ -154,7 +154,7 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 	if o.trackType == TrackAudio {
 		title = "Audio Tracks"
 	}
-	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(15), assColorBlue) + title + "\\N\\N")
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(23), assColorBlue) + title + "\\N\\N")
 
 	totalItems := len(o.tracks)
 	if o.trackType == TrackSub {
@@ -180,7 +180,7 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 			isCurrentlyActive = t.Selected
 		}
 
-		b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(13)))
+		b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(20)))
 
 		if i == o.selectedIndex {
 			b.WriteString("{" + assColorBlue + "\\b1}")

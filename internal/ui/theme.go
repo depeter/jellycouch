@@ -24,24 +24,24 @@ var (
 const (
 	PosterWidth     = 220
 	PosterHeight    = 330
-	PosterGap       = 28
+	PosterGap       = 32
 	PosterFocusPad  = 10
 
-	BackdropHeight  = 400
+	BackdropHeight  = 440
 
-	SectionPadding  = 40
-	SectionGap      = 30
-	SectionTitleH   = 40
+	SectionPadding  = 52
+	SectionGap      = 40
+	SectionTitleH   = 56
 
-	NavBarHeight    = 68
-	NavBarPadding   = 20
-	ButtonHeight    = 44
+	NavBarHeight    = 100
+	NavBarPadding   = 28
+	ButtonHeight    = 68
 
-	FontSizeTitle   = 32
-	FontSizeHeading = 26
-	FontSizeBody    = 18
-	FontSizeSmall   = 16
-	FontSizeCaption = 14
+	FontSizeTitle   = 54
+	FontSizeHeading = 42
+	FontSizeBody    = 30
+	FontSizeSmall   = 26
+	FontSizeCaption = 22
 
 	FocusAnimSpeed  = 0.15
 	ScrollAnimSpeed = 0.12

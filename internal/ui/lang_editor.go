@@ -129,7 +129,7 @@ func (le *LangEditor) Update() {
 	}
 
 	// Ensure focused item is visible (scroll into view)
-	maxRows := int((600 - 130) / 28) // matches Draw() calculation
+	maxRows := int((700 - 160) / 40) // matches Draw() calculation
 	if le.column == 0 {
 		if le.selIndex < le.selScroll {
 			le.selScroll = le.selIndex
@@ -169,8 +169,8 @@ func (le *LangEditor) Draw(dst *ebiten.Image) {
 	vector.DrawFilledRect(dst, 0, 0, ScreenWidth, ScreenHeight, ColorOverlay, false)
 
 	// Centered panel
-	panelW := float32(900)
-	panelH := float32(600)
+	panelW := float32(1100)
+	panelH := float32(700)
 	panelX := float32(ScreenWidth-panelW) / 2
 	panelY := float32(ScreenHeight-panelH) / 2
 
@@ -178,14 +178,14 @@ func (le *LangEditor) Draw(dst *ebiten.Image) {
 	vector.StrokeRect(dst, panelX, panelY, panelW, panelH, 2, ColorPrimary, false)
 
 	// Title
-	DrawTextCentered(dst, le.title, float64(panelX+panelW/2), float64(panelY+24), FontSizeHeading, ColorText)
+	DrawTextCentered(dst, le.title, float64(panelX+panelW/2), float64(panelY+32), FontSizeHeading, ColorText)
 
 	// Column layout
-	colW := (panelW - 60) / 2 // 20px padding on sides, 20px gap
-	leftX := panelX + 20
-	rightX := panelX + 20 + colW + 20
-	headerY := panelY + 56
-	listY := headerY + 30
+	colW := (panelW - 84) / 2 // 28px padding on sides, 28px gap
+	leftX := panelX + 28
+	rightX := panelX + 28 + colW + 28
+	headerY := panelY + 72
+	listY := headerY + 40
 
 	avail := le.available()
 
@@ -201,31 +201,31 @@ func (le *LangEditor) Draw(dst *ebiten.Image) {
 	DrawText(dst, "Available", float64(rightX), float64(headerY), FontSizeBody, availHeaderColor)
 
 	// Divider line
-	divX := panelX + 20 + colW + 10
-	vector.StrokeLine(dst, divX, headerY-4, divX, panelY+panelH-40, 1, ColorTextMuted, false)
+	divX := panelX + 28 + colW + 14
+	vector.StrokeLine(dst, divX, headerY-4, divX, panelY+panelH-48, 1, ColorTextMuted, false)
 
 	// Selected column
-	maxRows := int((panelH - 130) / 28)
+	maxRows := int((panelH - 160) / 40)
 	for vi := 0; vi < maxRows; vi++ {
 		i := vi + le.selScroll
 		if i >= len(le.selected) {
 			break
 		}
 		code := le.selected[i]
-		iy := float32(listY) + float32(vi)*28
+		iy := float32(listY) + float32(vi)*40
 		isFocused := le.column == 0 && i == le.selIndex
 		if isFocused {
-			vector.DrawFilledRect(dst, leftX, iy-2, colW, 26, ColorSurfaceHover, false)
+			vector.DrawFilledRect(dst, leftX, iy-2, colW, 36, ColorSurfaceHover, false)
 		}
 		label := fmt.Sprintf("%d. %s", i+1, langDisplayName(code))
 		clr := ColorTextSecondary
 		if isFocused {
 			clr = ColorText
 		}
-		DrawText(dst, label, float64(leftX+8), float64(iy+2), FontSizeBody, clr)
+		DrawText(dst, label, float64(leftX+12), float64(iy+2), FontSizeBody, clr)
 	}
 	if len(le.selected) == 0 {
-		DrawText(dst, "No languages selected", float64(leftX+8), float64(listY+2), FontSizeSmall, ColorTextMuted)
+		DrawText(dst, "No languages selected", float64(leftX+12), float64(listY+2), FontSizeSmall, ColorTextMuted)
 	}
 
 	// Available column
@@ -235,19 +235,19 @@ func (le *LangEditor) Draw(dst *ebiten.Image) {
 			break
 		}
 		entry := avail[i]
-		iy := float32(listY) + float32(vi)*28
+		iy := float32(listY) + float32(vi)*40
 		isFocused := le.column == 1 && i == le.availIndex
 		if isFocused {
-			vector.DrawFilledRect(dst, rightX, iy-2, colW, 26, ColorSurfaceHover, false)
+			vector.DrawFilledRect(dst, rightX, iy-2, colW, 36, ColorSurfaceHover, false)
 		}
 		clr := ColorTextSecondary
 		if isFocused {
 			clr = ColorText
 		}
-		DrawText(dst, entry.Name, float64(rightX+8), float64(iy+2), FontSizeBody, clr)
+		DrawText(dst, entry.Name, float64(rightX+12), float64(iy+2), FontSizeBody, clr)
 	}
 
 	// Hint bar at bottom
 	hint := "Enter: Toggle  |  Shift+\u2191/\u2193: Reorder  |  \u2190/\u2192: Switch Column  |  Esc: Done"
-	DrawTextCentered(dst, hint, float64(panelX+panelW/2), float64(panelY+panelH-16), FontSizeSmall, ColorTextMuted)
+	DrawTextCentered(dst, hint, float64(panelX+panelW/2), float64(panelY+panelH-24), FontSizeSmall, ColorTextMuted)
 }

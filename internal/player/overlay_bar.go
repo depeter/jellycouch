@@ -182,7 +182,7 @@ func (o *PlaybackOverlay) btnCenterX(target ControlButton) int {
 		totalRunes += labelLen
 	}
 
-	fontSize := float64(o.scale(12))
+	fontSize := float64(o.scale(19))
 	charW := fontSize * 0.55
 	barWidthPx := float64(totalRunes) * charW
 	targetCenterRune := float64(targetStart) + float64(targetLen)/2.0
@@ -229,10 +229,10 @@ func (o *PlaybackOverlay) renderBar() {
 		if epInfo != nil {
 			tooltip := fmt.Sprintf("Up Next: S%dE%d \u00B7 %s",
 				epInfo.SeasonNumber, epInfo.EpisodeNumber, epInfo.Title)
-			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(13), assColorWhite))
+			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(20), assColorWhite))
 			b.WriteString(tooltip + "\\N")
 		} else if noNext {
-			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(13), assColorDimGray))
+			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(20), assColorDimGray))
 			b.WriteString("No next episode\\N")
 		}
 	}
@@ -242,19 +242,19 @@ func (o *PlaybackOverlay) renderBar() {
 	if o.focusZone == ZoneProgress {
 		barColor = assColorBlue
 	}
-	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(9), barColor))
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(14), barColor))
 	b.WriteString(o.buildProgressBar(o.barWidth()) + "\\N")
 
 	// Time and volume line
-	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(11), assColorWhite))
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(17), assColorWhite))
 	b.WriteString("${time-pos} / ${duration}")
 	b.WriteString("    ")
 	b.WriteString("${?mute==yes:Muted}${!mute:Vol: ${volume}%}")
-	b.WriteString(fmt.Sprintf("${?pause==yes:  \\N{\\fs%d%s}Paused}", o.scale(10), assColorGray))
+	b.WriteString(fmt.Sprintf("${?pause==yes:  \\N{\\fs%d%s}Paused}", o.scale(16), assColorGray))
 	b.WriteString("\\N")
 
 	// Button row
-	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(12)))
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(19)))
 	playPauseLabel := "${?pause==yes:\u25B6}${!pause:\u23F8}"
 	btnLabelMap := map[ControlButton]string{
 		BtnSeekBack60: "\u25C0\u25C0",

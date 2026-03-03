@@ -156,10 +156,10 @@ func (fb *FilterBar) HandleClick(mx, my int) (int, bool) {
 }
 
 const (
-	filterBarHeight  = 42.0
-	filterBarPadding = 8.0
-	filterPillGap    = 12.0
-	filterPillPadX   = 14.0
+	filterBarHeight  = 62.0
+	filterBarPadding = 12.0
+	filterPillGap    = 16.0
+	filterPillPadX   = 20.0
 )
 
 // Draw renders the filter bar at the given position.
@@ -180,8 +180,8 @@ func (fb *FilterBar) Draw(dst *ebiten.Image, x, y float64) float64 {
 			DrawTextCentered(dst, label, curX+pillW/2, y+filterBarHeight/2,
 				FontSizeBody, ColorBackground)
 			// Draw up/down arrow triangles as affordance
-			drawTriangle(dst, float32(curX+pillW/2), float32(y-6), 5, true, ColorPrimary)
-			drawTriangle(dst, float32(curX+pillW/2), float32(y+filterBarHeight+6), 5, false, ColorPrimary)
+			drawTriangle(dst, float32(curX+pillW/2), float32(y-8), 7, true, ColorPrimary)
+			drawTriangle(dst, float32(curX+pillW/2), float32(y+filterBarHeight+8), 7, false, ColorPrimary)
 		} else {
 			vector.DrawFilledRect(dst, float32(curX), float32(y),
 				float32(pillW), float32(filterBarHeight), ColorSurface, false)
@@ -208,18 +208,18 @@ func (fb *FilterBar) Draw(dst *ebiten.Image, x, y float64) float64 {
 		vector.StrokeRect(dst, float32(curX), float32(y),
 			float32(searchW), float32(filterBarHeight), 2, ColorFocusBorder, false)
 		if fb.SearchInput.Text == "" {
-			DrawText(dst, "Search...", curX+10, y+10, FontSizeBody, ColorTextMuted)
+			DrawText(dst, "Search...", curX+16, y+18, FontSizeBody, ColorTextMuted)
 		}
-		DrawText(dst, fb.SearchInput.DisplayText(), curX+10, y+10, FontSizeBody, ColorText)
+		DrawText(dst, fb.SearchInput.DisplayText(), curX+16, y+18, FontSizeBody, ColorText)
 	} else {
 		vector.DrawFilledRect(dst, float32(curX), float32(y),
 			float32(searchW), float32(filterBarHeight), ColorSurface, false)
 		vector.StrokeRect(dst, float32(curX), float32(y),
 			float32(searchW), float32(filterBarHeight), 1, ColorTextMuted, false)
 		if fb.SearchInput.Text != "" {
-			DrawText(dst, fb.SearchInput.Text, curX+10, y+10, FontSizeBody, ColorText)
+			DrawText(dst, fb.SearchInput.Text, curX+16, y+18, FontSizeBody, ColorText)
 		} else {
-			DrawText(dst, "Search...", curX+10, y+10, FontSizeBody, ColorTextMuted)
+			DrawText(dst, "Search...", curX+16, y+18, FontSizeBody, ColorTextMuted)
 		}
 	}
 

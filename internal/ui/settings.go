@@ -306,18 +306,18 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 }
 
 func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
-	DrawText(dst, "Settings", SectionPadding, NavBarHeight+16, FontSizeTitle, ColorText)
+	DrawText(dst, "Settings", SectionPadding, NavBarHeight+20, FontSizeTitle, ColorText)
 
 	y := float64(NavBarHeight*2 + 10)
 	ss.rowRects = ss.rowRects[:0] // reset
 
 	for si, sec := range ss.sections {
 		DrawText(dst, sec.Label, SectionPadding, y, FontSizeHeading, ColorPrimary)
-		y += FontSizeHeading + 8
+		y += FontSizeHeading + 12
 
 		for ii, item := range sec.Items {
 			isFocused := si == ss.sectionIndex && ii == ss.itemIndex
-			rowH := float32(44)
+			rowH := float32(64)
 			rowX := float64(SectionPadding - 8)
 			rowW := float64(ScreenWidth - SectionPadding*2 + 16)
 
@@ -336,9 +336,9 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 			if isFocused {
 				labelColor = ColorText
 			}
-			DrawText(dst, item.Label, SectionPadding, y+4, FontSizeBody, labelColor)
+			DrawText(dst, item.Label, SectionPadding, y+8, FontSizeBody, labelColor)
 
-			valueX := SectionPadding + 300.0
+			valueX := SectionPadding + 400.0
 			value := item.Value()
 			isEditing := ss.editing && isFocused
 
@@ -346,10 +346,10 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 				value = ss.editInput.DisplayText()
 				// Blue border around value field when editing
 				vx := float32(valueX - 4)
-				vw := float32(rowW) - float32(300) - 8
+				vw := float32(rowW) - float32(400) - 8
 				vector.StrokeRect(dst, vx, float32(y-2), vw, float32(rowH)-4, 2, ColorFocusBorder, false)
 				// Paste button at the right end of the edit field
-				pasteW := 60.0
+				pasteW := 80.0
 				pasteH := float64(rowH) - 8
 				pasteX := float64(vx+vw) - pasteW - 4
 				pasteY := y - 1
@@ -365,28 +365,28 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 				if display == "" {
 					display = "(none)"
 				}
-				DrawText(dst, display, valueX, y+4, FontSizeBody, ColorText)
+				DrawText(dst, display, valueX, y+8, FontSizeBody, ColorText)
 				w, _ := MeasureText(display, FontSizeBody)
-				DrawText(dst, "[Enter to edit]", valueX+w+12, y+4, FontSizeSmall, ColorPrimary)
+				DrawText(dst, "[Enter to edit]", valueX+w+16, y+8, FontSizeSmall, ColorPrimary)
 			} else if item.MultiLang {
 				// Multi-language item (not focused): show display names
 				display := formatLangDisplay(value)
 				if display == "" {
 					display = "(none)"
 				}
-				DrawText(dst, display, valueX, y+4, FontSizeBody, ColorTextSecondary)
+				DrawText(dst, display, valueX, y+8, FontSizeBody, ColorTextSecondary)
 			} else if item.Options != nil && isFocused && !isEditing {
 				// Draw arrows around value for cycle-able items
-				DrawText(dst, "◀", valueX-20, y+4, FontSizeBody, ColorPrimary)
-				DrawText(dst, value, valueX, y+4, FontSizeBody, ColorText)
+				DrawText(dst, "◀", valueX-28, y+8, FontSizeBody, ColorPrimary)
+				DrawText(dst, value, valueX, y+8, FontSizeBody, ColorText)
 				w, _ := MeasureText(value, FontSizeBody)
-				DrawText(dst, "▶", valueX+w+8, y+4, FontSizeBody, ColorPrimary)
+				DrawText(dst, "▶", valueX+w+12, y+8, FontSizeBody, ColorPrimary)
 			} else {
 				valueColor := ColorTextSecondary
 				if isFocused && !isEditing {
 					valueColor = ColorText
 				}
-				DrawText(dst, value, valueX, y+4, FontSizeBody, valueColor)
+				DrawText(dst, value, valueX, y+8, FontSizeBody, valueColor)
 			}
 
 			// Show edit error below the row
@@ -396,7 +396,7 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 
 			y += float64(rowH)
 		}
-		y += 16
+		y += 24
 	}
 
 	// Draw lang editor overlay on top

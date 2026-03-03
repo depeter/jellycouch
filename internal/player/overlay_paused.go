@@ -15,8 +15,8 @@ func (o *PlaybackOverlay) renderPausedInfo() {
 
 	// Bottom bar: progress + time/duration
 	ass := fmt.Sprintf("{\\an2\\bord2\\fs%d%s}%s\\N{\\fs%d%s}%s / %s",
-		o.scale(9), assColorGray, o.buildProgressBar(o.barWidth()),
-		o.scale(11), assColorWhite, formatDuration(pos), formatDuration(dur))
+		o.scale(14), assColorGray, o.buildProgressBar(o.barWidth()),
+		o.scale(17), assColorWhite, formatDuration(pos), formatDuration(dur))
 	o.player.OsdOverlay(osdIDPausedBar, ass, o.screenW, o.screenH)
 
 	o.renderClock()
@@ -26,7 +26,7 @@ func (o *PlaybackOverlay) renderPausedInfo() {
 // renderClock renders only the top-right wall clock overlay.
 func (o *PlaybackOverlay) renderClock() {
 	clock := time.Now().Format("15:04")
-	ass := fmt.Sprintf("{\\an9\\bord2\\fs%d%s}%s", o.scale(14), assColorWhite, clock)
+	ass := fmt.Sprintf("{\\an9\\bord2\\fs%d%s}%s", o.scale(22), assColorWhite, clock)
 	o.player.OsdOverlay(osdIDClock, ass, o.screenW, o.screenH)
 	o.pausedOsdShown = true
 }

@@ -120,14 +120,14 @@ func (ls *LoginScreen) submit() {
 
 func (ls *LoginScreen) handleClick(mx, my float64) {
 	cx := float64(ScreenWidth) / 2
-	cy := float64(ScreenHeight)/2 - 100
-	fieldW := 400.0
-	fieldH := 44.0
+	cy := float64(ScreenHeight)/2 - 120
+	fieldW := 560.0
+	fieldH := 64.0
 	startY := cy
 
 	// Check text fields
 	for i := 0; i < 3; i++ {
-		fy := startY + float64(i)*70
+		fy := startY + float64(i)*90
 		fx := cx - fieldW/2
 		if mx >= fx && mx <= fx+fieldW && my >= fy && my <= fy+fieldH {
 			ls.fieldIndex = i
@@ -136,8 +136,8 @@ func (ls *LoginScreen) handleClick(mx, my float64) {
 	}
 
 	// Check connect button
-	btnY := startY + 3*70
-	btnH := 48.0
+	btnY := startY + 3*90
+	btnH := 68.0
 	bx := cx - fieldW/2
 	if mx >= bx && mx <= bx+fieldW && my >= btnY && my <= btnY+btnH {
 		ls.fieldIndex = 3
@@ -149,23 +149,23 @@ func (ls *LoginScreen) Draw(dst *ebiten.Image) {
 	dst.Fill(ColorBackground)
 
 	cx := float64(ScreenWidth) / 2
-	cy := float64(ScreenHeight)/2 - 100
+	cy := float64(ScreenHeight)/2 - 120
 
 	// Title
-	DrawTextCentered(dst, "JellyCouch", cx, cy-80, FontSizeTitle+8, ColorPrimary)
-	DrawTextCentered(dst, "Connect to your Jellyfin server", cx, cy-40, FontSizeBody, ColorTextSecondary)
+	DrawTextCentered(dst, "JellyCouch", cx, cy-100, FontSizeTitle+8, ColorPrimary)
+	DrawTextCentered(dst, "Connect to your Jellyfin server", cx, cy-50, FontSizeBody, ColorTextSecondary)
 
 	// Fields
-	fieldW := float32(400)
-	fieldH := float32(44)
+	fieldW := float32(560)
+	fieldH := float32(64)
 	startY := float32(cy)
 
 	for i := 0; i < 3; i++ {
-		fy := startY + float32(i)*70
+		fy := startY + float32(i)*90
 		fx := float32(cx) - fieldW/2
 
 		// Label
-		DrawText(dst, ls.labels[i], float64(fx), float64(fy-20), FontSizeSmall, ColorTextSecondary)
+		DrawText(dst, ls.labels[i], float64(fx), float64(fy-24), FontSizeSmall, ColorTextSecondary)
 
 		// Field background
 		bgColor := ColorSurface
@@ -197,16 +197,16 @@ func (ls *LoginScreen) Draw(dst *ebiten.Image) {
 		}
 
 		if ls.inputs[i].Text == "" && i != ls.fieldIndex {
-			DrawText(dst, ls.placeholders()[i], float64(fx+10), float64(fy+12), FontSizeBody, ColorTextMuted)
+			DrawText(dst, ls.placeholders()[i], float64(fx+16), float64(fy+18), FontSizeBody, ColorTextMuted)
 		} else {
-			DrawText(dst, value, float64(fx+10), float64(fy+12), FontSizeBody, ColorText)
+			DrawText(dst, value, float64(fx+16), float64(fy+18), FontSizeBody, ColorText)
 		}
 	}
 
 	// Connect button
-	btnY := startY + 3*70
+	btnY := startY + 3*90
 	btnW := fieldW
-	btnH := float32(48)
+	btnH := float32(68)
 	bx := float32(cx) - btnW/2
 
 	var btnColor color.Color = ColorPrimary
@@ -231,12 +231,12 @@ func (ls *LoginScreen) Draw(dst *ebiten.Image) {
 	if ls.Error != "" {
 		tw, _ := MeasureText(ls.Error, FontSizeBody)
 		errX := cx - tw/2
-		ls.errDisplay.Draw(dst, ls.Error, errX, float64(btnY+btnH+24), FontSizeBody)
+		ls.errDisplay.Draw(dst, ls.Error, errX, float64(btnY+btnH+32), FontSizeBody)
 	}
 
 	// Hint
 	DrawTextCentered(dst, "Tab to navigate, Enter to submit",
-		cx, float64(ScreenHeight)-40, FontSizeSmall, ColorTextMuted)
+		cx, float64(ScreenHeight)-50, FontSizeSmall, ColorTextMuted)
 }
 
 func (ls *LoginScreen) placeholders() [3]string {
