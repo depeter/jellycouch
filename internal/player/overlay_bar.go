@@ -245,11 +245,12 @@ func (o *PlaybackOverlay) renderBar() {
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(14), barColor))
 	b.WriteString(o.buildProgressBar(o.barWidth()) + "\\N")
 
-	// Time and volume line
+	// Time, volume, and wall clock line
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(17), assColorWhite))
 	b.WriteString("${time-pos} / ${duration}")
 	b.WriteString("    ")
 	b.WriteString("${?mute==yes:Muted}${!mute:Vol: ${volume}%}")
+	b.WriteString(fmt.Sprintf("    %s", time.Now().Format("15:04")))
 	b.WriteString(fmt.Sprintf("{\\fs%d%s}${?pause==yes:  \\NPaused}", o.scale(16), assColorGray))
 	b.WriteString("\\N")
 

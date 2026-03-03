@@ -15,11 +15,8 @@ const (
 	OverlayNextUp                  // "Up Next" countdown banner (top-left)
 )
 
-// OSD overlay slot IDs for persistent overlays (via osd-overlay command).
-const (
-	osdIDClock     = 1
-	osdIDPausedBar = 2
-)
+// OSD overlay slot ID for the persistent paused overlay (via osd-overlay command).
+const osdIDPausedBar = 1
 
 // ControlButton identifies a button on the control bar.
 type ControlButton int
@@ -84,8 +81,7 @@ type PlaybackOverlay struct {
 	focusedBtn ControlButton
 	focusZone  FocusZone
 	accel      seekAccel
-	lastRender      time.Time
-	lastClockRender time.Time
+	lastRender time.Time
 
 	// Screen dimensions for resolution-dependent scaling
 	screenW, screenH int
@@ -178,10 +174,8 @@ func (o *PlaybackOverlay) visibleIndex() int {
 
 // Show displays the control bar and resets the auto-hide timer.
 func (o *PlaybackOverlay) Show() {
-	// Remove paused bar (full bar replaces it), keep clock visible
-	o.player.OsdOverlayRemove(osdIDPausedBar)
-	o.pausedOsdShown = false
-	o.renderClock()
+	// Remove paused overlay (full bar replaces it)
+	o.hidePausedOsd()
 	o.Mode = OverlayBar
 	o.lastInput = time.Now()
 	o.focusZone = ZoneButtons
@@ -194,7 +188,6 @@ func (o *PlaybackOverlay) Hide() {
 	if o.nextUpActive {
 		o.Mode = OverlayNextUp
 		o.renderNextUp()
-		o.hideClock()
 		return
 	}
 	o.Mode = OverlayHidden
@@ -204,9 +197,7 @@ func (o *PlaybackOverlay) Hide() {
 		o.imgOverlayShown = false
 	}
 	if o.player.Paused() {
-		o.renderPausedInfo() // includes clock
-	} else {
-		o.hideClock()
+		o.renderPausedInfo()
 	}
 }
 
@@ -222,7 +213,6 @@ func (o *PlaybackOverlay) Update() {
 		// Periodically re-render to keep progress bar and clock current
 		if time.Since(o.lastRender) > time.Second {
 			o.renderBar()
-			o.renderClock()
 		}
 	}
 
@@ -262,7 +252,6 @@ func (o *PlaybackOverlay) Update() {
 // Cleanup removes all persistent overlays. Call before discarding the overlay.
 func (o *PlaybackOverlay) Cleanup() {
 	o.hidePausedOsd()
-	o.hideClock()
 	if o.imgOverlayShown {
 		o.player.OverlayRemove(0)
 		o.imgOverlayShown = false

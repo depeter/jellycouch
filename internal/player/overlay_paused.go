@@ -12,34 +12,23 @@ func (o *PlaybackOverlay) renderPausedInfo() {
 
 	pos := o.player.Position()
 	dur := o.player.Duration()
+	clock := time.Now().Format("15:04")
 
-	// Bottom bar: progress + time/duration
-	ass := fmt.Sprintf("{\\an2\\bord2\\fs%d%s}%s\\N{\\fs%d%s}%s / %s",
+	// Two ASS events in one overlay:
+	// 1. Clock at top-right
+	// 2. Progress bar + time/duration at bottom-center
+	ass := fmt.Sprintf("{\\an9\\bord2\\fs%d%s}%s\n{\\an2\\bord2\\fs%d%s}%s\\N{\\fs%d%s}%s / %s",
+		o.scale(22), assColorWhite, clock,
 		o.scale(14), assColorGray, o.buildProgressBar(o.barWidth()),
 		o.scale(17), assColorWhite, formatDuration(pos), formatDuration(dur))
 	o.player.OsdOverlay(osdIDPausedBar, ass, o.screenW, o.screenH)
-
-	o.renderClock()
 	o.pausedOsdShown = true
 }
 
-// renderClock renders only the top-right wall clock overlay.
-func (o *PlaybackOverlay) renderClock() {
-	clock := time.Now().Format("15:04")
-	ass := fmt.Sprintf("{\\an9\\bord2\\fs%d%s}%s", o.scale(22), assColorWhite, clock)
-	o.player.OsdOverlay(osdIDClock, ass, o.screenW, o.screenH)
-	o.lastClockRender = time.Now()
-}
-
-// hidePausedOsd removes the persistent paused bar overlay.
+// hidePausedOsd removes the persistent paused overlay.
 func (o *PlaybackOverlay) hidePausedOsd() {
 	o.player.OsdOverlayRemove(osdIDPausedBar)
 	o.pausedOsdShown = false
-}
-
-// hideClock removes the persistent clock overlay.
-func (o *PlaybackOverlay) hideClock() {
-	o.player.OsdOverlayRemove(osdIDClock)
 }
 
 // formatDuration formats seconds into "H:MM:SS" or "MM:SS".
