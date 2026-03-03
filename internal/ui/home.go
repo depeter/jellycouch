@@ -270,6 +270,16 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 	}
 
 	if !hs.loaded || len(hs.sections) == 0 {
+		// Allow retry on error with Enter key
+		if hs.loaded && hs.loadError != "" && !hs.loading {
+			_, enter, _ := InputState()
+			if enter {
+				hs.loaded = false
+				hs.loadError = ""
+				hs.loading = true
+				go hs.loadData()
+			}
+		}
 		return nil, nil
 	}
 

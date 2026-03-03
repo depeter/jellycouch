@@ -48,7 +48,7 @@ type Game struct {
 	nextEpBGRAPath string              // temp file for thumbnail overlay
 	prefetchDone   chan *prefetchResult // goroutine sends result here for main-thread application
 
-	startFullscreen bool // apply fullscreen on first Update() frame
+	startFullscreen bool // unused, kept for config compatibility
 
 	// Cursor auto-hide during playback
 	lastMouseX, lastMouseY int
@@ -411,12 +411,6 @@ func (g *Game) Update() error {
 		}
 	}
 actionsDrained:
-
-	// Apply fullscreen on first frame (unreliable before RunGame on Linux)
-	if g.startFullscreen {
-		g.startFullscreen = false
-		ebiten.SetFullscreen(true)
-	}
 
 	// Alt+Enter toggles fullscreen (works in all modes)
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && ebiten.IsKeyPressed(ebiten.KeyAlt) {

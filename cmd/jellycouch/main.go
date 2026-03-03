@@ -106,14 +106,11 @@ func main() {
 	if client == nil || cfg.Server.Token == "" {
 		sf.pushLogin(navbar)
 	} else {
-		// Validate token before showing home screen
-		if _, err := client.GetViews(); err != nil {
-			log.Printf("Token invalid, showing login: %v", err)
-			sf.pushLogin(navbar)
-		} else {
-			sf.pushHome()
-			sf.loadNavBarViews()
-		}
+		// Skip synchronous token validation — the home screen validates
+		// asynchronously and redirects to login on auth errors (401).
+		// This avoids blocking startup on slow/unreachable servers.
+		sf.pushHome()
+		sf.loadNavBarViews()
 	}
 
 	// Configure window
@@ -121,6 +118,7 @@ func main() {
 	ebiten.SetWindowTitle("JellyCouch")
 	ebiten.SetWindowIcon(icon.Generate())
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+	ebiten.SetFullscreen(cfg.UI.Fullscreen)
 
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
