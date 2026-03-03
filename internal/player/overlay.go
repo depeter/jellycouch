@@ -84,7 +84,8 @@ type PlaybackOverlay struct {
 	focusedBtn ControlButton
 	focusZone  FocusZone
 	accel      seekAccel
-	lastRender time.Time
+	lastRender      time.Time
+	lastClockRender time.Time
 
 	// Screen dimensions for resolution-dependent scaling
 	screenW, screenH int
@@ -177,13 +178,10 @@ func (o *PlaybackOverlay) visibleIndex() int {
 
 // Show displays the control bar and resets the auto-hide timer.
 func (o *PlaybackOverlay) Show() {
-	// Remove paused bar (full bar replaces it), but keep clock
+	// Remove paused bar (full bar replaces it), keep clock visible
 	o.player.OsdOverlayRemove(osdIDPausedBar)
-	if o.player.Paused() {
-		o.renderClock()
-	} else {
-		o.hidePausedOsd()
-	}
+	o.pausedOsdShown = false
+	o.renderClock()
 	o.Mode = OverlayBar
 	o.lastInput = time.Now()
 	o.focusZone = ZoneButtons
@@ -196,6 +194,7 @@ func (o *PlaybackOverlay) Hide() {
 	if o.nextUpActive {
 		o.Mode = OverlayNextUp
 		o.renderNextUp()
+		o.hideClock()
 		return
 	}
 	o.Mode = OverlayHidden
@@ -204,9 +203,10 @@ func (o *PlaybackOverlay) Hide() {
 		o.player.OverlayRemove(0)
 		o.imgOverlayShown = false
 	}
-	// If paused, immediately show the minimal paused info
 	if o.player.Paused() {
-		o.renderPausedInfo()
+		o.renderPausedInfo() // includes clock
+	} else {
+		o.hideClock()
 	}
 }
 
@@ -219,12 +219,10 @@ func (o *PlaybackOverlay) Update() {
 			o.Hide()
 			return
 		}
-		// Periodically re-render to keep progress bar current
+		// Periodically re-render to keep progress bar and clock current
 		if time.Since(o.lastRender) > time.Second {
 			o.renderBar()
-			if paused {
-				o.renderClock()
-			}
+			o.renderClock()
 		}
 	}
 
@@ -264,6 +262,7 @@ func (o *PlaybackOverlay) Update() {
 // Cleanup removes all persistent overlays. Call before discarding the overlay.
 func (o *PlaybackOverlay) Cleanup() {
 	o.hidePausedOsd()
+	o.hideClock()
 	if o.imgOverlayShown {
 		o.player.OverlayRemove(0)
 		o.imgOverlayShown = false

@@ -28,14 +28,18 @@ func (o *PlaybackOverlay) renderClock() {
 	clock := time.Now().Format("15:04")
 	ass := fmt.Sprintf("{\\an9\\bord2\\fs%d%s}%s", o.scale(22), assColorWhite, clock)
 	o.player.OsdOverlay(osdIDClock, ass, o.screenW, o.screenH)
-	o.pausedOsdShown = true
+	o.lastClockRender = time.Now()
 }
 
-// hidePausedOsd removes both persistent paused overlays.
+// hidePausedOsd removes the persistent paused bar overlay.
 func (o *PlaybackOverlay) hidePausedOsd() {
-	o.player.OsdOverlayRemove(osdIDClock)
 	o.player.OsdOverlayRemove(osdIDPausedBar)
 	o.pausedOsdShown = false
+}
+
+// hideClock removes the persistent clock overlay.
+func (o *PlaybackOverlay) hideClock() {
+	o.player.OsdOverlayRemove(osdIDClock)
 }
 
 // formatDuration formats seconds into "H:MM:SS" or "MM:SS".
