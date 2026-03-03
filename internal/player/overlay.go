@@ -15,8 +15,14 @@ const (
 	OverlayNextUp                  // "Up Next" countdown banner (top-left)
 )
 
-// OSD overlay slot ID for the persistent paused overlay (via osd-overlay command).
-const osdIDPausedBar = 1
+// OSD overlay slot IDs for persistent overlays (via osd-overlay command).
+const (
+	osdIDMain   = 1 // bar, tracks, next-up (mutually exclusive)
+	osdIDPaused = 2 // paused info (shown independently)
+)
+
+// renderInterval is the refresh rate for OSD overlay re-renders.
+const renderInterval = 150 * time.Millisecond
 
 // ControlButton identifies a button on the control bar.
 type ControlButton int
@@ -191,7 +197,7 @@ func (o *PlaybackOverlay) Hide() {
 		return
 	}
 	o.Mode = OverlayHidden
-	o.player.ShowText("", 1)
+	o.player.OsdOverlayRemove(osdIDMain)
 	if o.imgOverlayShown {
 		o.player.OverlayRemove(0)
 		o.imgOverlayShown = false
@@ -211,14 +217,14 @@ func (o *PlaybackOverlay) Update() {
 			return
 		}
 		// Periodically re-render to keep progress bar and clock current
-		if time.Since(o.lastRender) > time.Second {
+		if time.Since(o.lastRender) > renderInterval {
 			o.renderBar()
 		}
 	}
 
-	// Paused + hidden: show persistent minimal info, updated every second
+	// Paused + hidden: show persistent minimal info
 	if paused && o.Mode == OverlayHidden {
-		if time.Since(o.lastRender) > time.Second {
+		if time.Since(o.lastRender) > renderInterval {
 			o.renderPausedInfo()
 		}
 	}
@@ -241,9 +247,9 @@ func (o *PlaybackOverlay) Update() {
 		}
 	}
 
-	// Re-render next-up banner every second to update countdown
+	// Re-render next-up banner to update countdown
 	if o.Mode == OverlayNextUp {
-		if time.Since(o.lastRender) > time.Second {
+		if time.Since(o.lastRender) > renderInterval {
 			o.renderNextUp()
 		}
 	}
@@ -256,5 +262,5 @@ func (o *PlaybackOverlay) Cleanup() {
 		o.player.OverlayRemove(0)
 		o.imgOverlayShown = false
 	}
-	o.player.ShowText("", 1)
+	o.player.OsdOverlayRemove(osdIDMain)
 }
