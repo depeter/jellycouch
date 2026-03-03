@@ -15,9 +15,16 @@ import (
 	"github.com/depeter/jellycouch/internal/jellyfin"
 	"github.com/depeter/jellycouch/internal/jellyseerr"
 	"github.com/depeter/jellycouch/internal/ui"
+	"github.com/depeter/jellycouch/internal/webview"
 )
 
 func main() {
+	// Webview child process mode — must be checked before any Ebitengine init
+	if len(os.Args) >= 3 && os.Args[1] == "--webview" {
+		webview.RunWebview(os.Args[2])
+		return
+	}
+
 	// Load config
 	cfg, err := config.Load()
 	if err != nil {
@@ -72,6 +79,10 @@ func main() {
 			game.Screens.ClearStack()
 			sf.pushHome()
 			sf.pushJellyseerrDiscover()
+		case "apps":
+			game.Screens.ClearStack()
+			sf.pushHome()
+			sf.pushWebApps()
 		case "settings":
 			game.Screens.ClearStack()
 			sf.pushHome()
@@ -85,6 +96,9 @@ func main() {
 	}
 	navbar.JellyseerrEnabled = func() bool {
 		return game.Jellyseerr != nil
+	}
+	navbar.WebAppsEnabled = func() bool {
+		return len(cfg.WebApps) > 0
 	}
 	game.Screens.NavBar = navbar
 

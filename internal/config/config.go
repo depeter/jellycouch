@@ -14,6 +14,12 @@ type Config struct {
 	Playback   PlaybackConfig   `toml:"playback"`
 	UI         UIConfig         `toml:"ui"`
 	Keybinds   KeybindConfig    `toml:"keybinds"`
+	WebApps    []WebApp         `toml:"webapps"`
+}
+
+type WebApp struct {
+	Name string `toml:"name"`
+	URL  string `toml:"url"`
 }
 
 type JellyseerrConfig struct {

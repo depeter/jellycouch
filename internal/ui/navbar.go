@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"image/color"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -16,6 +17,12 @@ const (
 	NavBarActionDefocus              // return focus to screen below
 )
 
+// navBtn describes a right-side navigation button.
+type navBtn struct {
+	id    string
+	label string
+}
+
 // NavBar is a persistent navigation bar drawn at the top of every screen (except Login).
 type NavBar struct {
 	LibraryViews []struct{ ID, Name string }
@@ -24,13 +31,14 @@ type NavBar struct {
 	Active       bool
 	focusSection int // 0=library buttons, 1=search bar, 2=right nav buttons
 	libNavIndex  int
-	navBtnIndex  int // 0=discovery, 1=settings
+	navBtnIndex  int // index into rightButtons()
 
 	ActiveScreenName string // for visual highlight of current section
 
-	OnNavigate        func(action, id, title string) // "home", "library", "discovery", "settings"
+	OnNavigate        func(action, id, title string) // "home", "library", "discovery", "apps", "settings"
 	OnSearch          func(query string)
 	JellyseerrEnabled func() bool
+	WebAppsEnabled    func() bool
 }
 
 // NewNavBar creates a new NavBar.
@@ -38,6 +46,19 @@ func NewNavBar() *NavBar {
 	return &NavBar{
 		focusSection: 1, // default to search bar
 	}
+}
+
+// rightButtons returns the dynamic list of right-side nav buttons.
+func (nb *NavBar) rightButtons() []navBtn {
+	var btns []navBtn
+	if nb.JellyseerrEnabled != nil && nb.JellyseerrEnabled() {
+		btns = append(btns, navBtn{"discovery", "Discovery"})
+	}
+	if nb.WebAppsEnabled != nil && nb.WebAppsEnabled() {
+		btns = append(btns, navBtn{"apps", "Apps"})
+	}
+	btns = append(btns, navBtn{"settings", "Settings"})
+	return btns
 }
 
 // FocusFromBelow activates keyboard focus on the navbar (called when screen hands focus up).
@@ -115,26 +136,20 @@ func (nb *NavBar) Update() NavBarAction {
 
 		// Right at end → nav buttons
 		if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) && nb.input.CursorAtEnd() {
-			hasDiscovery := nb.JellyseerrEnabled != nil && nb.JellyseerrEnabled()
-			if hasDiscovery {
-				nb.navBtnIndex = 0
-			} else {
-				nb.navBtnIndex = 1
-			}
+			nb.navBtnIndex = 0
 			nb.focusSection = 2
 		}
 
-	case 2: // Nav buttons (discovery/settings)
-		hasDiscovery := nb.JellyseerrEnabled != nil && nb.JellyseerrEnabled()
+	case 2: // Right-side nav buttons (dynamic)
+		btns := nb.rightButtons()
+		if nb.navBtnIndex >= len(btns) {
+			nb.navBtnIndex = len(btns) - 1
+		}
 
 		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-			if nb.navBtnIndex == 0 && hasDiscovery {
+			if nb.navBtnIndex >= 0 && nb.navBtnIndex < len(btns) {
 				if nb.OnNavigate != nil {
-					nb.OnNavigate("discovery", "", "")
-				}
-			} else {
-				if nb.OnNavigate != nil {
-					nb.OnNavigate("settings", "", "")
+					nb.OnNavigate(btns[nb.navBtnIndex].id, "", "")
 				}
 			}
 			nb.Active = false
@@ -142,14 +157,14 @@ func (nb *NavBar) Update() NavBarAction {
 		}
 
 		if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
-			if nb.navBtnIndex == 0 && hasDiscovery {
-				nb.navBtnIndex = 1
+			if nb.navBtnIndex < len(btns)-1 {
+				nb.navBtnIndex++
 			}
 		}
 
 		if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
-			if nb.navBtnIndex == 1 && hasDiscovery {
-				nb.navBtnIndex = 0
+			if nb.navBtnIndex > 0 {
+				nb.navBtnIndex--
 			} else {
 				nb.focusSection = 1 // back to search
 			}
@@ -206,27 +221,32 @@ func (nb *NavBar) HandleClick(mx, my int) bool {
 		return true
 	}
 
-	// Settings button
-	settingsX := float64(ScreenWidth) - SectionPadding - 100
-	if PointInRect(mx, my, settingsX, 12, 100, 38) {
-		if nb.OnNavigate != nil {
-			nb.OnNavigate("settings", "", "")
-		}
-		return true
-	}
-
-	// Discovery button
-	if nb.JellyseerrEnabled != nil && nb.JellyseerrEnabled() {
-		reqX := settingsX - 120
-		if PointInRect(mx, my, reqX, 12, 110, 38) {
+	// Right-side buttons (laid out right-to-left)
+	btns := nb.rightButtons()
+	btnX := float64(ScreenWidth) - SectionPadding
+	for i := len(btns) - 1; i >= 0; i-- {
+		bw := nb.rightBtnWidth(btns[i])
+		btnX -= bw
+		if PointInRect(mx, my, btnX, 12, bw, 38) {
 			if nb.OnNavigate != nil {
-				nb.OnNavigate("discovery", "", "")
+				nb.OnNavigate(btns[i].id, "", "")
 			}
 			return true
 		}
+		btnX -= 10
 	}
 
 	return false
+}
+
+// rightBtnWidth returns the draw width for a right-side button.
+func (nb *NavBar) rightBtnWidth(btn navBtn) float64 {
+	tw, _ := MeasureText(btn.label, FontSizeBody)
+	// Buttons with icons (discovery, settings) get extra space for the icon
+	if btn.id == "discovery" || btn.id == "settings" {
+		return tw + 44 // 16px icon area + padding
+	}
+	return tw + 28
 }
 
 // Draw renders the navbar overlay.
@@ -316,53 +336,67 @@ func (nb *NavBar) Draw(dst *ebiten.Image) {
 		}
 	}
 
-	// Right-side buttons
-	settingsX := float64(ScreenWidth) - SectionPadding - 100
+	// Right-side buttons (laid out right-to-left)
+	btns := nb.rightButtons()
+	btnX := float64(ScreenWidth) - SectionPadding
+	for i := len(btns) - 1; i >= 0; i-- {
+		btn := btns[i]
+		bw := nb.rightBtnWidth(btn)
+		btnX -= bw
+		nb.drawRightButton(dst, btn, btnX, i)
+		btnX -= 10
+	}
+}
 
-	// Discovery button (only when Jellyseerr configured)
-	if nb.JellyseerrEnabled != nil && nb.JellyseerrEnabled() {
-		reqX := settingsX - 120
-		reqY := 12.0
-		reqW := 110.0
-		reqH := 38.0
-		focused := nb.Active && nb.focusSection == 2 && nb.navBtnIndex == 0
-		active := nb.ActiveScreenName == "Discovery"
-		if focused {
-			vector.DrawFilledRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), ColorPrimary, false)
-			DrawTextCentered(dst, "Discovery", reqX+reqW/2+8, reqY+reqH/2, FontSizeBody, ColorBackground)
-			drawCompassIcon(dst, float32(reqX+16), float32(reqY+reqH/2), 7, ColorBackground)
-		} else if active {
-			vector.DrawFilledRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), ColorSurfaceHover, false)
-			vector.StrokeRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), 2, ColorPrimary, false)
-			DrawTextCentered(dst, "Discovery", reqX+reqW/2+8, reqY+reqH/2, FontSizeBody, ColorText)
-			drawCompassIcon(dst, float32(reqX+16), float32(reqY+reqH/2), 7, ColorPrimary)
-		} else {
-			vector.DrawFilledRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), ColorSurfaceHover, false)
-			vector.StrokeRect(dst, float32(reqX), float32(reqY), float32(reqW), float32(reqH), 1, ColorPrimary, false)
-			DrawTextCentered(dst, "Discovery", reqX+reqW/2+8, reqY+reqH/2, FontSizeBody, ColorText)
-			drawCompassIcon(dst, float32(reqX+16), float32(reqY+reqH/2), 7, ColorPrimary)
-		}
+// drawRightButton draws a single right-side nav button.
+func (nb *NavBar) drawRightButton(dst *ebiten.Image, btn navBtn, x float64, idx int) {
+	w := nb.rightBtnWidth(btn)
+	h := 38.0
+	y := 12.0
+	focused := nb.Active && nb.focusSection == 2 && nb.navBtnIndex == idx
+	active := nb.ActiveScreenName == btn.label || (btn.id == "discovery" && nb.ActiveScreenName == "Discovery")
+
+	hasIcon := btn.id == "discovery" || btn.id == "settings"
+	textOffsetX := 0.0
+	if hasIcon {
+		textOffsetX = 8
 	}
 
-	// Settings button
-	settingsY := 12.0
-	settingsW := 100.0
-	settingsH := 38.0
-	sfocused := nb.Active && nb.focusSection == 2 && nb.navBtnIndex == 1
-	sactive := nb.ActiveScreenName == "Settings"
-	if sfocused {
-		vector.DrawFilledRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), ColorPrimary, false)
-		DrawTextCentered(dst, "Settings", settingsX+settingsW/2+8, settingsY+settingsH/2, FontSizeBody, ColorBackground)
-		drawGearIcon(dst, float32(settingsX+16), float32(settingsY+settingsH/2), 7, ColorBackground)
-	} else if sactive {
-		vector.DrawFilledRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), ColorSurfaceHover, false)
-		vector.StrokeRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), 2, ColorTextSecondary, false)
-		DrawTextCentered(dst, "Settings", settingsX+settingsW/2+8, settingsY+settingsH/2, FontSizeBody, ColorText)
-		drawGearIcon(dst, float32(settingsX+16), float32(settingsY+settingsH/2), 7, ColorTextSecondary)
+	// Determine border color for this button type
+	borderColor := ColorPrimary
+	if btn.id == "settings" {
+		borderColor = ColorTextSecondary
+	}
+
+	if focused {
+		vector.DrawFilledRect(dst, float32(x), float32(y), float32(w), float32(h), ColorPrimary, false)
+		DrawTextCentered(dst, btn.label, x+w/2+textOffsetX, y+h/2, FontSizeBody, ColorBackground)
+		if hasIcon {
+			nb.drawBtnIcon(dst, btn.id, float32(x+16), float32(y+h/2), 7, ColorBackground)
+		}
+	} else if active {
+		vector.DrawFilledRect(dst, float32(x), float32(y), float32(w), float32(h), ColorSurfaceHover, false)
+		vector.StrokeRect(dst, float32(x), float32(y), float32(w), float32(h), 2, borderColor, false)
+		DrawTextCentered(dst, btn.label, x+w/2+textOffsetX, y+h/2, FontSizeBody, ColorText)
+		if hasIcon {
+			nb.drawBtnIcon(dst, btn.id, float32(x+16), float32(y+h/2), 7, borderColor)
+		}
 	} else {
-		vector.DrawFilledRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), ColorSurfaceHover, false)
-		vector.StrokeRect(dst, float32(settingsX), float32(settingsY), float32(settingsW), float32(settingsH), 1, ColorTextSecondary, false)
-		DrawTextCentered(dst, "Settings", settingsX+settingsW/2+8, settingsY+settingsH/2, FontSizeBody, ColorText)
-		drawGearIcon(dst, float32(settingsX+16), float32(settingsY+settingsH/2), 7, ColorTextSecondary)
+		vector.DrawFilledRect(dst, float32(x), float32(y), float32(w), float32(h), ColorSurfaceHover, false)
+		vector.StrokeRect(dst, float32(x), float32(y), float32(w), float32(h), 1, borderColor, false)
+		DrawTextCentered(dst, btn.label, x+w/2+textOffsetX, y+h/2, FontSizeBody, ColorText)
+		if hasIcon {
+			nb.drawBtnIcon(dst, btn.id, float32(x+16), float32(y+h/2), 7, borderColor)
+		}
+	}
+}
+
+// drawBtnIcon draws the icon for a specific button type.
+func (nb *NavBar) drawBtnIcon(dst *ebiten.Image, id string, cx, cy, radius float32, clr color.Color) {
+	switch id {
+	case "discovery":
+		drawCompassIcon(dst, cx, cy, radius, clr)
+	case "settings":
+		drawGearIcon(dst, cx, cy, radius, clr)
 	}
 }

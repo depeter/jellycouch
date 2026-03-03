@@ -154,6 +154,14 @@ func (sf *screenFactory) pushJellyseerrRequests() {
 	sf.game.Screens.Push(reqsScreen)
 }
 
+func (sf *screenFactory) pushWebApps() {
+	screen := ui.NewWebAppsScreen(sf.cfg.WebApps)
+	screen.OnLaunch = func(url string) {
+		sf.game.StartWebApp(url)
+	}
+	sf.game.Screens.Push(screen)
+}
+
 func (sf *screenFactory) loadNavBarViews() {
 	if sf.game.Client == nil {
 		return

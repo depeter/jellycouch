@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -16,6 +17,7 @@ import (
 	"github.com/depeter/jellycouch/internal/jellyseerr"
 	"github.com/depeter/jellycouch/internal/player"
 	"github.com/depeter/jellycouch/internal/ui"
+	"github.com/depeter/jellycouch/internal/webview"
 )
 
 // Game implements ebiten.Game and manages the overall application.
@@ -40,6 +42,9 @@ type Game struct {
 	nextEpBGRAPath string              // temp file for thumbnail overlay
 
 	startFullscreen bool // apply fullscreen on first Update() frame
+
+	webCmd    *exec.Cmd
+	webExited chan struct{}
 }
 
 // NewGame creates the Game with all dependencies.
@@ -155,33 +160,6 @@ func (g *Game) PlayURL(url string) {
 	g.playbackEnded = false
 }
 
-// PlayURL plays an arbitrary URL (e.g. YouTube trailer) via mpv without Jellyfin progress reporting.
-func (g *Game) PlayURL(url string) {
-	if g.Player == nil {
-		if err := g.InitPlayer(); err != nil {
-			log.Printf("Failed to init player: %v", err)
-			return
-		}
-	}
-
-	wid, err := player.GetWindowHandle()
-	if err != nil {
-		log.Printf("Failed to get window handle: %v", err)
-		return
-	}
-	if err := g.Player.SetWindowID(wid); err != nil {
-		log.Printf("Failed to set window ID: %v", err)
-	}
-
-	if err := g.Player.LoadFile(url, ""); err != nil {
-		log.Printf("Failed to load URL: %v", err)
-		return
-	}
-
-	g.State = StatePlay
-	g.playbackEnded = false
-}
-
 // StopPlayback transitions back to browse mode.
 func (g *Game) StopPlayback() {
 	if g.overlay != nil {
@@ -290,6 +268,34 @@ func (g *Game) playNextEpisode() {
 	}
 	// Fallback: trigger async lookup
 	g.findAndQueueNextEpisode()
+}
+
+// StartWebApp launches a web app in a child webview process.
+func (g *Game) StartWebApp(url string) {
+	cmd, err := webview.StartWebApp(url)
+	if err != nil {
+		log.Printf("Failed to start web app: %v", err)
+		return
+	}
+	g.webCmd = cmd
+	g.webExited = make(chan struct{})
+	g.State = StateWeb
+
+	go func() {
+		cmd.Wait()
+		close(g.webExited)
+	}()
+}
+
+// StopWebApp kills the webview child process and returns to browse mode.
+func (g *Game) StopWebApp() {
+	if g.webCmd != nil && g.webCmd.Process != nil {
+		g.webCmd.Process.Kill()
+		g.webCmd.Wait()
+	}
+	g.webCmd = nil
+	g.webExited = nil
+	g.State = StateBrowse
 }
 
 // findAndQueueNextEpisode looks up the next episode and sends it on nextEpCh.
@@ -438,6 +444,15 @@ func (g *Game) Update() error {
 		// Forward playback controls to mpv (required on Windows where
 		// embedded mpv doesn't receive keyboard input directly)
 		g.handlePlaybackInput()
+
+	case StateWeb:
+		select {
+		case <-g.webExited:
+			g.webCmd = nil
+			g.webExited = nil
+			g.State = StateBrowse
+		default:
+		}
 	}
 
 	ui.UpdateInputState()
@@ -455,6 +470,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		// In play mode, mpv owns the window surface via --wid.
 		// We don't draw anything — mpv renders directly.
 		// During playback, evdev events are still logged to terminal.
+
+	case StateWeb:
+		screen.Fill(ui.ColorBackground)
+		ui.DrawTextCentered(screen, "Web app running...",
+			float64(g.Width)/2, float64(g.Height)/2,
+			ui.FontSizeHeading, ui.ColorTextMuted)
 	}
 }
 
