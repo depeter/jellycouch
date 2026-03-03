@@ -21,13 +21,13 @@ func (o *PlaybackOverlay) renderPausedInfo() {
 		o.scale(22), assColorWhite, clock,
 		o.scale(14), assColorGray, o.buildProgressBar(o.barWidth()),
 		o.scale(17), assColorWhite, formatDuration(pos), formatDuration(dur))
-	o.player.OsdOverlay(osdIDPaused, ass, o.screenW, o.screenH)
+	o.player.OsdOverlay(osdIDPausedBar, ass, o.screenW, o.screenH)
 	o.pausedOsdShown = true
 }
 
 // hidePausedOsd removes the persistent paused overlay.
 func (o *PlaybackOverlay) hidePausedOsd() {
-	o.player.OsdOverlayRemove(osdIDPaused)
+	o.player.OsdOverlayRemove(osdIDPausedBar)
 	o.pausedOsdShown = false
 }
 

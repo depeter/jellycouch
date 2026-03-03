@@ -191,7 +191,7 @@ func (o *PlaybackOverlay) btnCenterX(target ControlButton) int {
 	return int(barStartX + targetCenterRune*charW)
 }
 
-// renderBar renders the control bar ASS and sends it to mpv via osd-overlay.
+// renderBar renders the control bar ASS and sends it to mpv.
 func (o *PlaybackOverlay) renderBar() {
 	o.lastRender = time.Now()
 
@@ -219,12 +219,9 @@ func (o *PlaybackOverlay) renderBar() {
 		o.imgOverlayShown = false
 	}
 
-	// Clock event (top-right)
-	clock := fmt.Sprintf("{\\an9\\bord2\\fs%d%s}%s",
-		o.scale(22), assColorWhite, time.Now().Format("15:04"))
-
-	// Bar event (bottom-center)
 	var b strings.Builder
+
+	b.WriteString("${osd-ass-cc/0}")
 	b.WriteString("{\\an2\\bord0\\shad0\\fsp0}")
 
 	// Next episode tooltip line (above progress bar)
@@ -248,28 +245,18 @@ func (o *PlaybackOverlay) renderBar() {
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(14), barColor))
 	b.WriteString(o.buildProgressBar(o.barWidth()) + "\\N")
 
-	// Time, volume, and pause line
-	pos := o.player.Position()
-	dur := o.player.Duration()
+	// Time, volume, and wall clock line
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(17), assColorWhite))
-	b.WriteString(fmt.Sprintf("%s / %s", formatDuration(pos), formatDuration(dur)))
+	b.WriteString("${time-pos} / ${duration}")
 	b.WriteString("    ")
-	if o.player.Muted() {
-		b.WriteString("Muted")
-	} else {
-		b.WriteString(fmt.Sprintf("Vol: %.0f%%", o.player.Volume()))
-	}
-	if o.player.Paused() {
-		b.WriteString(fmt.Sprintf("{\\fs%d%s}  \\NPaused", o.scale(16), assColorGray))
-	}
+	b.WriteString("${?mute==yes:Muted}${!mute:Vol: ${volume}%}")
+	b.WriteString(fmt.Sprintf("    %s", time.Now().Format("15:04")))
+	b.WriteString(fmt.Sprintf("{\\fs%d%s}${?pause==yes:  \\NPaused}", o.scale(16), assColorGray))
 	b.WriteString("\\N")
 
 	// Button row
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(19)))
-	playPauseLabel := "\u25B6"
-	if !o.player.Paused() {
-		playPauseLabel = "\u25AE\u25AE"
-	}
+	playPauseLabel := "${?pause==yes:\u25B6}${!pause==yes:\u25AE\u25AE}"
 	btnLabelMap := map[ControlButton]string{
 		BtnSeekBack60: "\u25C0\u25C0",
 		BtnSeekBack10: "\u25C0",
@@ -296,7 +283,7 @@ func (o *PlaybackOverlay) renderBar() {
 		}
 	}
 
-	o.player.OsdOverlay(osdIDMain, clock+"\n"+b.String(), o.screenW, o.screenH)
+	o.player.ShowText(b.String(), int(o.hideDelay.Milliseconds()+1000))
 }
 
 // buildProgressBar creates a Unicode block progress bar using current position/duration.
