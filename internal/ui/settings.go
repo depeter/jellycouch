@@ -22,6 +22,10 @@ type SettingsScreen struct {
 	editInput    TextInput
 	editError    string
 
+	// Scroll offset for long settings lists
+	scrollY       float64
+	targetScrollY float64
+
 	// Row rects for mouse clicks (flat list across all sections)
 	rowRects []settingsRowRect
 	// Paste button rect (only valid while editing)
@@ -163,6 +167,39 @@ func cycleOption(item *settingsItem, delta int) {
 	item.OnChange(item.Options[idx])
 }
 
+// itemY computes the Y position of a settings item (before scroll offset).
+func (ss *SettingsScreen) itemY(si, ii int) float64 {
+	y := float64(NavBarHeight*2 + 10)
+	for s := 0; s <= si; s++ {
+		y += FontSizeHeading + 12 // section heading
+		if s < si {
+			y += float64(len(ss.sections[s].Items)) * 64
+			y += 24 // section gap
+		} else {
+			y += float64(ii) * 64
+		}
+	}
+	return y
+}
+
+// ensureFocusVisible adjusts scroll so the focused item is on screen.
+func (ss *SettingsScreen) ensureFocusVisible() {
+	itemTop := ss.itemY(ss.sectionIndex, ss.itemIndex)
+	itemBottom := itemTop + 64
+	viewTop := ss.targetScrollY
+	viewBottom := ss.targetScrollY + float64(ScreenHeight-NavBarHeight)
+
+	if itemBottom > viewBottom {
+		ss.targetScrollY = itemBottom - float64(ScreenHeight-NavBarHeight)
+	}
+	if itemTop < viewTop {
+		ss.targetScrollY = itemTop
+	}
+	if ss.targetScrollY < 0 {
+		ss.targetScrollY = 0
+	}
+}
+
 func (ss *SettingsScreen) openLangEditor(item *settingsItem) {
 	title := item.Label + " Preferences"
 	ss.langEditor = NewLangEditor(title, item.Value())
@@ -223,6 +260,15 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 		return nil, nil
 	}
 
+	// Mouse wheel scrolling
+	_, wy := MouseWheelDelta()
+	if wy != 0 {
+		ss.targetScrollY -= wy * ScrollWheelSpeed
+		if ss.targetScrollY < 0 {
+			ss.targetScrollY = 0
+		}
+	}
+
 	if back {
 		return &ScreenTransition{Type: TransitionPop}, nil
 	}
@@ -265,6 +311,7 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 				ss.itemIndex = len(ss.sections[ss.sectionIndex].Items) - 1
 			}
 		}
+		ss.ensureFocusVisible()
 	case DirDown:
 		ss.itemIndex++
 		if ss.itemIndex >= len(ss.sections[ss.sectionIndex].Items) {
@@ -276,6 +323,7 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 				ss.itemIndex = 0
 			}
 		}
+		ss.ensureFocusVisible()
 	case DirLeft:
 		item := ss.focusedItem()
 		if item.Options != nil {
@@ -306,9 +354,12 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 }
 
 func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
-	DrawText(dst, "Settings", SectionPadding, NavBarHeight+20, FontSizeTitle, ColorText)
+	// Smooth scroll animation
+	ss.scrollY = Lerp(ss.scrollY, ss.targetScrollY, ScrollAnimSpeed)
 
-	y := float64(NavBarHeight*2 + 10)
+	DrawText(dst, "Settings", SectionPadding, NavBarHeight+20-ss.scrollY, FontSizeTitle, ColorText)
+
+	y := float64(NavBarHeight*2+10) - ss.scrollY
 	ss.rowRects = ss.rowRects[:0] // reset
 
 	for si, sec := range ss.sections {
