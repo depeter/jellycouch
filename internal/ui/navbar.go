@@ -58,6 +58,7 @@ func (nb *NavBar) rightButtons() []navBtn {
 		btns = append(btns, navBtn{"apps", "Apps"})
 	}
 	btns = append(btns, navBtn{"settings", "Settings"})
+	btns = append(btns, navBtn{"quit", "Quit"})
 	return btns
 }
 
@@ -364,7 +365,7 @@ func (nb *NavBar) drawRightButton(dst *ebiten.Image, btn navBtn, x float64, idx 
 
 	// Determine border color for this button type
 	borderColor := ColorPrimary
-	if btn.id == "settings" {
+	if btn.id == "settings" || btn.id == "quit" {
 		borderColor = ColorTextSecondary
 	}
 

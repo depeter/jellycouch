@@ -87,6 +87,8 @@ func main() {
 			game.Screens.ClearStack()
 			sf.pushHome()
 			sf.pushSettings()
+		case "quit":
+			game.QuitRequested = true
 		}
 	}
 	navbar.OnSearch = func(query string) {

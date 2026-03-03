@@ -38,6 +38,9 @@ type Game struct {
 	// game state, to avoid data races with Update()/Draw().
 	MainActions chan func()
 
+	// QuitRequested is set to true when the user clicks the Quit button.
+	QuitRequested bool
+
 	// Set to true when mpv playback ends and we need to return to browse mode
 	playbackEnded atomic.Bool
 
@@ -398,6 +401,10 @@ func (g *Game) lookupNextEpisode(item *jellyfin.MediaItem) *jellyfin.MediaItem {
 }
 
 func (g *Game) Update() error {
+	if g.QuitRequested {
+		return ebiten.Termination
+	}
+
 	// Drain main-thread action queue (closures from background goroutines)
 	for {
 		select {
