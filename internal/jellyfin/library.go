@@ -74,7 +74,9 @@ var (
 
 // GetViews returns the user's media libraries (Movies, TV Shows, Music, etc.)
 func (c *Client) GetViews() ([]MediaItem, error) {
-	result, _, err := c.api.UserViewsAPI.GetUserViews(c.reqCtx()).UserId(c.userID).Execute()
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	result, _, err := c.api.UserViewsAPI.GetUserViews(ctx).UserId(c.userID).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("get views: %w", err)
 	}
@@ -83,7 +85,9 @@ func (c *Client) GetViews() ([]MediaItem, error) {
 
 // GetLatestMedia returns the latest items in a library.
 func (c *Client) GetLatestMedia(parentID string, limit int) ([]MediaItem, error) {
-	req := c.api.UserLibraryAPI.GetLatestMedia(c.reqCtx()).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	req := c.api.UserLibraryAPI.GetLatestMedia(ctx).
 		UserId(c.userID).
 		Limit(int32(limit)).
 		Fields(defaultFields).
@@ -101,7 +105,9 @@ func (c *Client) GetLatestMedia(parentID string, limit int) ([]MediaItem, error)
 
 // GetItems returns items in a library with pagination.
 func (c *Client) GetItems(parentID string, start, limit int, itemTypes []string) ([]MediaItem, int, error) {
-	req := c.api.ItemsAPI.GetItems(c.reqCtx()).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	req := c.api.ItemsAPI.GetItems(ctx).
 		UserId(c.userID).
 		StartIndex(int32(start)).
 		Limit(int32(limit)).
@@ -143,7 +149,9 @@ func (c *Client) GetFilteredItems(parentID string, start, limit int, itemTypes [
 		sortOrder = jellyfin.SORTORDER_ASCENDING
 	}
 
-	req := c.api.ItemsAPI.GetItems(c.reqCtx()).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	req := c.api.ItemsAPI.GetItems(ctx).
 		UserId(c.userID).
 		StartIndex(int32(start)).
 		Limit(int32(limit)).
@@ -193,7 +201,9 @@ func (c *Client) GetFilteredItems(parentID string, start, limit int, itemTypes [
 
 // GetCollectionType returns the collection type of a library view (e.g. "tvshows", "movies").
 func (c *Client) GetCollectionType(parentID string) (string, error) {
-	item, _, err := c.api.UserLibraryAPI.GetItem(c.reqCtx(), parentID).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	item, _, err := c.api.UserLibraryAPI.GetItem(ctx, parentID).
 		UserId(c.userID).
 		Execute()
 	if err != nil {
@@ -204,7 +214,9 @@ func (c *Client) GetCollectionType(parentID string) (string, error) {
 
 // GetGenres returns genre names for a library, sorted alphabetically.
 func (c *Client) GetGenres(parentID string, itemTypes []string) ([]string, error) {
-	req := c.api.GenresAPI.GetGenres(c.reqCtx()).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	req := c.api.GenresAPI.GetGenres(ctx).
 		UserId(c.userID)
 	if parentID != "" {
 		req = req.ParentId(parentID)
@@ -230,7 +242,9 @@ func (c *Client) GetGenres(parentID string, itemTypes []string) ([]string, error
 
 // GetSeasons returns seasons for a series.
 func (c *Client) GetSeasons(seriesID string) ([]MediaItem, error) {
-	result, _, err := c.api.TvShowsAPI.GetSeasons(c.reqCtx(), seriesID).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	result, _, err := c.api.TvShowsAPI.GetSeasons(ctx, seriesID).
 		UserId(c.userID).
 		Fields(metadataFields).
 		Execute()
@@ -242,7 +256,9 @@ func (c *Client) GetSeasons(seriesID string) ([]MediaItem, error) {
 
 // GetEpisodes returns episodes for a season.
 func (c *Client) GetEpisodes(seriesID string, seasonID string) ([]MediaItem, error) {
-	req := c.api.TvShowsAPI.GetEpisodes(c.reqCtx(), seriesID).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	req := c.api.TvShowsAPI.GetEpisodes(ctx, seriesID).
 		UserId(c.userID).
 		Fields(metadataFields).
 		SeasonId(seasonID)
@@ -255,7 +271,9 @@ func (c *Client) GetEpisodes(seriesID string, seasonID string) ([]MediaItem, err
 
 // GetResumeItems returns items the user can resume watching.
 func (c *Client) GetResumeItems(limit int) ([]MediaItem, error) {
-	result, _, err := c.api.ItemsAPI.GetResumeItems(c.reqCtx()).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	result, _, err := c.api.ItemsAPI.GetResumeItems(ctx).
 		UserId(c.userID).
 		Limit(int32(limit)).
 		Fields(defaultFields).
@@ -270,7 +288,9 @@ func (c *Client) GetResumeItems(limit int) ([]MediaItem, error) {
 
 // GetNextUp returns next episodes to watch.
 func (c *Client) GetNextUp(limit int) ([]MediaItem, error) {
-	result, _, err := c.api.TvShowsAPI.GetNextUp(c.reqCtx()).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	result, _, err := c.api.TvShowsAPI.GetNextUp(ctx).
 		UserId(c.userID).
 		Limit(int32(limit)).
 		Fields(metadataFields).
@@ -284,7 +304,9 @@ func (c *Client) GetNextUp(limit int) ([]MediaItem, error) {
 
 // SearchItems searches for items by name.
 func (c *Client) SearchItems(query string, limit int) ([]MediaItem, error) {
-	result, _, err := c.api.ItemsAPI.GetItems(c.reqCtx()).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	result, _, err := c.api.ItemsAPI.GetItems(ctx).
 		UserId(c.userID).
 		SearchTerm(query).
 		Limit(int32(limit)).
@@ -305,7 +327,9 @@ func (c *Client) SearchItems(query string, limit int) ([]MediaItem, error) {
 
 // GetItem returns a single item by ID.
 func (c *Client) GetItem(itemID string) (*MediaItem, error) {
-	result, _, err := c.api.UserLibraryAPI.GetItem(c.reqCtx(), itemID).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	result, _, err := c.api.UserLibraryAPI.GetItem(ctx, itemID).
 		UserId(c.userID).
 		Execute()
 	if err != nil {

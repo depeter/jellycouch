@@ -245,8 +245,10 @@ func (p *Player) LoadFile(url string, itemID string, startSeconds float64) error
 	p.itemID = itemID
 	p.playing = true
 	p.paused = false
+	p.position = 0
+	p.duration = 0
 	p.mu.Unlock()
-	return p.do(func(m *mpv.Mpv) error {
+	err := p.do(func(m *mpv.Mpv) error {
 		// Set or clear start position before loading the file.
 		// Using the options/ property prefix is more reliable than
 		// passing start= as a loadfile option via command_string.
@@ -257,6 +259,12 @@ func (p *Player) LoadFile(url string, itemID string, startSeconds float64) error
 		}
 		return m.CommandString(mpvCmd("loadfile", url))
 	})
+	if err != nil {
+		p.mu.Lock()
+		p.playing = false
+		p.mu.Unlock()
+	}
+	return err
 }
 
 // Seek seeks relative to current position.

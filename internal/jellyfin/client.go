@@ -57,7 +57,9 @@ func (c *Client) Authenticate(username, password string) error {
 	body.SetUsername(username)
 	body.SetPw(password)
 
-	result, resp, err := c.api.UserAPI.AuthenticateUserByName(c.reqCtx()).AuthenticateUserByName(body).Execute()
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	result, resp, err := c.api.UserAPI.AuthenticateUserByName(ctx).AuthenticateUserByName(body).Execute()
 	if err != nil {
 		return fmt.Errorf("auth failed: %w (status: %s)", err, respStatus(resp))
 	}
@@ -85,13 +87,9 @@ func (c *Client) API() *jellyfin.APIClient { return c.api }
 func (c *Client) Context() context.Context { return c.ctx }
 
 // reqCtx returns a context with a per-request timeout for API calls.
-// The cancel function is intentionally not returned because SDK calls are
-// synchronous — the context is cleaned up when the goroutine-scoped
-// deadline timer fires or when the parent context is cancelled.
-func (c *Client) reqCtx() context.Context {
-	ctx, cancel := context.WithTimeout(c.ctx, apiRequestTimeout)
-	_ = cancel // suppress vet; SDK Execute() calls are synchronous, context will be GC'd
-	return ctx
+// Callers must defer the cancel function to release timer resources promptly.
+func (c *Client) reqCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(c.ctx, apiRequestTimeout)
 }
 
 func respStatus(resp *http.Response) string {

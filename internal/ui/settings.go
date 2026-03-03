@@ -25,7 +25,8 @@ type SettingsScreen struct {
 	// Row rects for mouse clicks (flat list across all sections)
 	rowRects []settingsRowRect
 	// Paste button rect (only valid while editing)
-	pasteRect ButtonRect
+	pasteRect    ButtonRect
+	pendingPaste chan string // async clipboard result for paste button
 
 	langEditor *LangEditor
 
@@ -184,12 +185,25 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 		if ss.editInput.Update() {
 			ss.editError = "" // clear error as user types
 		}
-		// Paste button click
+		// Check for pending paste result
+		if ss.pendingPaste != nil {
+			select {
+			case clip := <-ss.pendingPaste:
+				ss.pendingPaste = nil
+				if clip != "" {
+					ss.editInput.insertAtCursor(clip)
+					ss.editError = ""
+				}
+			default:
+			}
+		}
+		// Paste button click — start async clipboard read
 		mx, my, clicked := MouseJustClicked()
 		if clicked && PointInRect(mx, my, ss.pasteRect.X, ss.pasteRect.Y, ss.pasteRect.W, ss.pasteRect.H) {
-			if clip := readClipboard(); clip != "" {
-				ss.editInput.insertAtCursor(clip)
-				ss.editError = ""
+			if ss.pendingPaste == nil {
+				ch := make(chan string, 1)
+				ss.pendingPaste = ch
+				go func() { ch <- readClipboard() }()
 			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {

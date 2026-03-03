@@ -33,6 +33,11 @@ type Game struct {
 	State         AppState
 	Width, Height int
 
+	// MainActions receives functions to execute on the main Ebitengine thread.
+	// Background goroutines must send closures here instead of directly mutating
+	// game state, to avoid data races with Update()/Draw().
+	MainActions chan func()
+
 	// Set to true when mpv playback ends and we need to return to browse mode
 	playbackEnded atomic.Bool
 
@@ -67,6 +72,7 @@ func NewGame(cfg *config.Config, client *jellyfin.Client, imgCache *cache.ImageC
 		Width:           cfg.UI.Width,
 		Height:          cfg.UI.Height,
 		startFullscreen: cfg.UI.Fullscreen,
+		MainActions:     make(chan func(), 16),
 	}
 	return g
 }
@@ -217,6 +223,7 @@ func (g *Game) prefetchNextEpisode(item *jellyfin.MediaItem) {
 	ch := g.prefetchDone // capture locally
 
 	if item == nil || item.Type != "Episode" || item.SeriesID == "" {
+		ch <- &prefetchResult{} // signal no next episode to unblock main thread
 		return
 	}
 
@@ -308,9 +315,12 @@ func (g *Game) StartWebApp(url string) {
 // StopWebApp kills the webview child process and returns to browse mode.
 func (g *Game) StopWebApp() {
 	if g.webCmd != nil && g.webCmd.Process != nil {
-		g.webCmd.Process.Kill()
-		// Wait for the goroutine's cmd.Wait() to finish (avoids calling Wait twice).
-		if g.webExited != nil {
+		// Check if already exited before killing
+		select {
+		case <-g.webExited:
+			// Already exited, no need to kill
+		default:
+			g.webCmd.Process.Kill()
 			<-g.webExited
 		}
 	}
@@ -377,6 +387,17 @@ func (g *Game) lookupNextEpisode(item *jellyfin.MediaItem) *jellyfin.MediaItem {
 }
 
 func (g *Game) Update() error {
+	// Drain main-thread action queue (closures from background goroutines)
+	for {
+		select {
+		case fn := <-g.MainActions:
+			fn()
+		default:
+			goto actionsDrained
+		}
+	}
+actionsDrained:
+
 	// Apply fullscreen on first frame (unreliable before RunGame on Linux)
 	if g.startFullscreen {
 		g.startFullscreen = false

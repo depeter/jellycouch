@@ -31,6 +31,8 @@ type JellyseerrRequestsScreen struct {
 	focusMode   int // 0=filter tabs, 1=request list
 	loading     bool
 	loadError   string
+	loadGen     int  // generation counter; only the latest load applies results
+	loaded      bool // true after initial load completes
 
 	ScrollState
 
@@ -62,7 +64,9 @@ func NewJellyseerrRequestsScreen(client *jellyseerr.Client, imgCache *cache.Imag
 func (jr *JellyseerrRequestsScreen) Name() string { return "My Requests" }
 
 func (jr *JellyseerrRequestsScreen) OnEnter() {
-	go jr.loadRequests()
+	if !jr.loaded {
+		go jr.loadRequests()
+	}
 }
 
 func (jr *JellyseerrRequestsScreen) OnExit() {}
@@ -71,6 +75,8 @@ func (jr *JellyseerrRequestsScreen) loadRequests() {
 	jr.mu.Lock()
 	jr.loading = true
 	jr.loadError = ""
+	jr.loadGen++
+	gen := jr.loadGen
 	filter := requestFilters[jr.filterIndex]
 	jr.mu.Unlock()
 
@@ -78,6 +84,11 @@ func (jr *JellyseerrRequestsScreen) loadRequests() {
 
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
+
+	// Discard stale results if a newer load was started
+	if gen != jr.loadGen {
+		return
+	}
 	jr.loading = false
 
 	if err != nil {
@@ -85,6 +96,7 @@ func (jr *JellyseerrRequestsScreen) loadRequests() {
 		return
 	}
 
+	jr.loaded = true
 	jr.requests = requests
 	jr.total = total
 	jr.grid.SetTotal(len(requests))

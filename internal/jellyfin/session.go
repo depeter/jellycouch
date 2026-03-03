@@ -15,7 +15,9 @@ func (c *Client) ReportPlaybackStart(itemID string, positionTicks int64) error {
 	body.SetCanSeek(true)
 	body.SetPlayMethod(jellyfin.PLAYMETHOD_DIRECT_PLAY)
 
-	_, err := c.api.PlaystateAPI.ReportPlaybackStart(c.reqCtx()).PlaybackStartInfo(body).Execute()
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	_, err := c.api.PlaystateAPI.ReportPlaybackStart(ctx).PlaybackStartInfo(body).Execute()
 	if err != nil {
 		return fmt.Errorf("report playback start: %w", err)
 	}
@@ -31,7 +33,9 @@ func (c *Client) ReportPlaybackProgress(itemID string, positionTicks int64, isPa
 	body.SetCanSeek(true)
 	body.SetPlayMethod(jellyfin.PLAYMETHOD_DIRECT_PLAY)
 
-	_, err := c.api.PlaystateAPI.ReportPlaybackProgress(c.reqCtx()).PlaybackProgressInfo(body).Execute()
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	_, err := c.api.PlaystateAPI.ReportPlaybackProgress(ctx).PlaybackProgressInfo(body).Execute()
 	if err != nil {
 		return fmt.Errorf("report progress: %w", err)
 	}
@@ -44,7 +48,9 @@ func (c *Client) ReportPlaybackStopped(itemID string, positionTicks int64) error
 	body.SetItemId(itemID)
 	body.SetPositionTicks(positionTicks)
 
-	_, err := c.api.PlaystateAPI.ReportPlaybackStopped(c.reqCtx()).PlaybackStopInfo(body).Execute()
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	_, err := c.api.PlaystateAPI.ReportPlaybackStopped(ctx).PlaybackStopInfo(body).Execute()
 	if err != nil {
 		return fmt.Errorf("report playback stopped: %w", err)
 	}
@@ -53,7 +59,9 @@ func (c *Client) ReportPlaybackStopped(itemID string, positionTicks int64) error
 
 // MarkPlayed marks an item as played.
 func (c *Client) MarkPlayed(itemID string) error {
-	_, _, err := c.api.PlaystateAPI.MarkPlayedItem(c.reqCtx(), itemID).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	_, _, err := c.api.PlaystateAPI.MarkPlayedItem(ctx, itemID).
 		UserId(c.userID).
 		DatePlayed(time.Now()).
 		Execute()
@@ -65,7 +73,9 @@ func (c *Client) MarkPlayed(itemID string) error {
 
 // MarkUnplayed marks an item as unplayed.
 func (c *Client) MarkUnplayed(itemID string) error {
-	_, _, err := c.api.PlaystateAPI.MarkUnplayedItem(c.reqCtx(), itemID).
+	ctx, cancel := c.reqCtx()
+	defer cancel()
+	_, _, err := c.api.PlaystateAPI.MarkUnplayedItem(ctx, itemID).
 		UserId(c.userID).
 		Execute()
 	if err != nil {

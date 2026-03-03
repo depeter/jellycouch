@@ -243,7 +243,10 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 							hs.OnLibraryBrowse(meta.ParentID, meta.Title)
 						}
 					} else if hs.OnItemSelected != nil {
-						fullItem, err := hs.client.GetItem(item.ID)
+						itemID := item.ID
+						hs.mu.Unlock()
+						fullItem, err := hs.client.GetItem(itemID)
+						hs.mu.Lock()
 						if err == nil {
 							hs.OnItemSelected(*fullItem)
 						}
@@ -306,8 +309,11 @@ func (hs *HomeScreen) Update() (*ScreenTransition, error) {
 					hs.OnLibraryBrowse(meta.ParentID, meta.Title)
 				}
 			} else if hs.OnItemSelected != nil {
-				// Fetch full item data
-				fullItem, err := hs.client.GetItem(item.ID)
+				// Fetch full item data — release mutex during network call
+				itemID := item.ID
+				hs.mu.Unlock()
+				fullItem, err := hs.client.GetItem(itemID)
+				hs.mu.Lock()
 				if err == nil {
 					hs.OnItemSelected(*fullItem)
 				}

@@ -17,6 +17,8 @@ type LangEditor struct {
 	column     int         // 0=selected, 1=available
 	selIndex   int         // focus index in selected column
 	availIndex int         // focus index in available column
+	selScroll  int         // scroll offset for selected column
+	availScroll int        // scroll offset for available column
 	done       bool
 	result     string
 }
@@ -126,6 +128,22 @@ func (le *LangEditor) Update() {
 		}
 	}
 
+	// Ensure focused item is visible (scroll into view)
+	maxRows := int((600 - 130) / 28) // matches Draw() calculation
+	if le.column == 0 {
+		if le.selIndex < le.selScroll {
+			le.selScroll = le.selIndex
+		} else if le.selIndex >= le.selScroll+maxRows {
+			le.selScroll = le.selIndex - maxRows + 1
+		}
+	} else {
+		if le.availIndex < le.availScroll {
+			le.availScroll = le.availIndex
+		} else if le.availIndex >= le.availScroll+maxRows {
+			le.availScroll = le.availIndex - maxRows + 1
+		}
+	}
+
 	if enter {
 		if le.column == 0 && len(le.selected) > 0 {
 			// Remove from selected
@@ -188,11 +206,13 @@ func (le *LangEditor) Draw(dst *ebiten.Image) {
 
 	// Selected column
 	maxRows := int((panelH - 130) / 28)
-	for i, code := range le.selected {
-		if i >= maxRows {
+	for vi := 0; vi < maxRows; vi++ {
+		i := vi + le.selScroll
+		if i >= len(le.selected) {
 			break
 		}
-		iy := float32(listY) + float32(i)*28
+		code := le.selected[i]
+		iy := float32(listY) + float32(vi)*28
 		isFocused := le.column == 0 && i == le.selIndex
 		if isFocused {
 			vector.DrawFilledRect(dst, leftX, iy-2, colW, 26, ColorSurfaceHover, false)
@@ -209,11 +229,13 @@ func (le *LangEditor) Draw(dst *ebiten.Image) {
 	}
 
 	// Available column
-	for i, entry := range avail {
-		if i >= maxRows {
+	for vi := 0; vi < maxRows; vi++ {
+		i := vi + le.availScroll
+		if i >= len(avail) {
 			break
 		}
-		iy := float32(listY) + float32(i)*28
+		entry := avail[i]
+		iy := float32(listY) + float32(vi)*28
 		isFocused := le.column == 1 && i == le.availIndex
 		if isFocused {
 			vector.DrawFilledRect(dst, rightX, iy-2, colW, 26, ColorSurfaceHover, false)

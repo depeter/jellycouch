@@ -31,10 +31,10 @@ type FilterBar struct {
 	Active       bool
 	OnChanged    func()
 
-	pillRects     []ButtonRect
-	searchRect    ButtonRect
-	debounceTimer *time.Timer
-	lastSearch    string
+	pillRects      []ButtonRect
+	searchRect     ButtonRect
+	lastSearch     string
+	searchChangedAt time.Time // when search text last changed; zero means no pending debounce
 }
 
 // NewFilterBar creates a FilterBar with the given filter options.
@@ -71,32 +71,21 @@ func (fb *FilterBar) Update() bool {
 		}
 
 		if textChanged {
-			// Debounce search: cancel previous timer, start new one
-			if fb.debounceTimer != nil {
-				fb.debounceTimer.Stop()
-			}
-			fb.debounceTimer = time.AfterFunc(500*time.Millisecond, func() {
-				// Will be picked up on next frame
-			})
+			fb.searchChangedAt = time.Now()
 		}
 
-		// Check if debounced search should fire
-		if fb.SearchInput.Text != fb.lastSearch {
-			if fb.debounceTimer != nil {
-				select {
-				case <-fb.debounceTimer.C:
-					// Timer fired (won't happen with AfterFunc, use flag instead)
-				default:
-				}
-			}
-			// For AfterFunc: check if enough time has passed
-			if textChanged {
-				// Reset — actual firing happens via timer
+		// Fire search after debounce period elapses
+		if !fb.searchChangedAt.IsZero() && time.Since(fb.searchChangedAt) >= 500*time.Millisecond {
+			fb.searchChangedAt = time.Time{}
+			if fb.SearchInput.Text != fb.lastSearch {
+				fb.lastSearch = fb.SearchInput.Text
+				changed = true
 			}
 		}
 
 		// Fire search on Enter immediately
 		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && fb.SearchInput.Text != fb.lastSearch {
+			fb.searchChangedAt = time.Time{}
 			fb.lastSearch = fb.SearchInput.Text
 			changed = true
 		}
@@ -135,12 +124,14 @@ func (fb *FilterBar) Update() bool {
 // CheckSearchDebounce checks if the search input has changed and debounce time elapsed.
 // Call this each frame; returns true if search changed.
 func (fb *FilterBar) CheckSearchDebounce() bool {
-	if fb.SearchInput.Text != fb.lastSearch && fb.debounceTimer == nil {
-		// No pending timer — text was changed without a timer (shouldn't happen normally)
+	if fb.searchChangedAt.IsZero() || fb.SearchInput.Text == fb.lastSearch {
 		return false
 	}
-	// The AfterFunc approach: we just track if text differs and timer has completed
-	// Simplify: just use a frame counter approach
+	if time.Since(fb.searchChangedAt) >= 500*time.Millisecond {
+		fb.searchChangedAt = time.Time{}
+		fb.lastSearch = fb.SearchInput.Text
+		return true
+	}
 	return false
 }
 

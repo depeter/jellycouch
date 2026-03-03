@@ -75,8 +75,6 @@ func (ic *ImageCache) LoadAsync(url string, callback func(*ebiten.Image)) {
 	}
 
 	go func() {
-		defer ic.loading.Delete(url)
-
 		// Acquire semaphore to limit concurrent downloads
 		ic.sem <- struct{}{}
 		defer func() { <-ic.sem }()
@@ -84,6 +82,7 @@ func (ic *ImageCache) LoadAsync(url string, callback func(*ebiten.Image)) {
 		img, err := ic.loadImage(url)
 		if err != nil {
 			log.Printf("image load failed for %s: %v", url, err)
+			ic.loading.Delete(url)
 			// Notify all waiters with nil so they don't hang forever
 			entry.mu.Lock()
 			cbs := make([]func(*ebiten.Image), len(entry.callbacks))
@@ -96,7 +95,11 @@ func (ic *ImageCache) LoadAsync(url string, callback func(*ebiten.Image)) {
 		}
 
 		eimg := ebiten.NewImageFromImage(img)
+		// Store in memory before removing from loading map to prevent
+		// a race where a concurrent LoadAsync misses both caches and
+		// starts a duplicate download.
 		ic.memory.Store(url, eimg)
+		ic.loading.Delete(url)
 
 		// Notify all waiters
 		entry.mu.Lock()
@@ -176,7 +179,10 @@ func (ic *ImageCache) CacheDir() string {
 
 // Clear removes all cached images from memory.
 func (ic *ImageCache) Clear() {
-	ic.memory = sync.Map{}
+	ic.memory.Range(func(key, value any) bool {
+		ic.memory.Delete(key)
+		return true
+	})
 }
 
 // ClearDisk removes all cached images from disk.

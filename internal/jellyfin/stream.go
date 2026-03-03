@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"crypto/rand"
 	"fmt"
 	"net/url"
 )
@@ -19,7 +20,14 @@ func (c *Client) GetHLSStreamURL(itemID string) string {
 	params := url.Values{}
 	params.Set("api_key", c.token)
 	params.Set("DeviceId", "jellycouch-1")
-	params.Set("PlaySessionId", "jellycouch-session")
+	params.Set("PlaySessionId", generateSessionID())
 	return fmt.Sprintf("%s/Videos/%s/master.m3u8?%s",
 		c.serverURL, url.PathEscape(itemID), params.Encode())
+}
+
+// generateSessionID returns a random session ID for playback tracking.
+func generateSessionID() string {
+	var b [8]byte
+	rand.Read(b[:])
+	return fmt.Sprintf("jc-%x", b)
 }

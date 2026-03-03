@@ -162,15 +162,27 @@ func (c *Config) Save() error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 
-	f, err := os.Create(path)
+	// Write to a temp file first and atomically rename, so a crash
+	// mid-write won't leave a truncated/corrupt config file.
+	tmp := path + ".tmp"
+	f, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
-	return toml.NewEncoder(f).Encode(c)
+	if err := toml.NewEncoder(f).Encode(c); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
 }

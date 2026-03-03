@@ -25,20 +25,24 @@ func (sf *screenFactory) pushLogin(navbar *ui.NavBar) {
 		go func() {
 			c := jellyfin.NewClient(server)
 			if err := c.Authenticate(user, pass); err != nil {
-				screen.Error = "Login failed: " + err.Error()
-				screen.Busy = false
+				sf.game.MainActions <- func() {
+					screen.Error = "Login failed: " + err.Error()
+					screen.Busy = false
+				}
 				return
 			}
-			sf.cfg.Server.URL = server
-			sf.cfg.Server.Username = user
-			sf.cfg.Server.Token = c.Token()
-			sf.cfg.Server.UserID = c.UserID()
-			sf.cfg.Save()
+			sf.game.MainActions <- func() {
+				sf.cfg.Server.URL = server
+				sf.cfg.Server.Username = user
+				sf.cfg.Server.Token = c.Token()
+				sf.cfg.Server.UserID = c.UserID()
+				sf.cfg.Save()
 
-			sf.game.Client = c
-			screen.Busy = false
-			sf.pushHome()
-			sf.loadNavBarViews()
+				sf.game.Client = c
+				screen.Busy = false
+				sf.pushHome()
+				sf.loadNavBarViews()
+			}
 		}()
 	})
 	sf.game.Screens.Replace(loginScreen)
@@ -176,6 +180,8 @@ func (sf *screenFactory) loadNavBarViews() {
 		for _, v := range views {
 			libViews = append(libViews, struct{ ID, Name string }{v.ID, v.Name})
 		}
-		sf.game.Screens.NavBar.LibraryViews = libViews
+		sf.game.MainActions <- func() {
+			sf.game.Screens.NavBar.LibraryViews = libViews
+		}
 	}()
 }

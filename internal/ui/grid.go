@@ -159,8 +159,9 @@ func truncateText(s string, maxWidth float64, fontSize float64) string {
 	if w <= maxWidth {
 		return s
 	}
-	for i := len(s) - 1; i > 0; i-- {
-		candidate := s[:i] + "…"
+	runes := []rune(s)
+	for i := len(runes) - 1; i > 0; i-- {
+		candidate := string(runes[:i]) + "…"
 		w, _ = MeasureText(candidate, fontSize)
 		if w <= maxWidth {
 			return candidate

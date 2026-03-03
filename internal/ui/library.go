@@ -288,7 +288,12 @@ func (ls *LibraryScreen) loadData(start int) {
 	for i, item := range ls.items {
 		ls.gridItems[i] = GridItemFromMediaItem(item)
 	}
-	LoadGridItemImages(ls.client, ls.imgCache, &ls.gridItems, ls.items, &ls.mu)
+	// Release lock before loading images to avoid deadlock if a callback
+	// fires synchronously (image already in memory cache).
+	allItems := ls.items
+	ls.mu.Unlock()
+	LoadGridItemImages(ls.client, ls.imgCache, &ls.gridItems, allItems, &ls.mu)
+	ls.mu.Lock()
 
 	ls.loaded = true
 	ls.loading = false

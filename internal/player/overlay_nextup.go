@@ -25,6 +25,9 @@ func (o *PlaybackOverlay) SetNextUp(name string, index int) {
 // SetShowNextButton controls whether the Next button appears in the bar.
 func (o *PlaybackOverlay) SetShowNextButton(show bool) {
 	o.showNextBtn = show
+	if !show && o.focusedBtn == BtnNext {
+		o.focusedBtn = BtnPlayPause
+	}
 }
 
 // SetNextEpisode stores pre-fetched next episode info for the tooltip.

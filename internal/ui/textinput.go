@@ -12,6 +12,8 @@ import (
 type TextInput struct {
 	Text   string
 	Cursor int // rune position within Text
+
+	pendingPaste chan string // async clipboard result (nil when idle)
 }
 
 // NewTextInput creates a TextInput initialized with the given text and cursor at the end.
@@ -39,6 +41,19 @@ func (ti *TextInput) Update() bool {
 	changed := false
 	runeCount := utf8.RuneCountInString(ti.Text)
 
+	// Check for pending async clipboard paste result
+	if ti.pendingPaste != nil {
+		select {
+		case clip := <-ti.pendingPaste:
+			ti.pendingPaste = nil
+			if clip != "" {
+				ti.insertAtCursor(clip)
+				changed = true
+			}
+		default:
+		}
+	}
+
 	// Cursor movement
 	if inputRepeating(ebiten.KeyArrowLeft) {
 		if ti.Cursor > 0 {
@@ -57,11 +72,12 @@ func (ti *TextInput) Update() bool {
 		ti.Cursor = runeCount
 	}
 
-	// Ctrl+V paste from clipboard
+	// Ctrl+V paste — start async clipboard read to avoid blocking the game thread
 	if inpututil.IsKeyJustPressed(ebiten.KeyV) && (ebiten.IsKeyPressed(ebiten.KeyControl) || ebiten.IsKeyPressed(ebiten.KeyMeta)) {
-		if clip := readClipboard(); clip != "" {
-			ti.insertAtCursor(clip)
-			changed = true
+		if ti.pendingPaste == nil {
+			ch := make(chan string, 1)
+			ti.pendingPaste = ch
+			go func() { ch <- readClipboard() }()
 		}
 	}
 

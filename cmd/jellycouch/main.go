@@ -125,4 +125,11 @@ func main() {
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}
+	// Clean up resources on exit
+	if game.State == app.StateWeb {
+		game.StopWebApp()
+	}
+	if game.Player != nil {
+		game.Player.Destroy()
+	}
 }
