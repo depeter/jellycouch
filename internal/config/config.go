@@ -12,9 +12,6 @@ type Config struct {
 	Jellyseerr JellyseerrConfig `toml:"jellyseerr"`
 	Subtitles  SubtitleConfig   `toml:"subtitles"`
 	Playback   PlaybackConfig   `toml:"playback"`
-	UI         UIConfig         `toml:"ui"`
-	Keybinds   KeybindConfig    `toml:"keybinds"`
-	WebApps    []WebApp         `toml:"webapps"`
 }
 
 type WebApp struct {
@@ -53,24 +50,10 @@ type PlaybackConfig struct {
 	Volume        int    `toml:"volume"`
 }
 
-type UIConfig struct {
-	Fullscreen bool `toml:"fullscreen"`
-	Width      int  `toml:"width"`
-	Height     int  `toml:"height"`
-}
-
-type KeybindConfig struct {
-	PlayPause    string `toml:"play_pause"`
-	SeekForward  string `toml:"seek_forward"`
-	SeekBackward string `toml:"seek_backward"`
-	SeekForwardLarge  string `toml:"seek_forward_large"`
-	SeekBackwardLarge string `toml:"seek_backward_large"`
-	VolumeUp     string `toml:"volume_up"`
-	VolumeDown   string `toml:"volume_down"`
-	Mute         string `toml:"mute"`
-	SubCycle     string `toml:"sub_cycle"`
-	AudioCycle   string `toml:"audio_cycle"`
-	Fullscreen   string `toml:"fullscreen"`
+// BuiltinWebApps are always-present streaming service shortcuts.
+var BuiltinWebApps = []WebApp{
+	{Name: "VRT MAX", URL: "https://www.vrt.be/vrtmax/"},
+	{Name: "Go Play", URL: "https://www.goplay.be"},
 }
 
 func DefaultConfig() *Config {
@@ -92,24 +75,6 @@ func DefaultConfig() *Config {
 			AudioLanguage: "eng",
 			SubLanguage:   "eng",
 			Volume:        100,
-		},
-		UI: UIConfig{
-			Fullscreen: true,
-			Width:      1920,
-			Height:     1080,
-		},
-		Keybinds: KeybindConfig{
-			PlayPause:         "Space",
-			SeekForward:       "Right",
-			SeekBackward:      "Left",
-			SeekForwardLarge:  "Up",
-			SeekBackwardLarge: "Down",
-			VolumeUp:          "0",
-			VolumeDown:        "9",
-			Mute:              "M",
-			SubCycle:          "S",
-			AudioCycle:        "A",
-			Fullscreen:        "F",
 		},
 	}
 }

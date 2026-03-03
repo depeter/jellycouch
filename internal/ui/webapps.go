@@ -68,7 +68,7 @@ func (s *WebAppsScreen) Draw(dst *ebiten.Image) {
 	DrawText(dst, "Web Apps", SectionPadding, NavBarHeight+20, FontSizeTitle, ColorText)
 
 	if len(s.apps) == 0 {
-		DrawText(dst, "No web apps configured. Add [[webapps]] entries to config.toml.",
+		DrawText(dst, "No web apps available.",
 			SectionPadding, NavBarHeight+80, FontSizeBody, ColorTextMuted)
 		return
 	}

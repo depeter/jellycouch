@@ -98,7 +98,7 @@ func main() {
 		return game.Jellyseerr != nil
 	}
 	navbar.WebAppsEnabled = func() bool {
-		return len(cfg.WebApps) > 0
+		return true
 	}
 	game.Screens.NavBar = navbar
 
@@ -114,11 +114,11 @@ func main() {
 	}
 
 	// Configure window
-	ebiten.SetWindowSize(cfg.UI.Width, cfg.UI.Height)
+	ebiten.SetWindowSize(1920, 1080)
 	ebiten.SetWindowTitle("JellyCouch")
 	ebiten.SetWindowIcon(icon.Generate())
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
-	ebiten.SetFullscreen(cfg.UI.Fullscreen)
+	ebiten.SetFullscreen(true)
 
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)

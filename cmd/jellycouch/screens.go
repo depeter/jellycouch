@@ -162,7 +162,7 @@ func (sf *screenFactory) pushJellyseerrRequests() {
 }
 
 func (sf *screenFactory) pushWebApps() {
-	screen := ui.NewWebAppsScreen(sf.cfg.WebApps)
+	screen := ui.NewWebAppsScreen(config.BuiltinWebApps)
 	screen.OnLaunch = func(url string) {
 		sf.game.StartWebApp(url)
 	}

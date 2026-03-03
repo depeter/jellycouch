@@ -10,7 +10,7 @@ import (
 	jellyfin "github.com/sj14/jellyfin-go/api"
 )
 
-const apiRequestTimeout = 15 * time.Second
+const apiRequestTimeout = 30 * time.Second
 
 const (
 	clientName    = "JellyCouch"
@@ -40,6 +40,9 @@ func NewClient(serverURL string) *Client {
 	cfg := jellyfin.NewConfiguration()
 	cfg.Servers = jellyfin.ServerConfigurations{
 		{URL: serverURL},
+	}
+	cfg.HTTPClient = &http.Client{
+		Timeout: apiRequestTimeout,
 	}
 	cfg.AddDefaultHeader("X-Emby-Authorization",
 		fmt.Sprintf(`MediaBrowser Client="%s", Device="%s", DeviceId="jellycouch-1", Version="%s"`,

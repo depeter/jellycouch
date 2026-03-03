@@ -48,8 +48,6 @@ type Game struct {
 	nextEpBGRAPath string              // temp file for thumbnail overlay
 	prefetchDone   chan *prefetchResult // goroutine sends result here for main-thread application
 
-	startFullscreen bool // unused, kept for config compatibility
-
 	// Cursor auto-hide during playback
 	lastMouseX, lastMouseY int
 	cursorIdleFrames       int
@@ -74,10 +72,9 @@ func NewGame(cfg *config.Config, client *jellyfin.Client, imgCache *cache.ImageC
 		Cache:           imgCache,
 		Screens:         ui.NewScreenManager(),
 		State:           StateBrowse,
-		Width:           cfg.UI.Width,
-		Height:          cfg.UI.Height,
-		startFullscreen: cfg.UI.Fullscreen,
-		MainActions:     make(chan func(), 16),
+		Width:           1920,
+		Height:          1080,
+		MainActions: make(chan func(), 16),
 	}
 	return g
 }
@@ -412,11 +409,6 @@ func (g *Game) Update() error {
 	}
 actionsDrained:
 
-	// Alt+Enter toggles fullscreen (works in all modes)
-	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && ebiten.IsKeyPressed(ebiten.KeyAlt) {
-		ebiten.SetFullscreen(!ebiten.IsFullscreen())
-	}
-
 	// F12 toggles debug overlay (works in all modes)
 	ui.ToggleDebugOverlay()
 
@@ -575,17 +567,16 @@ func (g *Game) handlePlaybackInput() {
 	if g.Player == nil {
 		return
 	}
-	kb := &g.Config.Keybinds
 
 	// Determine directional input
 	dir := player.DirNone
-	if keyJustPressed(kb.SeekForward) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
 		dir = player.DirRight
-	} else if keyJustPressed(kb.SeekBackward) {
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
 		dir = player.DirLeft
-	} else if keyJustPressed(kb.SeekForwardLarge) {
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
 		dir = player.DirUp
-	} else if keyJustPressed(kb.SeekBackwardLarge) {
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
 		dir = player.DirDown
 	}
 	enterPressed := inpututil.IsKeyJustPressed(ebiten.KeyEnter) && !ui.IsModifierPressed()
@@ -600,9 +591,9 @@ func (g *Game) handlePlaybackInput() {
 	case player.OverlayNextUp:
 		g.handleInputNextUp(dir, enterPressed)
 	case player.OverlayBar:
-		g.handleInputBar(dir, enterPressed, kb)
+		g.handleInputBar(dir, enterPressed)
 	default:
-		g.handleInputHidden(enterPressed, kb)
+		g.handleInputHidden(enterPressed)
 	}
 }
 
@@ -623,14 +614,14 @@ func (g *Game) handleInputNextUp(dir player.Direction, enter bool) {
 }
 
 // handleInputBar handles input when the control bar is visible.
-func (g *Game) handleInputBar(dir player.Direction, enter bool, kb *config.KeybindConfig) {
+func (g *Game) handleInputBar(dir player.Direction, enter bool) {
 	if dir != player.DirNone || enter {
 		g.overlay.HandleBarInput(dir, enter, false)
 	}
 	if g.overlay == nil {
 		return
 	}
-	g.handleCommonPlaybackKeys(kb, true)
+	g.handleCommonPlaybackKeys(true)
 	if inpututil.IsKeyJustPressed(ebiten.KeyI) {
 		g.overlay.Show()
 	}
@@ -638,28 +629,28 @@ func (g *Game) handleInputBar(dir player.Direction, enter bool, kb *config.Keybi
 }
 
 // handleInputHidden handles input when the overlay is hidden.
-func (g *Game) handleInputHidden(enter bool, kb *config.KeybindConfig) {
-	if keyJustPressed(kb.PlayPause) {
+func (g *Game) handleInputHidden(enter bool) {
+	if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
 		g.Player.TogglePause()
 		g.overlay.Show()
 	}
-	if keyJustPressed(kb.SeekForward) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
 		g.Player.Seek(player.SeekSmall)
 		g.Player.ShowProgress()
 	}
-	if keyJustPressed(kb.SeekBackward) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
 		g.Player.Seek(-player.SeekSmall)
 		g.Player.ShowProgress()
 	}
-	if keyJustPressed(kb.SeekForwardLarge) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
 		g.Player.Seek(player.SeekLarge)
 		g.Player.ShowProgress()
 	}
-	if keyJustPressed(kb.SeekBackwardLarge) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
 		g.Player.Seek(-player.SeekLarge)
 		g.Player.ShowProgress()
 	}
-	g.handleCommonPlaybackKeys(kb, false)
+	g.handleCommonPlaybackKeys(false)
 	if enter {
 		g.overlay.Show()
 	}
@@ -672,7 +663,7 @@ func (g *Game) handleInputHidden(enter bool, kb *config.KeybindConfig) {
 // handleCommonPlaybackKeys handles volume, track, and fullscreen keys shared
 // between bar-visible and hidden modes. When barVisible is true, actions
 // re-show the overlay bar; otherwise they show a brief progress indicator.
-func (g *Game) handleCommonPlaybackKeys(kb *config.KeybindConfig, barVisible bool) {
+func (g *Game) handleCommonPlaybackKeys(barVisible bool) {
 	show := func() {
 		if barVisible {
 			g.overlay.Show()
@@ -680,32 +671,29 @@ func (g *Game) handleCommonPlaybackKeys(kb *config.KeybindConfig, barVisible boo
 			g.Player.ShowProgress()
 		}
 	}
-	if keyJustPressed(kb.VolumeUp) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyDigit0) {
 		g.Player.AdjustVolume(player.VolumeStep)
 		show()
 	}
-	if keyJustPressed(kb.VolumeDown) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyDigit9) {
 		g.Player.AdjustVolume(-player.VolumeStep)
 		show()
 	}
-	if keyJustPressed(kb.Mute) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyM) {
 		g.Player.ToggleMute()
 		show()
 	}
-	if keyJustPressed(kb.SubCycle) && g.overlay != nil {
+	if inpututil.IsKeyJustPressed(ebiten.KeyS) && g.overlay != nil {
 		if !barVisible {
 			g.overlay.Show()
 		}
 		g.overlay.OpenTrackPanel(player.TrackSub)
 	}
-	if keyJustPressed(kb.AudioCycle) && g.overlay != nil {
+	if inpututil.IsKeyJustPressed(ebiten.KeyA) && g.overlay != nil {
 		if !barVisible {
 			g.overlay.Show()
 		}
 		g.overlay.OpenTrackPanel(player.TrackAudio)
-	}
-	if keyJustPressed(kb.Fullscreen) {
-		ebiten.SetFullscreen(!ebiten.IsFullscreen())
 	}
 }
 
