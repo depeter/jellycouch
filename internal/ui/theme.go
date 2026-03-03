@@ -33,8 +33,8 @@ const (
 	SectionGap      = 40
 	SectionTitleH   = 56
 
-	NavBarHeight    = 100
-	NavBarPadding   = 28
+	NavBarHeight    = 68
+	NavBarPadding   = 20
 	ButtonHeight    = 68
 
 	FontSizeTitle   = 54

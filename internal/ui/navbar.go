@@ -9,6 +9,13 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
+// Navbar uses its own font sizes to stay compact while the rest of the UI
+// uses the larger 10-foot sizes.
+const (
+	navFontTitle = 32
+	navFontBody  = 18
+)
+
 // NavBarAction represents the result of a navbar Update cycle.
 type NavBarAction int
 
@@ -35,7 +42,7 @@ type NavBar struct {
 
 	ActiveScreenName string // for visual highlight of current section
 
-	OnNavigate        func(action, id, title string) // "home", "library", "discovery", "apps", "settings"
+	OnNavigate        func(action, id, title string) // "home", "library", "discovery", "apps", "settings", "quit"
 	OnSearch          func(query string)
 	JellyseerrEnabled func() bool
 	WebAppsEnabled    func() bool
@@ -182,7 +189,7 @@ func (nb *NavBar) HandleClick(mx, my int) bool {
 	}
 
 	// JellyCouch title → home
-	if PointInRect(mx, my, SectionPadding, 18, 220, 56) {
+	if PointInRect(mx, my, SectionPadding, 12, 180, 38) {
 		if nb.OnNavigate != nil {
 			nb.OnNavigate("home", "", "")
 		}
@@ -191,9 +198,9 @@ func (nb *NavBar) HandleClick(mx, my int) bool {
 
 	// Home button
 	homeBtnX := 230.0
-	homeTw, _ := MeasureText("Home", FontSizeBody)
-	homeBtnW := homeTw + 44
-	if PointInRect(mx, my, homeBtnX, 18, homeBtnW, 56) {
+	homeTw, _ := MeasureText("Home", navFontBody)
+	homeBtnW := homeTw + 28
+	if PointInRect(mx, my, homeBtnX, 12, homeBtnW, 38) {
 		if nb.OnNavigate != nil {
 			nb.OnNavigate("home", "", "")
 		}
@@ -201,22 +208,22 @@ func (nb *NavBar) HandleClick(mx, my int) bool {
 	}
 
 	// Library buttons
-	libBtnX := homeBtnX + homeBtnW + 14
+	libBtnX := homeBtnX + homeBtnW + 10
 	for _, view := range nb.LibraryViews {
-		tw, _ := MeasureText(view.Name, FontSizeBody)
-		btnW := tw + 44
-		if PointInRect(mx, my, libBtnX, 18, btnW, 56) {
+		tw, _ := MeasureText(view.Name, navFontBody)
+		btnW := tw + 28
+		if PointInRect(mx, my, libBtnX, 12, btnW, 38) {
 			if nb.OnNavigate != nil {
 				nb.OnNavigate("library", view.ID, view.Name)
 			}
 			return true
 		}
-		libBtnX += btnW + 14
+		libBtnX += btnW + 10
 	}
 
 	// Search bar
-	searchX := float64(ScreenWidth)/2 - 240
-	if PointInRect(mx, my, searchX, 18, 480, 56) {
+	searchX := float64(ScreenWidth)/2 - 200
+	if PointInRect(mx, my, searchX, 12, 400, 38) {
 		nb.Active = true
 		nb.focusSection = 1
 		return true
@@ -228,13 +235,13 @@ func (nb *NavBar) HandleClick(mx, my int) bool {
 	for i := len(btns) - 1; i >= 0; i-- {
 		bw := nb.rightBtnWidth(btns[i])
 		btnX -= bw
-		if PointInRect(mx, my, btnX, 18, bw, 56) {
+		if PointInRect(mx, my, btnX, 12, bw, 38) {
 			if nb.OnNavigate != nil {
 				nb.OnNavigate(btns[i].id, "", "")
 			}
 			return true
 		}
-		btnX -= 14
+		btnX -= 10
 	}
 
 	return false
@@ -242,12 +249,12 @@ func (nb *NavBar) HandleClick(mx, my int) bool {
 
 // rightBtnWidth returns the draw width for a right-side button.
 func (nb *NavBar) rightBtnWidth(btn navBtn) float64 {
-	tw, _ := MeasureText(btn.label, FontSizeBody)
+	tw, _ := MeasureText(btn.label, navFontBody)
 	// Buttons with icons (discovery, settings) get extra space for the icon
 	if btn.id == "discovery" || btn.id == "settings" {
-		return tw + 60 // 22px icon area + padding
+		return tw + 44 // 16px icon area + padding
 	}
-	return tw + 44
+	return tw + 28
 }
 
 // Draw renders the navbar overlay.
@@ -262,78 +269,78 @@ func (nb *NavBar) Draw(dst *ebiten.Image) {
 	if nb.ActiveScreenName == "Home" {
 		homeColor = ColorText
 	}
-	DrawText(dst, "JellyCouch", SectionPadding, 28, FontSizeTitle, homeColor)
+	DrawText(dst, "JellyCouch", SectionPadding, 16, navFontTitle, homeColor)
 
 	// Home button
 	homeBtnX := 230.0
 	{
-		tw, _ := MeasureText("Home", FontSizeBody)
-		btnW := tw + 44
-		btnH := 56.0
-		btnY := 18.0
+		tw, _ := MeasureText("Home", navFontBody)
+		btnW := tw + 28
+		btnH := 38.0
+		btnY := 12.0
 		focused := nb.Active && nb.focusSection == 0 && nb.libNavIndex == 0
 		active := nb.ActiveScreenName == "Home"
 
 		if focused {
 			vector.DrawFilledRect(dst, float32(homeBtnX), float32(btnY), float32(btnW), float32(btnH), ColorPrimary, false)
-			DrawTextCentered(dst, "Home", homeBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorBackground)
+			DrawTextCentered(dst, "Home", homeBtnX+btnW/2, btnY+btnH/2, navFontBody, ColorBackground)
 		} else if active {
 			vector.DrawFilledRect(dst, float32(homeBtnX), float32(btnY), float32(btnW), float32(btnH), ColorSurfaceHover, false)
 			vector.StrokeRect(dst, float32(homeBtnX), float32(btnY), float32(btnW), float32(btnH), 2, ColorPrimary, false)
-			DrawTextCentered(dst, "Home", homeBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorText)
+			DrawTextCentered(dst, "Home", homeBtnX+btnW/2, btnY+btnH/2, navFontBody, ColorText)
 		} else {
 			vector.DrawFilledRect(dst, float32(homeBtnX), float32(btnY), float32(btnW), float32(btnH), ColorSurfaceHover, false)
 			vector.StrokeRect(dst, float32(homeBtnX), float32(btnY), float32(btnW), float32(btnH), 1, ColorPrimary, false)
-			DrawTextCentered(dst, "Home", homeBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorText)
+			DrawTextCentered(dst, "Home", homeBtnX+btnW/2, btnY+btnH/2, navFontBody, ColorText)
 		}
-		homeBtnX += btnW + 14
+		homeBtnX += btnW + 10
 	}
 
 	// Library nav buttons
 	libBtnX := homeBtnX
 	for i, view := range nb.LibraryViews {
-		tw, _ := MeasureText(view.Name, FontSizeBody)
-		btnW := tw + 44
-		btnH := 56.0
-		btnY := 18.0
+		tw, _ := MeasureText(view.Name, navFontBody)
+		btnW := tw + 28
+		btnH := 38.0
+		btnY := 12.0
 
 		focused := nb.Active && nb.focusSection == 0 && i+1 == nb.libNavIndex
 		active := strings.HasPrefix(nb.ActiveScreenName, "Library: "+view.Name)
 
 		if focused {
 			vector.DrawFilledRect(dst, float32(libBtnX), float32(btnY), float32(btnW), float32(btnH), ColorPrimary, false)
-			DrawTextCentered(dst, view.Name, libBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorBackground)
+			DrawTextCentered(dst, view.Name, libBtnX+btnW/2, btnY+btnH/2, navFontBody, ColorBackground)
 		} else if active {
 			vector.DrawFilledRect(dst, float32(libBtnX), float32(btnY), float32(btnW), float32(btnH), ColorSurfaceHover, false)
 			vector.StrokeRect(dst, float32(libBtnX), float32(btnY), float32(btnW), float32(btnH), 2, ColorPrimary, false)
-			DrawTextCentered(dst, view.Name, libBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorText)
+			DrawTextCentered(dst, view.Name, libBtnX+btnW/2, btnY+btnH/2, navFontBody, ColorText)
 		} else {
 			vector.DrawFilledRect(dst, float32(libBtnX), float32(btnY), float32(btnW), float32(btnH), ColorSurfaceHover, false)
 			vector.StrokeRect(dst, float32(libBtnX), float32(btnY), float32(btnW), float32(btnH), 1, ColorPrimary, false)
-			DrawTextCentered(dst, view.Name, libBtnX+btnW/2, btnY+btnH/2, FontSizeBody, ColorText)
+			DrawTextCentered(dst, view.Name, libBtnX+btnW/2, btnY+btnH/2, navFontBody, ColorText)
 		}
-		libBtnX += btnW + 14
+		libBtnX += btnW + 10
 	}
 
 	// Search bar (center)
-	searchX := float64(ScreenWidth)/2 - 240
-	searchY := 18.0
-	searchW := 480.0
-	searchH := 56.0
+	searchX := float64(ScreenWidth)/2 - 200
+	searchY := 12.0
+	searchW := 400.0
+	searchH := 38.0
 	if nb.Active && nb.focusSection == 1 {
 		vector.DrawFilledRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), ColorSurfaceHover, false)
 		vector.StrokeRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), 2, ColorFocusBorder, false)
 		if nb.input.Text == "" {
-			DrawText(dst, "Search...", searchX+18, searchY+16, FontSizeBody, ColorTextMuted)
+			DrawText(dst, "Search...", searchX+14, searchY+10, navFontBody, ColorTextMuted)
 		}
-		DrawText(dst, nb.input.DisplayText(), searchX+18, searchY+16, FontSizeBody, ColorText)
+		DrawText(dst, nb.input.DisplayText(), searchX+14, searchY+10, navFontBody, ColorText)
 	} else {
 		vector.DrawFilledRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), ColorSurface, false)
 		vector.StrokeRect(dst, float32(searchX), float32(searchY), float32(searchW), float32(searchH), 1, ColorTextMuted, false)
 		if nb.input.Text != "" {
-			DrawText(dst, nb.input.Text, searchX+18, searchY+16, FontSizeBody, ColorText)
+			DrawText(dst, nb.input.Text, searchX+14, searchY+10, navFontBody, ColorText)
 		} else {
-			DrawText(dst, "Search library...", searchX+18, searchY+16, FontSizeBody, ColorTextMuted)
+			DrawText(dst, "Search library...", searchX+14, searchY+10, navFontBody, ColorTextMuted)
 		}
 	}
 
@@ -345,22 +352,22 @@ func (nb *NavBar) Draw(dst *ebiten.Image) {
 		bw := nb.rightBtnWidth(btn)
 		btnX -= bw
 		nb.drawRightButton(dst, btn, btnX, i)
-		btnX -= 14
+		btnX -= 10
 	}
 }
 
 // drawRightButton draws a single right-side nav button.
 func (nb *NavBar) drawRightButton(dst *ebiten.Image, btn navBtn, x float64, idx int) {
 	w := nb.rightBtnWidth(btn)
-	h := 56.0
-	y := 18.0
+	h := 38.0
+	y := 12.0
 	focused := nb.Active && nb.focusSection == 2 && nb.navBtnIndex == idx
 	active := nb.ActiveScreenName == btn.label || (btn.id == "discovery" && nb.ActiveScreenName == "Discovery")
 
 	hasIcon := btn.id == "discovery" || btn.id == "settings"
 	textOffsetX := 0.0
 	if hasIcon {
-		textOffsetX = 12
+		textOffsetX = 8
 	}
 
 	// Determine border color for this button type
@@ -371,23 +378,23 @@ func (nb *NavBar) drawRightButton(dst *ebiten.Image, btn navBtn, x float64, idx 
 
 	if focused {
 		vector.DrawFilledRect(dst, float32(x), float32(y), float32(w), float32(h), ColorPrimary, false)
-		DrawTextCentered(dst, btn.label, x+w/2+textOffsetX, y+h/2, FontSizeBody, ColorBackground)
+		DrawTextCentered(dst, btn.label, x+w/2+textOffsetX, y+h/2, navFontBody, ColorBackground)
 		if hasIcon {
-			nb.drawBtnIcon(dst, btn.id, float32(x+22), float32(y+h/2), 10, ColorBackground)
+			nb.drawBtnIcon(dst, btn.id, float32(x+16), float32(y+h/2), 7, ColorBackground)
 		}
 	} else if active {
 		vector.DrawFilledRect(dst, float32(x), float32(y), float32(w), float32(h), ColorSurfaceHover, false)
 		vector.StrokeRect(dst, float32(x), float32(y), float32(w), float32(h), 2, borderColor, false)
-		DrawTextCentered(dst, btn.label, x+w/2+textOffsetX, y+h/2, FontSizeBody, ColorText)
+		DrawTextCentered(dst, btn.label, x+w/2+textOffsetX, y+h/2, navFontBody, ColorText)
 		if hasIcon {
-			nb.drawBtnIcon(dst, btn.id, float32(x+22), float32(y+h/2), 10, borderColor)
+			nb.drawBtnIcon(dst, btn.id, float32(x+16), float32(y+h/2), 7, borderColor)
 		}
 	} else {
 		vector.DrawFilledRect(dst, float32(x), float32(y), float32(w), float32(h), ColorSurfaceHover, false)
 		vector.StrokeRect(dst, float32(x), float32(y), float32(w), float32(h), 1, borderColor, false)
-		DrawTextCentered(dst, btn.label, x+w/2+textOffsetX, y+h/2, FontSizeBody, ColorText)
+		DrawTextCentered(dst, btn.label, x+w/2+textOffsetX, y+h/2, navFontBody, ColorText)
 		if hasIcon {
-			nb.drawBtnIcon(dst, btn.id, float32(x+22), float32(y+h/2), 10, borderColor)
+			nb.drawBtnIcon(dst, btn.id, float32(x+16), float32(y+h/2), 7, borderColor)
 		}
 	}
 }
