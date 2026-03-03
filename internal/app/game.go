@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -33,18 +34,26 @@ type Game struct {
 	Width, Height int
 
 	// Set to true when mpv playback ends and we need to return to browse mode
-	playbackEnded bool
+	playbackEnded atomic.Bool
 
 	overlay        *player.PlaybackOverlay
 	currentItem    *jellyfin.MediaItem
 	nextEpCh       chan *jellyfin.MediaItem
 	nextEpItem     *jellyfin.MediaItem // pre-fetched next episode for direct playback
 	nextEpBGRAPath string              // temp file for thumbnail overlay
+	prefetchDone   chan *prefetchResult // goroutine sends result here for main-thread application
 
 	startFullscreen bool // apply fullscreen on first Update() frame
 
 	webCmd    *exec.Cmd
 	webExited chan struct{}
+}
+
+// prefetchResult carries the outcome of prefetchNextEpisode back to the main thread.
+type prefetchResult struct {
+	item     *jellyfin.MediaItem
+	bgraPath string
+	info     *player.NextEpisodeInfo // nil means no next episode found
 }
 
 // NewGame creates the Game with all dependencies.
@@ -69,7 +78,7 @@ func (g *Game) InitPlayer() error {
 		return err
 	}
 	p.OnPlaybackEnd = func() {
-		g.playbackEnded = true
+		g.playbackEnded.Store(true)
 	}
 	g.Player = p
 	return nil
@@ -111,6 +120,7 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 	g.nextEpCh = make(chan *jellyfin.MediaItem, 1)
 	g.nextEpItem = nil
 	g.nextEpBGRAPath = ""
+	g.prefetchDone = make(chan *prefetchResult, 1)
 
 	g.overlay = player.NewPlaybackOverlay(g.Player, g.Width, g.Height)
 	g.overlay.OnStop = func() { g.StopPlayback() }
@@ -123,7 +133,7 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 	g.overlay.Show()
 
 	g.State = StatePlay
-	g.playbackEnded = false
+	g.playbackEnded.Store(false)
 }
 
 // PlayURL plays an arbitrary URL (e.g. YouTube trailer) via mpv without Jellyfin progress reporting.
@@ -157,25 +167,34 @@ func (g *Game) PlayURL(url string) {
 	g.overlay.Show()
 
 	g.State = StatePlay
-	g.playbackEnded = false
+	g.playbackEnded.Store(false)
 }
 
 // StopPlayback transitions back to browse mode.
 func (g *Game) StopPlayback() {
 	if g.overlay != nil {
-		g.overlay.Cleanup()
-		g.overlay.Hide()
+		o := g.overlay
 		g.overlay = nil
+		o.Cleanup()
 	}
-	if g.Player != nil && g.Player.Playing() {
+	if g.Player != nil {
 		itemID := g.Player.ItemID()
 		posTicks := int64(g.Player.Position() * constants.TicksPerSecond)
-		g.Player.Stop()
+		if g.Player.Playing() {
+			g.Player.Stop()
+		}
 		if itemID != "" {
 			go g.Client.ReportPlaybackStopped(itemID, posTicks)
 		}
 	}
-	// Drain next-episode channel and clear state
+	// Drain next-episode channels and clear state
+	if g.prefetchDone != nil {
+		select {
+		case <-g.prefetchDone:
+		default:
+		}
+		g.prefetchDone = nil
+	}
 	if g.nextEpCh != nil {
 		select {
 		case <-g.nextEpCh:
@@ -192,17 +211,18 @@ func (g *Game) StopPlayback() {
 }
 
 // prefetchNextEpisode looks up the next episode and pre-fetches its metadata
-// and thumbnail for the overlay tooltip. Runs as a goroutine.
+// and thumbnail for the overlay tooltip. Runs as a goroutine; sends the result
+// on g.prefetchDone so the main thread can safely apply it.
 func (g *Game) prefetchNextEpisode(item *jellyfin.MediaItem) {
+	ch := g.prefetchDone // capture locally
+
 	if item == nil || item.Type != "Episode" || item.SeriesID == "" {
 		return
 	}
 
 	next := g.lookupNextEpisode(item)
 	if next == nil {
-		if g.overlay != nil {
-			g.overlay.SetNoNextEpisode()
-		}
+		ch <- &prefetchResult{} // info == nil signals no next episode
 		return
 	}
 
@@ -210,19 +230,20 @@ func (g *Game) prefetchNextEpisode(item *jellyfin.MediaItem) {
 	full, err := g.Client.GetItem(next.ID)
 	if err != nil {
 		log.Printf("Failed to fetch next episode: %v", err)
-		if g.overlay != nil {
-			g.overlay.SetNoNextEpisode()
-		}
+		ch <- &prefetchResult{}
 		return
 	}
-
-	g.nextEpItem = full
 
 	info := &player.NextEpisodeInfo{
 		Title:         full.Name,
 		SeasonNumber:  full.ParentIndexNumber,
 		EpisodeNumber: full.IndexNumber,
 		ItemID:        full.ID,
+	}
+
+	result := &prefetchResult{
+		item: full,
+		info: info,
 	}
 
 	// Try to fetch a thumbnail image
@@ -242,7 +263,7 @@ func (g *Game) prefetchNextEpisode(item *jellyfin.MediaItem) {
 				info.ImagePath = bgraPath
 				info.ImageW = w
 				info.ImageH = h
-				g.nextEpBGRAPath = bgraPath
+				result.bgraPath = bgraPath
 			} else {
 				log.Printf("Failed to prepare overlay image: %v", err)
 			}
@@ -251,10 +272,7 @@ func (g *Game) prefetchNextEpisode(item *jellyfin.MediaItem) {
 		}
 	}
 
-	if g.overlay != nil {
-		g.overlay.SetNextEpisode(info)
-		g.overlay.SetNextUp(full.Name, full.IndexNumber)
-	}
+	ch <- result
 }
 
 // playNextEpisode plays the pre-fetched next episode directly, or falls back
@@ -291,7 +309,10 @@ func (g *Game) StartWebApp(url string) {
 func (g *Game) StopWebApp() {
 	if g.webCmd != nil && g.webCmd.Process != nil {
 		g.webCmd.Process.Kill()
-		g.webCmd.Wait()
+		// Wait for the goroutine's cmd.Wait() to finish (avoids calling Wait twice).
+		if g.webExited != nil {
+			<-g.webExited
+		}
 	}
 	g.webCmd = nil
 	g.webExited = nil
@@ -377,15 +398,14 @@ func (g *Game) Update() error {
 		}
 
 	case StatePlay:
-		if g.playbackEnded {
-			g.playbackEnded = false
+		if g.playbackEnded.Swap(false) {
 			if g.nextEpItem != nil {
 				next := g.nextEpItem
 				g.StopPlayback()
 				g.StartPlayback(next.ID, 0, next)
 				return nil
 			}
-			g.State = StateBrowse
+			g.StopPlayback()
 			return nil
 		}
 
@@ -394,7 +414,26 @@ func (g *Game) Update() error {
 			g.overlay.Update()
 		}
 
-		// Check for pre-fetched next-episode result
+		// Apply prefetched next-episode result from goroutine (race-free)
+		if g.prefetchDone != nil {
+			select {
+			case res := <-g.prefetchDone:
+				g.prefetchDone = nil
+				if res.info != nil {
+					g.nextEpItem = res.item
+					g.nextEpBGRAPath = res.bgraPath
+					if g.overlay != nil {
+						g.overlay.SetNextEpisode(res.info)
+						g.overlay.SetNextUp(res.info.Title, res.info.EpisodeNumber)
+					}
+				} else if g.overlay != nil {
+					g.overlay.SetNoNextEpisode()
+				}
+			default:
+			}
+		}
+
+		// Check for async next-episode lookup result (fallback path)
 		if g.nextEpCh != nil {
 			select {
 			case nextItem := <-g.nextEpCh:
@@ -541,6 +580,9 @@ func (g *Game) handleInputBar(dir player.Direction, enter bool, kb *config.Keybi
 	if dir != player.DirNone || enter {
 		g.overlay.HandleBarInput(dir, enter, false)
 	}
+	if g.overlay == nil {
+		return
+	}
 	g.handleCommonPlaybackKeys(kb, true)
 	if inpututil.IsKeyJustPressed(ebiten.KeyI) {
 		g.overlay.Show()
@@ -603,13 +645,13 @@ func (g *Game) handleCommonPlaybackKeys(kb *config.KeybindConfig, barVisible boo
 		g.Player.ToggleMute()
 		show()
 	}
-	if keyJustPressed(kb.SubCycle) {
+	if keyJustPressed(kb.SubCycle) && g.overlay != nil {
 		if !barVisible {
 			g.overlay.Show()
 		}
 		g.overlay.OpenTrackPanel(player.TrackSub)
 	}
-	if keyJustPressed(kb.AudioCycle) {
+	if keyJustPressed(kb.AudioCycle) && g.overlay != nil {
 		if !barVisible {
 			g.overlay.Show()
 		}

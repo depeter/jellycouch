@@ -53,7 +53,7 @@ func (c *Client) ReportPlaybackStopped(itemID string, positionTicks int64) error
 
 // MarkPlayed marks an item as played.
 func (c *Client) MarkPlayed(itemID string) error {
-	_, _, err := c.api.PlaystateAPI.MarkPlayedItem(c.ctx, itemID).
+	_, _, err := c.api.PlaystateAPI.MarkPlayedItem(c.reqCtx(), itemID).
 		UserId(c.userID).
 		DatePlayed(time.Now()).
 		Execute()
@@ -65,7 +65,7 @@ func (c *Client) MarkPlayed(itemID string) error {
 
 // MarkUnplayed marks an item as unplayed.
 func (c *Client) MarkUnplayed(itemID string) error {
-	_, _, err := c.api.PlaystateAPI.MarkUnplayedItem(c.ctx, itemID).
+	_, _, err := c.api.PlaystateAPI.MarkUnplayedItem(c.reqCtx(), itemID).
 		UserId(c.userID).
 		Execute()
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"image"
+	"log"
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
@@ -82,6 +83,15 @@ func (ic *ImageCache) LoadAsync(url string, callback func(*ebiten.Image)) {
 
 		img, err := ic.loadImage(url)
 		if err != nil {
+			log.Printf("image load failed for %s: %v", url, err)
+			// Notify all waiters with nil so they don't hang forever
+			entry.mu.Lock()
+			cbs := make([]func(*ebiten.Image), len(entry.callbacks))
+			copy(cbs, entry.callbacks)
+			entry.mu.Unlock()
+			for _, cb := range cbs {
+				cb(nil)
+			}
 			return
 		}
 

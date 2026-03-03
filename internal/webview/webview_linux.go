@@ -8,6 +8,14 @@ package webview
 #include <gtk/gtk.h>
 #include <webkit2/webkit2.h>
 
+// Callback when JS sends a message via webkit.messageHandlers.jcClose.postMessage()
+static void on_close_message(WebKitUserContentManager *manager,
+                             WebKitJavascriptResult *result,
+                             gpointer user_data) {
+    GtkWidget *window = GTK_WIDGET(user_data);
+    gtk_widget_destroy(window);
+}
+
 static void run_webview(const char *url, const char *init_js) {
     gtk_init(0, NULL);
 
@@ -17,6 +25,11 @@ static void run_webview(const char *url, const char *init_js) {
 
     // Create user content manager for JS injection
     WebKitUserContentManager *ucm = webkit_user_content_manager_new();
+
+    // Register message handler so JS can close the window
+    g_signal_connect(ucm, "script-message-received::jcClose",
+                     G_CALLBACK(on_close_message), window);
+    webkit_user_content_manager_register_script_message_handler(ucm, "jcClose");
 
     if (init_js && init_js[0]) {
         WebKitUserScript *script = webkit_user_script_new(
@@ -53,8 +66,8 @@ import (
 // RunWebview creates a fullscreen WebKitGTK webview with spatial navigation.
 // This blocks until the webview window is closed.
 func RunWebview(url string) {
-	// Build the init JS: define __jc_close as window.close, then add spatial nav
-	closeJS := `window.__jc_close = function() { window.close(); };`
+	// Build the init JS: define __jc_close via WebKit message handler, then add spatial nav
+	closeJS := `window.__jc_close = function() { window.webkit.messageHandlers.jcClose.postMessage('close'); };`
 	initJS := closeJS + "\n" + spatialNavJS
 
 	curl := C.CString(url)

@@ -23,6 +23,7 @@ type playerCmd struct {
 // All mpv API calls are proxied to a single dedicated OS thread.
 type Player struct {
 	cmdCh chan playerCmd
+	done  chan struct{} // closed when mpvThread exits
 
 	mu       sync.Mutex
 	playing  bool
@@ -39,6 +40,7 @@ type Player struct {
 func New(cfg *config.Config) (*Player, error) {
 	p := &Player{
 		cmdCh: make(chan playerCmd, 8),
+		done:  make(chan struct{}),
 	}
 
 	initErr := make(chan error, 1)
@@ -81,6 +83,7 @@ func mpvCmd(args ...string) string {
 func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	defer close(p.done)
 
 	m := mpv.New()
 
@@ -213,10 +216,20 @@ func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 }
 
 // do sends a command to the mpv thread and waits for the result.
+// Returns an error immediately if the mpv thread has exited.
 func (p *Player) do(fn func(m *mpv.Mpv) error) error {
 	ch := make(chan error, 1)
-	p.cmdCh <- playerCmd{fn: fn, result: ch}
-	return <-ch
+	select {
+	case p.cmdCh <- playerCmd{fn: fn, result: ch}:
+	case <-p.done:
+		return fmt.Errorf("mpv thread exited")
+	}
+	select {
+	case err := <-ch:
+		return err
+	case <-p.done:
+		return fmt.Errorf("mpv thread exited")
+	}
 }
 
 // SetWindowID sets the native window handle for embedded playback.

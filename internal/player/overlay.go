@@ -244,7 +244,7 @@ func (o *PlaybackOverlay) Update() {
 	if o.nextUpName != "" && !o.nextUpActive {
 		pos := o.player.Position()
 		dur := o.player.Duration()
-		if dur > 0 && dur-pos <= 60 {
+		if dur > 0 && pos > 60 && dur-pos <= 60 {
 			o.nextUpActive = true
 			if o.Mode == OverlayHidden {
 				o.Mode = OverlayNextUp
@@ -264,4 +264,9 @@ func (o *PlaybackOverlay) Update() {
 // Cleanup removes all persistent overlays. Call before discarding the overlay.
 func (o *PlaybackOverlay) Cleanup() {
 	o.hidePausedOsd()
+	if o.imgOverlayShown {
+		o.player.OverlayRemove(0)
+		o.imgOverlayShown = false
+	}
+	o.player.ShowText("", 1)
 }

@@ -193,7 +193,7 @@ func (c *Client) GetFilteredItems(parentID string, start, limit int, itemTypes [
 
 // GetCollectionType returns the collection type of a library view (e.g. "tvshows", "movies").
 func (c *Client) GetCollectionType(parentID string) (string, error) {
-	item, _, err := c.api.UserLibraryAPI.GetItem(c.ctx, parentID).
+	item, _, err := c.api.UserLibraryAPI.GetItem(c.reqCtx(), parentID).
 		UserId(c.userID).
 		Execute()
 	if err != nil {
@@ -230,7 +230,7 @@ func (c *Client) GetGenres(parentID string, itemTypes []string) ([]string, error
 
 // GetSeasons returns seasons for a series.
 func (c *Client) GetSeasons(seriesID string) ([]MediaItem, error) {
-	result, _, err := c.api.TvShowsAPI.GetSeasons(c.ctx, seriesID).
+	result, _, err := c.api.TvShowsAPI.GetSeasons(c.reqCtx(), seriesID).
 		UserId(c.userID).
 		Fields(metadataFields).
 		Execute()
@@ -242,7 +242,7 @@ func (c *Client) GetSeasons(seriesID string) ([]MediaItem, error) {
 
 // GetEpisodes returns episodes for a season.
 func (c *Client) GetEpisodes(seriesID string, seasonID string) ([]MediaItem, error) {
-	req := c.api.TvShowsAPI.GetEpisodes(c.ctx, seriesID).
+	req := c.api.TvShowsAPI.GetEpisodes(c.reqCtx(), seriesID).
 		UserId(c.userID).
 		Fields(metadataFields).
 		SeasonId(seasonID)
@@ -305,7 +305,7 @@ func (c *Client) SearchItems(query string, limit int) ([]MediaItem, error) {
 
 // GetItem returns a single item by ID.
 func (c *Client) GetItem(itemID string) (*MediaItem, error) {
-	result, _, err := c.api.UserLibraryAPI.GetItem(c.ctx, itemID).
+	result, _, err := c.api.UserLibraryAPI.GetItem(c.reqCtx(), itemID).
 		UserId(c.userID).
 		Execute()
 	if err != nil {

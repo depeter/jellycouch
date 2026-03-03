@@ -130,7 +130,7 @@ const spatialNavJS = `
 
   document.addEventListener('keydown', function(e) {
     // Skip when a text input has focus (allow normal typing)
-    if (isTextInput(document.activeElement) && e.key !== 'Escape') return;
+    if (isTextInput(document.activeElement) && e.key !== 'Escape' && e.key !== 'Backspace') return;
 
     switch (e.key) {
       case 'ArrowUp':
@@ -154,6 +154,7 @@ const spatialNavJS = `
         break;
       }
 
+      case 'Backspace':
       case 'Escape': {
         e.preventDefault();
         e.stopPropagation();
