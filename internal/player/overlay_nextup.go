@@ -72,7 +72,6 @@ func (o *PlaybackOverlay) renderNextUp() {
 	}
 
 	var b strings.Builder
-	b.WriteString("${osd-ass-cc/0}")
 	b.WriteString("{\\an7\\bord0\\shad0}")
 
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(20), assColorGray))
@@ -84,5 +83,5 @@ func (o *PlaybackOverlay) renderNextUp() {
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s\\b1}", o.scale(20), assColorBlue))
 	b.WriteString("[ Start ]")
 
-	o.player.ShowText(b.String(), 2000)
+	o.player.OsdOverlay(osdIDMain, b.String(), o.screenW, o.screenH)
 }

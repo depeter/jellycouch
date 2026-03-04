@@ -15,8 +15,10 @@ const (
 	OverlayNextUp                  // "Up Next" countdown banner (top-left)
 )
 
-// OSD overlay slot ID for the persistent paused overlay (via osd-overlay command).
-const osdIDPausedBar = 1
+// OSD overlay slot ID for the main overlay (bar, tracks, next-up, paused).
+// All mutually exclusive modes share a single ID so that setting new content
+// atomically replaces the previous overlay without a remove-then-set race.
+const osdIDMain = 1
 
 // ControlButton identifies a button on the control bar.
 type ControlButton int
@@ -191,7 +193,7 @@ func (o *PlaybackOverlay) Hide() {
 		return
 	}
 	o.Mode = OverlayHidden
-	o.player.ShowText("", 1)
+	o.player.OsdOverlayRemove(osdIDMain)
 	if o.imgOverlayShown {
 		o.player.OverlayRemove(0)
 		o.imgOverlayShown = false
@@ -256,5 +258,5 @@ func (o *PlaybackOverlay) Cleanup() {
 		o.player.OverlayRemove(0)
 		o.imgOverlayShown = false
 	}
-	o.player.ShowText("", 1)
+	o.player.OsdOverlayRemove(osdIDMain)
 }

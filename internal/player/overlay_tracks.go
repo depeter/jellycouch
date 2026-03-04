@@ -147,7 +147,6 @@ func (o *PlaybackOverlay) selectTrack() {
 func (o *PlaybackOverlay) renderTrackPanel() {
 	var b strings.Builder
 
-	b.WriteString("${osd-ass-cc/0}")
 	b.WriteString("{\\an5\\bord0\\shad0}")
 
 	title := "Subtitle Tracks"
@@ -197,7 +196,7 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 		b.WriteString("\\N")
 	}
 
-	o.player.ShowText(b.String(), 30000)
+	o.player.OsdOverlay(osdIDMain, b.String(), o.screenW, o.screenH)
 }
 
 // langName converts ISO 639-2/B language codes to human-readable names.

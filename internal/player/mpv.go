@@ -30,6 +30,8 @@ type Player struct {
 	paused   bool
 	duration float64
 	position float64
+	volume   float64
+	muted    bool
 	itemID   string
 
 	OnPlaybackEnd func()
@@ -139,6 +141,8 @@ func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 	m.ObserveProperty(0, "time-pos", mpv.FormatDouble)
 	m.ObserveProperty(0, "duration", mpv.FormatDouble)
 	m.ObserveProperty(0, "pause", mpv.FormatFlag)
+	m.ObserveProperty(0, "volume", mpv.FormatDouble)
+	m.ObserveProperty(0, "mute", mpv.FormatFlag)
 
 	initErr <- nil
 
@@ -185,6 +189,14 @@ func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 			case "pause":
 				if v, ok := prop.Data.(int); ok {
 					p.paused = v == 1
+				}
+			case "volume":
+				if v, ok := prop.Data.(float64); ok {
+					p.volume = v
+				}
+			case "mute":
+				if v, ok := prop.Data.(int); ok {
+					p.muted = v == 1
 				}
 			}
 			p.mu.Unlock()
@@ -340,16 +352,22 @@ func (p *Player) OverlayRemove(id int) {
 // OsdOverlay sends an osd-overlay command to display persistent ASS content.
 // id identifies the overlay slot (use different IDs for independent overlays).
 func (p *Player) OsdOverlay(id int, assData string, resX, resY int) {
-	p.do(func(m *mpv.Mpv) error {
+	err := p.do(func(m *mpv.Mpv) error {
 		return osdOverlaySet(m, id, assData, resX, resY)
 	})
+	if err != nil {
+		log.Printf("OsdOverlay(%d): %v", id, err)
+	}
 }
 
 // OsdOverlayRemove removes a persistent osd-overlay by its slot ID.
 func (p *Player) OsdOverlayRemove(id int) {
-	p.do(func(m *mpv.Mpv) error {
+	err := p.do(func(m *mpv.Mpv) error {
 		return osdOverlayRemove(m, id)
 	})
+	if err != nil {
+		log.Printf("OsdOverlayRemove(%d): %v", id, err)
+	}
 }
 
 // ShowText displays a text message on mpv's OSD for the given duration (ms).
@@ -504,4 +522,18 @@ func (p *Player) ItemID() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.itemID
+}
+
+// Volume returns the current volume level.
+func (p *Player) Volume() float64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.volume
+}
+
+// Muted returns the current mute state.
+func (p *Player) Muted() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.muted
 }
