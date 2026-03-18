@@ -96,7 +96,7 @@ func (o *PlaybackOverlay) HandleTrackInput(dir Direction, enter, back bool) bool
 
 	totalItems := len(o.tracks)
 	if o.trackType == TrackSub {
-		totalItems++ // "Off" option
+		totalItems += 2 // "Download Subtitles..." + "Off"
 	}
 
 	if dir == DirUp {
@@ -127,10 +127,17 @@ func (o *PlaybackOverlay) HandleTrackInput(dir Direction, enter, back bool) bool
 // selectTrack applies the selected track and closes the panel.
 func (o *PlaybackOverlay) selectTrack() {
 	if o.trackType == TrackSub {
-		// Last item is "Off"
-		if o.selectedIndex >= len(o.tracks) {
+		switch {
+		case o.selectedIndex == len(o.tracks)+1:
+			// "Off"
 			o.player.SetSubTrack(0)
-		} else {
+		case o.selectedIndex == len(o.tracks):
+			// "Download Subtitles..."
+			if o.OnDownloadSubtitles != nil {
+				o.OnDownloadSubtitles()
+			}
+			return // don't close panel — game state change handles it
+		default:
 			o.player.SetSubTrack(o.tracks[o.selectedIndex].ID)
 		}
 	} else {
@@ -158,14 +165,18 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 
 	totalItems := len(o.tracks)
 	if o.trackType == TrackSub {
-		totalItems++ // "Off" option at the end
+		totalItems += 2 // "Download Subtitles..." + "Off"
 	}
 
 	for i := 0; i < totalItems; i++ {
 		var label string
 		var isCurrentlyActive bool
 
-		if o.trackType == TrackSub && i >= len(o.tracks) {
+		if o.trackType == TrackSub && i == len(o.tracks) {
+			// "Download Subtitles..." entry
+			label = "Download Subtitles..."
+		} else if o.trackType == TrackSub && i == len(o.tracks)+1 {
+			// "Off" entry
 			label = "Off"
 			isCurrentlyActive = true
 			for _, t := range o.tracks {

@@ -43,6 +43,7 @@ type MediaItem struct {
 	Genres                []string
 	Taglines              []string
 	OfficialRating        string
+	ProviderIds           map[string]string
 }
 
 type UserData struct {
@@ -69,6 +70,7 @@ var (
 		jellyfin.ITEMFIELDS_OVERVIEW,
 		jellyfin.ITEMFIELDS_GENRES,
 		jellyfin.ITEMFIELDS_TAGLINES,
+		jellyfin.ITEMFIELDS_PROVIDER_IDS,
 	}
 )
 
@@ -359,6 +361,9 @@ func convertBaseItemDto(item *jellyfin.BaseItemDto) MediaItem {
 	mi.Taglines = item.GetTaglines()
 	mi.OfficialRating = item.GetOfficialRating()
 	mi.RecursiveItemCount = int(item.GetRecursiveItemCount())
+	if ids := item.GetProviderIds(); len(ids) > 0 {
+		mi.ProviderIds = ids
+	}
 
 	if item.UserData.IsSet() {
 		udPtr := item.UserData.Get()

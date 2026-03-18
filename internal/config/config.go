@@ -8,12 +8,19 @@ import (
 )
 
 type Config struct {
-	Server     ServerConfig     `toml:"server"`
-	Jellyseerr JellyseerrConfig `toml:"jellyseerr"`
-	Subtitles  SubtitleConfig   `toml:"subtitles"`
-	Playback   PlaybackConfig   `toml:"playback"`
-	UI         UIConfig         `toml:"ui"`
-	Keybinds   KeybindConfig    `toml:"keybinds"`
+	Server        ServerConfig        `toml:"server"`
+	Jellyseerr    JellyseerrConfig    `toml:"jellyseerr"`
+	OpenSubtitles OpenSubtitlesConfig `toml:"opensubtitles"`
+	Subtitles     SubtitleConfig      `toml:"subtitles"`
+	Playback      PlaybackConfig      `toml:"playback"`
+	UI            UIConfig            `toml:"ui"`
+	Keybinds      KeybindConfig       `toml:"keybinds"`
+}
+
+type OpenSubtitlesConfig struct {
+	APIKey   string `toml:"api_key"`
+	Username string `toml:"username"`
+	Password string `toml:"password"`
 }
 
 type JellyseerrConfig struct {

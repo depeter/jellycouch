@@ -2,12 +2,14 @@ package main
 
 import (
 	"log"
+	"path/filepath"
 
 	"github.com/depeter/jellycouch/internal/app"
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/config"
 	"github.com/depeter/jellycouch/internal/jellyfin"
 	"github.com/depeter/jellycouch/internal/jellyseerr"
+	"github.com/depeter/jellycouch/internal/opensubtitles"
 	"github.com/depeter/jellycouch/internal/ui"
 )
 
@@ -66,7 +68,28 @@ func (sf *screenFactory) pushDetail(item jellyfin.MediaItem) {
 	detail.OnLibrary = func(parentID, title string) {
 		sf.pushLibrary(parentID, title, nil)
 	}
+	if sf.game.OpenSubtitles != nil {
+		detail.AddButton("Subtitles")
+		detail.OnSubtitleDownload = func(item jellyfin.MediaItem) {
+			sf.pushSubtitleDownload(item, nil, nil)
+		}
+	}
 	sf.game.Screens.Push(detail)
+}
+
+func (sf *screenFactory) pushSubtitleDownload(item jellyfin.MediaItem, onReady func(string), onCancel func()) {
+	if sf.game.OpenSubtitles == nil {
+		return
+	}
+	subDir := filepath.Join(filepath.Dir(sf.game.Cache.CacheDir()), "subtitles")
+	screen := ui.NewSubtitleDownloadScreen(sf.game.OpenSubtitles, item, subDir)
+	if onReady != nil {
+		screen.OnSubtitleReady = onReady
+	}
+	if onCancel != nil {
+		screen.OnCancel = onCancel
+	}
+	sf.game.Screens.Push(screen)
 }
 
 func (sf *screenFactory) pushLibrary(parentID, title string, itemTypes []string) {
@@ -95,6 +118,15 @@ func (sf *screenFactory) pushSettings() {
 			sf.game.Jellyseerr = jellyseerr.NewClient(sf.cfg.Jellyseerr.URL, sf.cfg.Jellyseerr.APIKey)
 		} else {
 			sf.game.Jellyseerr = nil
+		}
+		if sf.cfg.OpenSubtitles.APIKey != "" {
+			sf.game.OpenSubtitles = opensubtitles.NewClient(
+				sf.cfg.OpenSubtitles.APIKey,
+				sf.cfg.OpenSubtitles.Username,
+				sf.cfg.OpenSubtitles.Password,
+			)
+		} else {
+			sf.game.OpenSubtitles = nil
 		}
 		sf.loadNavBarViews()
 	})

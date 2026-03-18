@@ -28,6 +28,13 @@ func (p *Player) ApplySubtitleConfig(cfg *config.SubtitleConfig) {
 	})
 }
 
+// AddSubtitleFile loads an external subtitle file into the current playback.
+func (p *Player) AddSubtitleFile(path string) error {
+	return p.do(func(m *mpv.Mpv) error {
+		return m.CommandString(mpvCmd("sub-add", path, "select"))
+	})
+}
+
 // SetSubDelay adjusts subtitle delay in seconds.
 func (p *Player) SetSubDelay(seconds float64) error {
 	return p.do(func(m *mpv.Mpv) error {

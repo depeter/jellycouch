@@ -90,9 +90,10 @@ type PlaybackOverlay struct {
 	screenW, screenH int
 
 	// Callbacks
-	OnStop        func()
-	OnNextEpisode func()
-	OnStartNextUp func()
+	OnStop               func()
+	OnNextEpisode        func()
+	OnStartNextUp        func()
+	OnDownloadSubtitles  func()
 
 	// Next-up state
 	nextUpName   string

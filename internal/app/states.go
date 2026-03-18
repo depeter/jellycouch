@@ -6,4 +6,5 @@ type AppState int
 const (
 	StateBrowse AppState = iota
 	StatePlay
+	StateSubtitleModal // StatePlay + Ebitengine screen stack active
 )

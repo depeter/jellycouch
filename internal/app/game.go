@@ -14,18 +14,20 @@ import (
 	"github.com/depeter/jellycouch/internal/constants"
 	"github.com/depeter/jellycouch/internal/jellyfin"
 	"github.com/depeter/jellycouch/internal/jellyseerr"
+	"github.com/depeter/jellycouch/internal/opensubtitles"
 	"github.com/depeter/jellycouch/internal/player"
 	"github.com/depeter/jellycouch/internal/ui"
 )
 
 // Game implements ebiten.Game and manages the overall application.
 type Game struct {
-	Config     *config.Config
-	Client     *jellyfin.Client
-	Jellyseerr *jellyseerr.Client
-	Player     *player.Player
-	Cache      *cache.ImageCache
-	Screens    *ui.ScreenManager
+	Config        *config.Config
+	Client        *jellyfin.Client
+	Jellyseerr    *jellyseerr.Client
+	OpenSubtitles *opensubtitles.Client
+	Player        *player.Player
+	Cache         *cache.ImageCache
+	Screens       *ui.ScreenManager
 
 	State         AppState
 	Width, Height int
@@ -33,11 +35,12 @@ type Game struct {
 	// Set to true when mpv playback ends and we need to return to browse mode
 	playbackEnded bool
 
-	overlay        *player.PlaybackOverlay
-	currentItem    *jellyfin.MediaItem
-	nextEpCh       chan *jellyfin.MediaItem
-	nextEpItem     *jellyfin.MediaItem // pre-fetched next episode for direct playback
-	nextEpBGRAPath string              // temp file for thumbnail overlay
+	overlay              *player.PlaybackOverlay
+	currentItem          *jellyfin.MediaItem
+	nextEpCh             chan *jellyfin.MediaItem
+	nextEpItem           *jellyfin.MediaItem // pre-fetched next episode for direct playback
+	nextEpBGRAPath       string              // temp file for thumbnail overlay
+	subtitleModalDone    bool
 
 	startFullscreen bool // apply fullscreen on first Update() frame
 }
@@ -115,10 +118,35 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 		g.overlay.OnStartNextUp = func() { g.playNextEpisode() }
 		go g.prefetchNextEpisode(item)
 	}
+	if g.OpenSubtitles != nil && item != nil {
+		g.overlay.OnDownloadSubtitles = func() {
+			g.startSubtitleDownloadDuringPlayback()
+		}
+	}
 	g.overlay.Show()
 
 	g.State = StatePlay
 	g.playbackEnded = false
+}
+
+// startSubtitleDownloadDuringPlayback pushes the subtitle download screen over playback.
+func (g *Game) startSubtitleDownloadDuringPlayback() {
+	if g.currentItem == nil || g.OpenSubtitles == nil {
+		return
+	}
+	subDir := filepath.Join(filepath.Dir(g.Cache.CacheDir()), "subtitles")
+	screen := ui.NewSubtitleDownloadScreen(g.OpenSubtitles, *g.currentItem, subDir)
+	screen.OnSubtitleReady = func(path string) {
+		if g.Player != nil {
+			g.Player.AddSubtitleFile(path)
+		}
+		g.subtitleModalDone = true
+	}
+	screen.OnCancel = func() {
+		g.subtitleModalDone = true
+	}
+	g.Screens.Push(screen)
+	g.State = StateSubtitleModal
 }
 
 // PlayURL plays an arbitrary URL (e.g. YouTube trailer) via mpv without Jellyfin progress reporting.
@@ -343,6 +371,20 @@ func (g *Game) Update() error {
 			return err
 		}
 
+	case StateSubtitleModal:
+		if g.subtitleModalDone {
+			g.subtitleModalDone = false
+			g.State = StatePlay
+			if g.overlay != nil {
+				g.overlay.Show()
+			}
+			ui.UpdateInputState()
+			return nil
+		}
+		if err := g.Screens.Update(); err != nil {
+			return err
+		}
+
 	case StatePlay:
 		if g.playbackEnded {
 			g.playbackEnded = false
@@ -423,6 +465,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		screen.Fill(ui.ColorBackground)
 		g.Screens.Draw(screen)
 		ui.DrawDebugOverlay(screen)
+
+	case StateSubtitleModal:
+		screen.Fill(ui.ColorBackground)
+		g.Screens.Draw(screen)
 
 	case StatePlay:
 		// In play mode, mpv owns the window surface via --wid.

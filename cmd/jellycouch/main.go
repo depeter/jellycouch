@@ -14,6 +14,7 @@ import (
 	"github.com/depeter/jellycouch/internal/config"
 	"github.com/depeter/jellycouch/internal/jellyfin"
 	"github.com/depeter/jellycouch/internal/jellyseerr"
+	"github.com/depeter/jellycouch/internal/opensubtitles"
 	"github.com/depeter/jellycouch/internal/ui"
 )
 
@@ -53,6 +54,15 @@ func main() {
 	// Init Jellyseerr client if configured
 	if cfg.Jellyseerr.URL != "" && cfg.Jellyseerr.APIKey != "" {
 		game.Jellyseerr = jellyseerr.NewClient(cfg.Jellyseerr.URL, cfg.Jellyseerr.APIKey)
+	}
+
+	// Init OpenSubtitles client if configured
+	if cfg.OpenSubtitles.APIKey != "" {
+		game.OpenSubtitles = opensubtitles.NewClient(
+			cfg.OpenSubtitles.APIKey,
+			cfg.OpenSubtitles.Username,
+			cfg.OpenSubtitles.Password,
+		)
 	}
 
 	sf := &screenFactory{game: game, cfg: cfg, imgCache: imgCache}

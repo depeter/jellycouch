@@ -75,6 +75,14 @@ func NewSettingsScreen(cfg *config.Config, onSave func()) *SettingsScreen {
 			},
 		},
 		{
+			Label: "OpenSubtitles",
+			Items: []settingsItem{
+				{Label: "API Key", Value: func() string { return cfg.OpenSubtitles.APIKey }, OnChange: func(v string) error { cfg.OpenSubtitles.APIKey = v; return nil }},
+				{Label: "Username", Value: func() string { return cfg.OpenSubtitles.Username }, OnChange: func(v string) error { cfg.OpenSubtitles.Username = v; return nil }},
+				{Label: "Password", Value: func() string { return cfg.OpenSubtitles.Password }, OnChange: func(v string) error { cfg.OpenSubtitles.Password = v; return nil }},
+			},
+		},
+		{
 			Label: "Subtitles",
 			Items: []settingsItem{
 				{Label: "Font", Value: func() string { return cfg.Subtitles.Font }, OnChange: func(v string) error { cfg.Subtitles.Font = v; return nil }},

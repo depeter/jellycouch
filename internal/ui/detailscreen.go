@@ -38,8 +38,9 @@ type DetailScreen struct {
 	focusMode  int
 	loaded     bool
 
-	OnPlay    func(item jellyfin.MediaItem, resumeTicks int64)
-	OnLibrary func(parentID, title string)
+	OnPlay              func(item jellyfin.MediaItem, resumeTicks int64)
+	OnLibrary           func(parentID, title string)
+	OnSubtitleDownload  func(item jellyfin.MediaItem)
 
 	mu sync.Mutex
 }
@@ -289,7 +290,16 @@ func (ds *DetailScreen) handleButtonPress() {
 	case "Mark Watched", "Mark Unwatched":
 		ds.item.Played = ToggleWatched(ds.client, ds.item.ID, ds.item.Played)
 		ds.updateWatchedButton()
+	case "Subtitles":
+		if ds.OnSubtitleDownload != nil {
+			ds.OnSubtitleDownload(ds.item)
+		}
 	}
+}
+
+// AddButton appends a button to the detail panel after construction.
+func (ds *DetailScreen) AddButton(label string) {
+	ds.detail.Buttons = append(ds.detail.Buttons, label)
 }
 
 func (ds *DetailScreen) updateWatchedButton() {
