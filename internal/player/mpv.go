@@ -204,8 +204,12 @@ func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 		case mpv.EventEnd:
 			if ev.Data == nil {
 				p.mu.Lock()
+				wasPlaying := p.playing
 				p.playing = false
 				p.mu.Unlock()
+				if wasPlaying && p.OnPlaybackEnd != nil {
+					p.OnPlaybackEnd()
+				}
 				continue
 			}
 			ef := ev.EndFile()
@@ -214,7 +218,7 @@ func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 			p.playing = false
 			p.mu.Unlock()
 			log.Printf("mpv end-file: reason=%s wasPlaying=%v", ef.Reason, wasPlaying)
-			if wasPlaying && ef.Reason == mpv.EndFileEOF && p.OnPlaybackEnd != nil {
+			if wasPlaying && p.OnPlaybackEnd != nil {
 				p.OnPlaybackEnd()
 			}
 
