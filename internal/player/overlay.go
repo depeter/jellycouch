@@ -185,7 +185,6 @@ func (o *PlaybackOverlay) Show() {
 	o.lastInput = time.Now()
 	o.focusZone = ZoneButtons
 	o.accel = seekAccel{}
-
 	o.renderBar()
 }
 

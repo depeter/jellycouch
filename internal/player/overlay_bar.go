@@ -28,11 +28,6 @@ func (o *PlaybackOverlay) HandleBarInput(dir Direction, enter, back bool) bool {
 	switch o.focusZone {
 	case ZoneButtons:
 		if dir == DirUp {
-			o.Hide()
-			return true
-		}
-
-		if dir == DirDown {
 			o.focusZone = ZoneProgress
 			o.accel = seekAccel{}
 			o.renderBar()
@@ -70,13 +65,13 @@ func (o *PlaybackOverlay) HandleBarInput(dir Direction, enter, back bool) bool {
 
 	case ZoneProgress:
 		if dir == DirUp {
-			o.focusZone = ZoneButtons
-			o.renderBar()
+			o.Hide()
 			return true
 		}
 
 		if dir == DirDown {
-			o.Hide()
+			o.focusZone = ZoneButtons
+			o.renderBar()
 			return true
 		}
 
@@ -216,7 +211,7 @@ func (o *PlaybackOverlay) renderBar() {
 		} else if imgX+epInfo.ImageW > o.screenW {
 			imgX = o.screenW - epInfo.ImageW
 		}
-		imgY := o.screenH * 20 / 100
+		imgY := o.screenH - o.screenH*20/100 - epInfo.ImageH
 		o.player.OverlayAdd(0, imgX, imgY, epInfo.ImagePath, epInfo.ImageW, epInfo.ImageH)
 		o.imgOverlayShown = true
 	} else if o.imgOverlayShown {
@@ -225,12 +220,49 @@ func (o *PlaybackOverlay) renderBar() {
 	}
 
 	// Clock as separate top-right ASS event
-	clock := fmt.Sprintf("{\\an9\\pos(%d,10)\\bord2\\fs%d%s}%s",
-		o.screenW-20, o.scale(22), assColorWhite, time.Now().Format("15:04"))
+	clock := fmt.Sprintf("{\\an9\\bord2\\fs%d%s}%s",
+		o.scale(22), assColorWhite, time.Now().Format("15:04"))
 
 	var b strings.Builder
 
-	b.WriteString(fmt.Sprintf("{\\an8\\pos(%d,10)\\bord0\\shad0\\fsp0}", o.screenW/2))
+	b.WriteString("{\\an2\\bord0\\shad0\\fsp0}")
+
+	// Next episode tooltip line (above progress bar)
+	if nextFocused {
+		if epInfo != nil {
+			tooltip := fmt.Sprintf("Up Next: S%dE%d \u00B7 %s",
+				epInfo.SeasonNumber, epInfo.EpisodeNumber, epInfo.Title)
+			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(20), assColorWhite))
+			b.WriteString(tooltip + "\\N")
+		} else if noNext {
+			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(20), assColorDimGray))
+			b.WriteString("No next episode\\N")
+		}
+	}
+
+	// Progress bar line
+	barColor := assColorGray
+	if o.focusZone == ZoneProgress {
+		barColor = assColorBlue
+	}
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(14), barColor))
+	b.WriteString(o.buildProgressBar(o.barWidth()) + "\\N")
+
+	// Time, volume, and wall clock line
+	pos := o.player.Position()
+	dur := o.player.Duration()
+	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(17), assColorWhite))
+	b.WriteString(fmt.Sprintf("%s / %s", formatDuration(pos), formatDuration(dur)))
+	b.WriteString("    ")
+	if o.player.Muted() {
+		b.WriteString("Muted")
+	} else {
+		b.WriteString(fmt.Sprintf("Vol: %.0f%%", o.player.Volume()))
+	}
+	if o.player.Paused() {
+		b.WriteString(fmt.Sprintf("{\\fs%d%s}  \\NPaused", o.scale(16), assColorGray))
+	}
+	b.WriteString("\\N")
 
 	// Button row
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(19)))
@@ -263,44 +295,6 @@ func (o *PlaybackOverlay) renderBar() {
 			b.WriteString("{" + assColorBlue + "\\b1}" + label + "{\\b0}")
 		} else {
 			b.WriteString("{" + assColorGray + "}" + label)
-		}
-	}
-	b.WriteString("\\N")
-
-	// Time, volume, clock line
-	pos := o.player.Position()
-	dur := o.player.Duration()
-	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(17), assColorWhite))
-	b.WriteString(fmt.Sprintf("%s / %s", formatDuration(pos), formatDuration(dur)))
-	b.WriteString("    ")
-	if o.player.Muted() {
-		b.WriteString("Muted")
-	} else {
-		b.WriteString(fmt.Sprintf("Vol: %.0f%%", o.player.Volume()))
-	}
-	if o.player.Paused() {
-		b.WriteString(fmt.Sprintf("{\\fs%d%s}  \\NPaused", o.scale(16), assColorGray))
-	}
-	b.WriteString("\\N")
-
-	// Progress bar line
-	barColor := assColorGray
-	if o.focusZone == ZoneProgress {
-		barColor = assColorBlue
-	}
-	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(14), barColor))
-	b.WriteString(o.buildProgressBar(o.barWidth()) + "\\N")
-
-	// Next episode tooltip line (below progress bar)
-	if nextFocused {
-		if epInfo != nil {
-			tooltip := fmt.Sprintf("Up Next: S%dE%d \u00B7 %s",
-				epInfo.SeasonNumber, epInfo.EpisodeNumber, epInfo.Title)
-			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(20), assColorWhite))
-			b.WriteString(tooltip + "\\N")
-		} else if noNext {
-			b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(20), assColorDimGray))
-			b.WriteString("No next episode\\N")
 		}
 	}
 

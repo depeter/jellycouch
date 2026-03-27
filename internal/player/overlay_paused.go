@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// renderPausedInfo renders minimal time/duration + progress bar at the top
-// and a top-right clock as persistent OSD overlays while paused.
+// renderPausedInfo renders the minimal bottom progress bar + time/duration
+// and top-right clock as persistent OSD overlays while paused.
 func (o *PlaybackOverlay) renderPausedInfo() {
 	o.lastRender = time.Now()
 
@@ -14,11 +14,13 @@ func (o *PlaybackOverlay) renderPausedInfo() {
 	dur := o.player.Duration()
 	clock := time.Now().Format("15:04")
 
-	// Two ASS events: clock at top-right, time/progress at top-center
-	ass := fmt.Sprintf("{\\an9\\pos(%d,10)\\bord2\\fs%d%s}%s\n{\\an8\\pos(%d,10)\\bord2\\fs%d%s}%s / %s\\N{\\fs%d%s}%s",
-		o.screenW-20, o.scale(22), assColorWhite, clock,
-		o.screenW/2, o.scale(17), assColorWhite, formatDuration(pos), formatDuration(dur),
-		o.scale(14), assColorGray, o.buildProgressBar(o.barWidth()))
+	// Two ASS events in one overlay:
+	// 1. Clock at top-right
+	// 2. Progress bar + time/duration at bottom-center
+	ass := fmt.Sprintf("{\\an9\\bord2\\fs%d%s}%s\n{\\an2\\bord2\\fs%d%s}%s\\N{\\fs%d%s}%s / %s",
+		o.scale(22), assColorWhite, clock,
+		o.scale(14), assColorGray, o.buildProgressBar(o.barWidth()),
+		o.scale(17), assColorWhite, formatDuration(pos), formatDuration(dur))
 	o.player.OsdOverlay(osdIDMain, ass, o.screenW, o.screenH)
 	o.pausedOsdShown = true
 }

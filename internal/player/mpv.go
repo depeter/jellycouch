@@ -105,8 +105,6 @@ func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 	must(m.SetOptionString("osd-duration", "2000"))
 	must(m.SetOptionString("osd-bar", "yes"))
 
-	// OSD overlay alignment is controlled by \an/\pos tags in the ASS events
-
 	// Subtitle defaults from config
 	must(m.SetOptionString("sub-font", cfg.Subtitles.Font))
 	must(m.SetOptionString("sub-font-size", fmt.Sprintf("%d", cfg.Subtitles.FontSize)))
@@ -349,8 +347,6 @@ func (p *Player) OverlayRemove(id int) {
 
 // OsdOverlay sends an osd-overlay command to display persistent ASS content.
 // id identifies the overlay slot (use different IDs for independent overlays).
-// assData contains one or more ASS event text lines separated by \n.
-// Each line becomes the Text field of an ASS Dialogue event rendered by mpv.
 func (p *Player) OsdOverlay(id int, assData string, resX, resY int) {
 	err := p.do(func(m *mpv.Mpv) error {
 		return osdOverlaySet(m, id, assData, resX, resY)
