@@ -41,7 +41,8 @@ type Game struct {
 	// QuitRequested is set to true when the user clicks the Quit button.
 	QuitRequested bool
 
-	// Set to true when mpv playback ends and we need to return to browse mode
+	// Set to true when mpv playback ends (EOF) and we need to return to browse mode.
+	// Accessed from mpv thread (write) and game loop (read), so must be atomic.
 	playbackEnded atomic.Bool
 
 	overlay        *player.PlaybackOverlay
@@ -431,104 +432,99 @@ actionsDrained:
 				next := g.nextEpItem
 				g.StopPlayback()
 				g.StartPlayback(next.ID, 0, next)
-				return nil
-			}
-			g.StopPlayback()
-			return nil
-		}
-
-		// Update overlay auto-hide timer and next-up trigger
-		if g.overlay != nil {
-			g.overlay.Update()
-		}
-
-		// Auto-hide cursor after 3 seconds of no mouse movement
-		const cursorHideDelay = 180 // ~3s at 60fps
-		mx, my := ebiten.CursorPosition()
-		if mx != g.lastMouseX || my != g.lastMouseY {
-			g.lastMouseX, g.lastMouseY = mx, my
-			g.cursorIdleFrames = 0
-			if g.cursorHidden {
-				ebiten.SetCursorMode(ebiten.CursorModeVisible)
-				g.cursorHidden = false
+			} else {
+				g.StopPlayback()
 			}
 		} else {
-			g.cursorIdleFrames++
-			if !g.cursorHidden && g.cursorIdleFrames >= cursorHideDelay {
-				ebiten.SetCursorMode(ebiten.CursorModeHidden)
-				g.cursorHidden = true
+			// Update overlay auto-hide timer and next-up trigger
+			if g.overlay != nil {
+				g.overlay.Update()
 			}
-		}
 
-		// Apply prefetched next-episode result from goroutine (race-free)
-		if g.prefetchDone != nil {
-			select {
-			case res := <-g.prefetchDone:
-				g.prefetchDone = nil
-				if res.info != nil {
-					g.nextEpItem = res.item
-					g.nextEpBGRAPath = res.bgraPath
-					if g.overlay != nil {
-						g.overlay.SetNextEpisode(res.info)
-						g.overlay.SetNextUp(res.info.Title, res.info.EpisodeNumber)
-					}
-				} else if g.overlay != nil {
-					g.overlay.SetNoNextEpisode()
+			// Auto-hide cursor after 3 seconds of no mouse movement
+			const cursorHideDelay = 180 // ~3s at 60fps
+			mx, my := ebiten.CursorPosition()
+			if mx != g.lastMouseX || my != g.lastMouseY {
+				g.lastMouseX, g.lastMouseY = mx, my
+				g.cursorIdleFrames = 0
+				if g.cursorHidden {
+					ebiten.SetCursorMode(ebiten.CursorModeVisible)
+					g.cursorHidden = false
 				}
-			default:
+			} else {
+				g.cursorIdleFrames++
+				if !g.cursorHidden && g.cursorIdleFrames >= cursorHideDelay {
+					ebiten.SetCursorMode(ebiten.CursorModeHidden)
+					g.cursorHidden = true
+				}
 			}
-		}
 
-		// Check for async next-episode lookup result (fallback path)
-		if g.nextEpCh != nil {
-			select {
-			case nextItem := <-g.nextEpCh:
-				g.nextEpCh = nil
-				if nextItem != nil {
-					if g.nextEpItem != nil {
-						// Already have a stored result — this shouldn't happen, ignore
-					} else {
-						g.nextEpItem = nextItem
+			// Apply prefetched next-episode result from goroutine (race-free)
+			if g.prefetchDone != nil {
+				select {
+				case res := <-g.prefetchDone:
+					g.prefetchDone = nil
+					if res.info != nil {
+						g.nextEpItem = res.item
+						g.nextEpBGRAPath = res.bgraPath
 						if g.overlay != nil {
-							g.overlay.SetNextUp(nextItem.Name, nextItem.IndexNumber)
+							g.overlay.SetNextEpisode(res.info)
+							g.overlay.SetNextUp(res.info.Title, res.info.EpisodeNumber)
 						}
+					} else if g.overlay != nil {
+						g.overlay.SetNoNextEpisode()
 					}
-				} else if g.Player != nil {
-					g.Player.ShowText("No next episode", 3000)
+				default:
 				}
-			default:
+			}
+
+			// Check for async next-episode lookup result (fallback path)
+			if g.nextEpCh != nil {
+				select {
+				case nextItem := <-g.nextEpCh:
+					g.nextEpCh = nil
+					if nextItem != nil {
+						if g.nextEpItem != nil {
+							// Already have a stored result — this shouldn't happen, ignore
+						} else {
+							g.nextEpItem = nextItem
+							if g.overlay != nil {
+								g.overlay.SetNextUp(nextItem.Name, nextItem.IndexNumber)
+							}
+						}
+					} else if g.Player != nil {
+						g.Player.ShowText("No next episode", 3000)
+					}
+				default:
+				}
+			}
+
+			// Esc/Back — context-dependent behavior
+			backPressed := inpututil.IsKeyJustPressed(ebiten.KeyEscape) ||
+				inpututil.IsKeyJustPressed(ebiten.KeyBackspace) ||
+				inpututil.IsMouseButtonJustPressed(ebiten.MouseButton3) ||
+				ui.EvdevBackJustPressed()
+
+			backHandled := false
+			if backPressed && g.overlay != nil {
+				switch g.overlay.Mode {
+				case player.OverlayTrackSelect:
+					g.overlay.HandleTrackInput(player.DirNone, false, true)
+					backHandled = true
+				case player.OverlayBar:
+					g.overlay.Hide()
+					backHandled = true
+				}
+			}
+
+			if backPressed && !backHandled {
+				g.StopPlayback()
+			} else {
+				// Forward playback controls to mpv (required on Windows where
+				// embedded mpv doesn't receive keyboard input directly)
+				g.handlePlaybackInput()
 			}
 		}
-
-		// Esc/Back — context-dependent behavior
-		backPressed := inpututil.IsKeyJustPressed(ebiten.KeyEscape) ||
-			inpututil.IsKeyJustPressed(ebiten.KeyBackspace) ||
-			inpututil.IsMouseButtonJustPressed(ebiten.MouseButton3) ||
-			ui.EvdevBackJustPressed()
-
-		if backPressed && g.overlay != nil {
-			switch g.overlay.Mode {
-			case player.OverlayTrackSelect:
-				g.overlay.HandleTrackInput(player.DirNone, false, true)
-				return nil
-			case player.OverlayBar:
-				g.overlay.Hide()
-				return nil
-			case player.OverlayNextUp:
-				// Back on next-up banner — fall through to stop playback
-			default:
-				// OverlayHidden — fall through to stop playback
-			}
-		}
-
-		if backPressed {
-			g.StopPlayback()
-			return nil
-		}
-
-		// Forward playback controls to mpv (required on Windows where
-		// embedded mpv doesn't receive keyboard input directly)
-		g.handlePlaybackInput()
 
 	case StateWeb:
 		select {
