@@ -22,9 +22,11 @@ func osdOverlaySet(m *mpv.Mpv, id int, data string, resX, resY int) error {
 }
 
 // osdOverlayRemove removes an osd-overlay by setting format to "none".
+// An empty data arg is required because mpv's positional parser treats it as mandatory.
 func osdOverlayRemove(m *mpv.Mpv, id int) error {
 	return m.CommandString(mpvCmd("osd-overlay",
 		fmt.Sprintf("%d", id),
 		"none",
+		"",
 	))
 }

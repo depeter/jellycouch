@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -72,12 +73,22 @@ func (ti *TextInput) Update() bool {
 		ti.Cursor = runeCount
 	}
 
-	// Ctrl+V paste — start async clipboard read to avoid blocking the game thread
+	// Ctrl+V paste — start async clipboard read to avoid blocking the game thread.
+	// Uses a timeout so a locked clipboard (RDP, clipboard managers) can't hang forever.
 	if inpututil.IsKeyJustPressed(ebiten.KeyV) && (ebiten.IsKeyPressed(ebiten.KeyControl) || ebiten.IsKeyPressed(ebiten.KeyMeta)) {
 		if ti.pendingPaste == nil {
 			ch := make(chan string, 1)
 			ti.pendingPaste = ch
-			go func() { ch <- readClipboard() }()
+			go func() {
+				done := make(chan string, 1)
+				go func() { done <- readClipboard() }()
+				select {
+				case s := <-done:
+					ch <- s
+				case <-time.After(2 * time.Second):
+					ch <- ""
+				}
+			}()
 		}
 	}
 

@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/hajimehoshi/ebiten/v2"
 
@@ -100,7 +101,7 @@ func main() {
 		return game.Jellyseerr != nil
 	}
 	navbar.WebAppsEnabled = func() bool {
-		return true
+		return runtime.GOOS == "linux"
 	}
 	game.Screens.NavBar = navbar
 

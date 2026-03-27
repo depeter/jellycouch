@@ -3,6 +3,7 @@ package player
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -327,6 +328,8 @@ func (p *Player) ShowProgress() {
 // a file containing raw BGRA pixel data, and w/h are the image dimensions.
 func (p *Player) OverlayAdd(id, x, y int, filePath string, w, h int) {
 	stride := w * 4
+	// mpv expects forward slashes in file paths, even on Windows.
+	filePath = filepath.ToSlash(filePath)
 	p.do(func(m *mpv.Mpv) error {
 		return m.CommandString(mpvCmd("overlay-add",
 			fmt.Sprintf("%d", id),

@@ -80,8 +80,12 @@ func DefaultConfig() *Config {
 }
 
 func ConfigDir() (string, error) {
-	configHome := os.Getenv("XDG_CONFIG_HOME")
-	if configHome == "" {
+	// os.UserConfigDir returns:
+	//   Windows: %AppData% (e.g. C:\Users\X\AppData\Roaming)
+	//   Linux:   $XDG_CONFIG_HOME or ~/.config
+	//   macOS:   ~/Library/Application Support
+	configHome, err := os.UserConfigDir()
+	if err != nil {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", err
