@@ -25,7 +25,7 @@ static int osd_overlay_set(mpv_handle *h, int id, const char *data, int res_x, i
     // "format" -> "ass-events"
     keys[2] = "format";
     keys_vals[2].format = MPV_FORMAT_STRING;
-    keys_vals[2].u.string = "ass-events";
+    keys_vals[2].u.string = "ass";
 
     // "data" -> data
     keys[3] = "data";

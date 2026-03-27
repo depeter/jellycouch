@@ -345,11 +345,33 @@ func (p *Player) OverlayRemove(id int) {
 	})
 }
 
+// buildASSScript wraps ASS event text lines (separated by \n) into a complete
+// ASS script with a top-center default style (Alignment=8).
+func buildASSScript(events string, resX, resY int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "[Script Info]\nScriptType: v4.00+\nPlayResX: %d\nPlayResY: %d\n\n", resX, resY)
+	b.WriteString("[V4+ Styles]\n")
+	b.WriteString("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n")
+	b.WriteString("Style: Default,sans-serif,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,8,10,10,10,1\n\n")
+	b.WriteString("[Events]\n")
+	b.WriteString("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
+	for _, line := range strings.Split(events, "\n") {
+		if line == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "Dialogue: 0,0:00:00.00,9:00:00.00,Default,,0,0,0,,%s\n", line)
+	}
+	return b.String()
+}
+
 // OsdOverlay sends an osd-overlay command to display persistent ASS content.
 // id identifies the overlay slot (use different IDs for independent overlays).
+// assData contains one or more ASS event text lines separated by \n.
+// They are wrapped into a full ASS script with a top-center default style.
 func (p *Player) OsdOverlay(id int, assData string, resX, resY int) {
+	script := buildASSScript(assData, resX, resY)
 	err := p.do(func(m *mpv.Mpv) error {
-		return osdOverlaySet(m, id, assData, resX, resY)
+		return osdOverlaySet(m, id, script, resX, resY)
 	})
 	if err != nil {
 		log.Printf("OsdOverlay(%d): %v", id, err)
