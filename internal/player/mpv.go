@@ -89,9 +89,6 @@ func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 
 	m := mpv.New()
 
-	// Prevent mpv.conf from interfering with our options
-	must(m.SetOptionString("config", "no"))
-
 	// Core options — mpv owns the render pipeline
 	must(m.SetOptionString("hwdec", cfg.Playback.HWAccel))
 	must(m.SetOptionString("vo", "gpu"))
@@ -352,17 +349,11 @@ func (p *Player) OverlayRemove(id int) {
 	})
 }
 
-// osdDebugOnce ensures we log the first overlay data for diagnostics.
-var osdDebugOnce sync.Once
-
 // OsdOverlay sends an osd-overlay command to display persistent ASS content.
 // id identifies the overlay slot (use different IDs for independent overlays).
 // assData contains one or more ASS event text lines separated by \n.
 // Each line becomes the Text field of an ASS Dialogue event rendered by mpv.
 func (p *Player) OsdOverlay(id int, assData string, resX, resY int) {
-	osdDebugOnce.Do(func() {
-		log.Printf("OsdOverlay DEBUG id=%d res=%dx%d data=%q", id, resX, resY, assData)
-	})
 	err := p.do(func(m *mpv.Mpv) error {
 		return osdOverlaySet(m, id, assData, resX, resY)
 	})
