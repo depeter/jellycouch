@@ -76,7 +76,7 @@ func (o *PlaybackOverlay) renderNextUp() {
 	}
 
 	var b strings.Builder
-	b.WriteString("{\\bord0\\shad0}")
+	b.WriteString("{\\an7\\pos(20,20)\\bord0\\shad0}")
 
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1%s}", o.scale(20), assColorGray))
 	b.WriteString("Up Next\\N")

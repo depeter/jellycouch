@@ -224,14 +224,13 @@ func (o *PlaybackOverlay) renderBar() {
 		o.imgOverlayShown = false
 	}
 
-	// Clock inline (no separate event — avoid \an/\pos which may be ignored)
-	clock := time.Now().Format("15:04")
+	// Clock as separate top-right ASS event
+	clock := fmt.Sprintf("{\\an9\\pos(%d,10)\\bord2\\fs%d%s}%s",
+		o.screenW-20, o.scale(22), assColorWhite, time.Now().Format("15:04"))
 
 	var b strings.Builder
 
-	// Rely on osd-align-y=top + osd-align-x=center (set in mpv init)
-	// instead of \an/\pos which are unreliable in osd-overlay events
-	b.WriteString(fmt.Sprintf("{\\bord0\\shad0\\fsp0}"))
+	b.WriteString(fmt.Sprintf("{\\an8\\pos(%d,10)\\bord0\\shad0\\fsp0}", o.screenW/2))
 
 	// Button row
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(19)))
@@ -279,7 +278,6 @@ func (o *PlaybackOverlay) renderBar() {
 	} else {
 		b.WriteString(fmt.Sprintf("Vol: %.0f%%", o.player.Volume()))
 	}
-	b.WriteString("    " + clock)
 	if o.player.Paused() {
 		b.WriteString(fmt.Sprintf("{\\fs%d%s}  \\NPaused", o.scale(16), assColorGray))
 	}
@@ -306,7 +304,7 @@ func (o *PlaybackOverlay) renderBar() {
 		}
 	}
 
-	o.player.OsdOverlay(osdIDMain, b.String(), o.screenW, o.screenH)
+	o.player.OsdOverlay(osdIDMain, clock+"\n"+b.String(), o.screenW, o.screenH)
 }
 
 // buildProgressBar creates a Unicode block progress bar using current position/duration.

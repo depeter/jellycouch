@@ -186,10 +186,6 @@ func (o *PlaybackOverlay) Show() {
 	o.focusZone = ZoneButtons
 	o.accel = seekAccel{}
 
-	// DEBUG: test minimal overlay — if this shows at the bottom, the issue
-	// is fundamental to how mpv renders osd-overlay on this system.
-	o.player.OsdOverlay(99, "=== CONTROLS ARE HERE ===", o.screenW, o.screenH)
-
 	o.renderBar()
 }
 
