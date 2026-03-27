@@ -18,12 +18,16 @@ type NextEpisodeInfo struct {
 
 // SetNextUp configures the next episode info for the "Up Next" banner.
 func (o *PlaybackOverlay) SetNextUp(name string, index int) {
+	o.nextEpMu.Lock()
+	defer o.nextEpMu.Unlock()
 	o.nextUpName = name
 	o.nextUpIndex = index
 }
 
 // SetShowNextButton controls whether the Next button appears in the bar.
 func (o *PlaybackOverlay) SetShowNextButton(show bool) {
+	o.nextEpMu.Lock()
+	defer o.nextEpMu.Unlock()
 	o.showNextBtn = show
 	if !show && o.focusedBtn == BtnNext {
 		o.focusedBtn = BtnPlayPause

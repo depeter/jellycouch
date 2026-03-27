@@ -158,7 +158,10 @@ func (o *PlaybackOverlay) visibleButtons() []ControlButton {
 		BtnSeekBack60, BtnSeekBack10, BtnPlayPause, BtnStop,
 		BtnSeekFwd10, BtnSeekFwd60, BtnSubtitles, BtnAudio,
 	}
-	if o.showNextBtn {
+	o.nextEpMu.Lock()
+	showNext := o.showNextBtn
+	o.nextEpMu.Unlock()
+	if showNext {
 		all = append(all, BtnNext)
 	}
 	return all
@@ -231,7 +234,10 @@ func (o *PlaybackOverlay) Update() {
 	}
 
 	// Check if we should activate the next-up banner
-	if o.nextUpName != "" && !o.nextUpActive {
+	o.nextEpMu.Lock()
+	hasNextUp := o.nextUpName != ""
+	o.nextEpMu.Unlock()
+	if hasNextUp && !o.nextUpActive {
 		pos := o.player.Position()
 		dur := o.player.Duration()
 		if dur > 0 && pos > 60 && dur-pos <= 60 {
