@@ -105,9 +105,14 @@ func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 	must(m.SetOptionString("osd-duration", "2000"))
 	must(m.SetOptionString("osd-bar", "yes"))
 
-	// Force OSD overlay default alignment to top-center
-	must(m.SetOptionString("osd-align-y", "top"))
-	must(m.SetOptionString("osd-align-x", "center"))
+	// Force OSD overlay default alignment to top-center.
+	// Use explicit error check — if this fails the overlay will be at the bottom.
+	if err := m.SetOptionString("osd-align-y", "top"); err != nil {
+		log.Printf("FATAL: osd-align-y failed: %v", err)
+	}
+	if err := m.SetOptionString("osd-align-x", "center"); err != nil {
+		log.Printf("FATAL: osd-align-x failed: %v", err)
+	}
 
 	// Subtitle defaults from config
 	must(m.SetOptionString("sub-font", cfg.Subtitles.Font))
