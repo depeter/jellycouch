@@ -146,11 +146,11 @@ func (ic *ImageCache) loadImage(url string) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 
 	// Tee to disk while decoding
 	tee := io.TeeReader(resp.Body, f)
 	img, _, err := image.Decode(tee)
-	f.Close()
 	if err != nil {
 		os.Remove(diskPath)
 		return nil, err
