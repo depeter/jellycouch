@@ -17,9 +17,9 @@ func (o *PlaybackOverlay) renderPausedInfo() {
 	// Two ASS events in one overlay:
 	// 1. Clock at top-right
 	// 2. Time/duration + progress bar at top-center
-	ass := fmt.Sprintf("{\\an9\\bord2\\fs%d%s}%s\n{\\an8\\bord2\\fs%d%s}%s / %s\\N{\\fs%d%s}%s",
-		o.scale(22), assColorWhite, clock,
-		o.scale(17), assColorWhite, formatDuration(pos), formatDuration(dur),
+	ass := fmt.Sprintf("{\\an9\\pos(%d,10)\\bord2\\fs%d%s}%s\n{\\an8\\pos(%d,10)\\bord2\\fs%d%s}%s / %s\\N{\\fs%d%s}%s",
+		o.screenW-20, o.scale(22), assColorWhite, clock,
+		o.screenW/2, o.scale(17), assColorWhite, formatDuration(pos), formatDuration(dur),
 		o.scale(14), assColorGray, o.buildProgressBar(o.barWidth()))
 	o.player.OsdOverlay(osdIDMain, ass, o.screenW, o.screenH)
 	o.pausedOsdShown = true

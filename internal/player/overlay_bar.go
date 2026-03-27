@@ -224,13 +224,15 @@ func (o *PlaybackOverlay) renderBar() {
 		o.imgOverlayShown = false
 	}
 
-	// Clock as separate top-right ASS event
-	clock := fmt.Sprintf("{\\an9\\bord2\\fs%d%s}%s",
-		o.scale(22), assColorWhite, time.Now().Format("15:04"))
+	// Clock as separate top-right ASS event (use \pos for absolute positioning)
+	clock := fmt.Sprintf("{\\an9\\pos(%d,10)\\bord2\\fs%d%s}%s",
+		o.screenW-20, o.scale(22), assColorWhite, time.Now().Format("15:04"))
 
 	var b strings.Builder
 
-	b.WriteString("{\\an8\\bord0\\shad0\\fsp0}")
+	// Use \an8 + \pos to force top-center positioning (\an8 alone may be
+	// ignored by mpv's ass-events default style)
+	b.WriteString(fmt.Sprintf("{\\an8\\pos(%d,10)\\bord0\\shad0\\fsp0}", o.screenW/2))
 
 	// Button row
 	b.WriteString(fmt.Sprintf("{\\fs%d\\bord1}", o.scale(19)))
