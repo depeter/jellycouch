@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+!libmpv.dll
 
 # Test
 *.test
