@@ -2,7 +2,7 @@ package ui
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -110,7 +110,7 @@ func (jr *JellyseerrRequestScreen) OnExit() {}
 func (jr *JellyseerrRequestScreen) loadTVDetail() {
 	detail, err := jr.client.GetTV(jr.result.ID)
 	if err != nil {
-		log.Printf("Failed to load TV detail: %v", err)
+		slog.Warn("jellyseerr tv detail", "err", err)
 		return
 	}
 	jr.mu.Lock()
@@ -132,7 +132,7 @@ func (jr *JellyseerrRequestScreen) loadTVDetail() {
 func (jr *JellyseerrRequestScreen) loadMovieDetail() {
 	detail, err := jr.client.GetMovie(jr.result.ID)
 	if err != nil {
-		log.Printf("Failed to load movie detail: %v", err)
+		slog.Warn("jellyseerr movie detail", "err", err)
 		return
 	}
 	jr.mu.Lock()
@@ -149,7 +149,7 @@ func (jr *JellyseerrRequestScreen) loadServiceSettings() {
 	if jr.result.MediaType == "movie" {
 		settings, err := jr.client.GetRadarrSettings()
 		if err != nil {
-			log.Printf("Failed to load Radarr settings: %v", err)
+			slog.Warn("jellyseerr radarr settings", "err", err)
 			return
 		}
 		jr.mu.Lock()
@@ -160,7 +160,7 @@ func (jr *JellyseerrRequestScreen) loadServiceSettings() {
 	} else {
 		settings, err := jr.client.GetSonarrSettings()
 		if err != nil {
-			log.Printf("Failed to load Sonarr settings: %v", err)
+			slog.Warn("jellyseerr sonarr settings", "err", err)
 			return
 		}
 		jr.mu.Lock()
@@ -739,28 +739,16 @@ func (jr *JellyseerrRequestScreen) Draw(dst *ebiten.Image) {
 	}
 
 	// Buttons
-	jr.buttonRects = make([]ButtonRect, len(jr.buttons))
-	btnX := infoX
 	btnY := infoY + 8
+	rects, btnEndX := LayoutButtonRow(jr.buttons, infoX, btnY, float64(ButtonHeight), 20, 12, FontSizeBody)
+	jr.buttonRects = rects
 	for i, label := range jr.buttons {
-		tw, _ := MeasureText(label, FontSizeBody)
-		w := tw + 40
-		h := float64(ButtonHeight)
-
-		jr.buttonRects[i] = ButtonRect{X: btnX, Y: btnY, W: w, H: h}
-
-		if jr.focusMode == 0 && i == jr.buttonIndex {
-			vector.DrawFilledRect(dst, float32(btnX), float32(btnY), float32(w), float32(h), ColorPrimary, false)
-			DrawTextCentered(dst, label, btnX+w/2, btnY+h/2, FontSizeBody, ColorText)
-		} else {
-			vector.DrawFilledRect(dst, float32(btnX), float32(btnY), float32(w), float32(h), ColorSurface, false)
-			DrawTextCentered(dst, label, btnX+w/2, btnY+h/2, FontSizeBody, ColorTextSecondary)
-		}
-		btnX += w + 12
+		focused := jr.focusMode == 0 && i == jr.buttonIndex
+		DrawButton(dst, rects[i], label, focused, FontSizeBody)
 	}
 
 	if jr.requesting {
-		DrawText(dst, "Requesting...", btnX+20, btnY+8, FontSizeSmall, ColorTextSecondary)
+		DrawText(dst, "Requesting...", btnEndX+20, btnY+8, FontSizeSmall, ColorTextSecondary)
 	}
 
 	// --- Request options section (below poster area) ---

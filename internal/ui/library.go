@@ -2,7 +2,7 @@ package ui
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -185,7 +185,7 @@ func (ls *LibraryScreen) OnExit() {}
 func (ls *LibraryScreen) loadGenres() {
 	genres, err := ls.client.GetGenres(ls.parentID, ls.itemTypes)
 	if err != nil {
-		log.Printf("Failed to load genres: %v", err)
+		slog.Warn("library load genres", "err", err)
 		return
 	}
 
@@ -269,7 +269,7 @@ func (ls *LibraryScreen) loadData(start int) {
 
 	items, total, err := ls.client.GetFilteredItems(ls.parentID, start, 50, ls.itemTypes, filter)
 	if err != nil {
-		log.Printf("Failed to load library items: %v", err)
+		slog.Warn("library load items", "err", err)
 		ls.mu.Lock()
 		ls.loading = false
 		ls.loadingMore = false

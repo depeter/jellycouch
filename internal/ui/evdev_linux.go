@@ -4,7 +4,7 @@ package ui
 
 import (
 	"encoding/binary"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -89,7 +89,7 @@ func readEvdev(path string) {
 			}
 			recentEventsMu.Unlock()
 
-			log.Printf("evdev: key press on %s — type=%d code=%d value=%d", device, typ, code, value)
+			slog.Debug("evdev key press", "device", device, "type", typ, "code", code, "value", value)
 		}
 
 		if typ == evKey && code == keyBack && value == 1 {

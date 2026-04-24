@@ -32,9 +32,11 @@ type SettingsScreen struct {
 	pasteRect    ButtonRect
 	pendingPaste chan string // async clipboard result for paste button
 
-	langEditor *LangEditor
+	langEditor  *LangEditor
+	keyCapture  *KeyCaptureOverlay
 
-	OnSave func()
+	OnSave    func()
+	OnSignOut func()
 }
 
 type settingsRowRect struct {
@@ -49,14 +51,20 @@ type settingsSection struct {
 }
 
 type settingsItem struct {
-	Label     string
-	Value     func() string
-	OnChange  func(val string) error // returns error if validation fails
-	Options   []string               // when set, Left/Right cycles through these instead of text edit
-	MultiLang bool                   // when set, Enter opens multi-language editor overlay
+	Label      string
+	Value      func() string
+	OnChange   func(val string) error // returns error if validation fails
+	Options    []string               // when set, Left/Right cycles through these instead of text edit
+	MultiLang  bool                   // when set, Enter opens multi-language editor overlay
+	Action     func()                 // when set, Enter/click invokes this; no value editor
+	KeyCapture bool                   // when set, Enter opens key-capture overlay
 }
 
 var hwAccelOptions = []string{"auto-safe", "auto", "no", "vaapi", "vdpau", "cuda", "videotoolbox", "d3d11va", "dxva2"}
+
+// uiScaleOptions are the presets surfaced in Settings. Keep in sync with
+// config.DisplayConfig clamp range (0.5–2.0).
+var uiScaleOptions = []string{"0.75", "1.00", "1.25", "1.50", "1.75", "2.00"}
 
 func NewSettingsScreen(cfg *config.Config, onSave func()) *SettingsScreen {
 	ss := &SettingsScreen{
@@ -70,6 +78,11 @@ func NewSettingsScreen(cfg *config.Config, onSave func()) *SettingsScreen {
 			Items: []settingsItem{
 				{Label: "Server URL", Value: func() string { return cfg.Server.URL }, OnChange: func(v string) error { cfg.Server.URL = v; return nil }},
 				{Label: "Username", Value: func() string { return cfg.Server.Username }, OnChange: func(v string) error { cfg.Server.Username = v; return nil }},
+				{Label: "Sign out", Value: func() string { return "" }, Action: func() {
+					if ss.OnSignOut != nil {
+						ss.OnSignOut()
+					}
+				}},
 			},
 		},
 		{
@@ -124,6 +137,35 @@ func NewSettingsScreen(cfg *config.Config, onSave func()) *SettingsScreen {
 					cfg.Playback.Volume = n
 					return nil
 				}},
+			},
+		},
+		{
+			Label: "Display",
+			Items: []settingsItem{
+				{Label: "UI Scale", Value: func() string { return fmt.Sprintf("%.2f", cfg.Display.UIScale) }, OnChange: func(v string) error {
+					f, err := strconv.ParseFloat(v, 64)
+					if err != nil {
+						return fmt.Errorf("invalid number: %s", v)
+					}
+					cfg.Display.UIScale = f
+					return nil
+				}, Options: uiScaleOptions},
+			},
+		},
+		{
+			Label: "Keybindings",
+			Items: []settingsItem{
+				{Label: "Play / Pause", Value: func() string { return cfg.Keybindings.PlayPause }, OnChange: func(v string) error { cfg.Keybindings.PlayPause = v; return nil }, KeyCapture: true},
+				{Label: "Seek -10s", Value: func() string { return cfg.Keybindings.SeekSmallBack }, OnChange: func(v string) error { cfg.Keybindings.SeekSmallBack = v; return nil }, KeyCapture: true},
+				{Label: "Seek +10s", Value: func() string { return cfg.Keybindings.SeekSmallForward }, OnChange: func(v string) error { cfg.Keybindings.SeekSmallForward = v; return nil }, KeyCapture: true},
+				{Label: "Seek -60s", Value: func() string { return cfg.Keybindings.SeekLargeBack }, OnChange: func(v string) error { cfg.Keybindings.SeekLargeBack = v; return nil }, KeyCapture: true},
+				{Label: "Seek +60s", Value: func() string { return cfg.Keybindings.SeekLargeForward }, OnChange: func(v string) error { cfg.Keybindings.SeekLargeForward = v; return nil }, KeyCapture: true},
+				{Label: "Volume Up", Value: func() string { return cfg.Keybindings.VolumeUp }, OnChange: func(v string) error { cfg.Keybindings.VolumeUp = v; return nil }, KeyCapture: true},
+				{Label: "Volume Down", Value: func() string { return cfg.Keybindings.VolumeDown }, OnChange: func(v string) error { cfg.Keybindings.VolumeDown = v; return nil }, KeyCapture: true},
+				{Label: "Mute", Value: func() string { return cfg.Keybindings.Mute }, OnChange: func(v string) error { cfg.Keybindings.Mute = v; return nil }, KeyCapture: true},
+				{Label: "Cycle Subtitles", Value: func() string { return cfg.Keybindings.CycleSubtitles }, OnChange: func(v string) error { cfg.Keybindings.CycleSubtitles = v; return nil }, KeyCapture: true},
+				{Label: "Cycle Audio", Value: func() string { return cfg.Keybindings.CycleAudio }, OnChange: func(v string) error { cfg.Keybindings.CycleAudio = v; return nil }, KeyCapture: true},
+				{Label: "Show Info / Overlay", Value: func() string { return cfg.Keybindings.ShowInfo }, OnChange: func(v string) error { cfg.Keybindings.ShowInfo = v; return nil }, KeyCapture: true},
 			},
 		},
 	}
@@ -205,6 +247,10 @@ func (ss *SettingsScreen) openLangEditor(item *settingsItem) {
 	ss.langEditor = NewLangEditor(title, item.Value())
 }
 
+func (ss *SettingsScreen) openKeyCapture(item *settingsItem) {
+	ss.keyCapture = NewKeyCaptureOverlay(item.Label, item.Value())
+}
+
 func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 	// Delegate to lang editor overlay when active
 	if ss.langEditor != nil {
@@ -212,6 +258,18 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 		if done, result := ss.langEditor.Done(); done {
 			ss.focusedItem().OnChange(result)
 			ss.langEditor = nil
+		}
+		return nil, nil
+	}
+
+	// Delegate to key-capture overlay when active
+	if ss.keyCapture != nil {
+		ss.keyCapture.Update()
+		if done, result, canceled := ss.keyCapture.Done(); done {
+			if !canceled && result != "" {
+				ss.focusedItem().OnChange(result)
+			}
+			ss.keyCapture = nil
 		}
 		return nil, nil
 	}
@@ -281,7 +339,11 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 				ss.sectionIndex = rect.SectionIdx
 				ss.itemIndex = rect.ItemIdx
 				item := ss.focusedItem()
-				if item.MultiLang {
+				if item.Action != nil {
+					item.Action()
+				} else if item.KeyCapture {
+					ss.openKeyCapture(item)
+				} else if item.MultiLang {
 					ss.openLangEditor(item)
 				} else if item.Options != nil {
 					// Cycle forward on click
@@ -338,7 +400,11 @@ func (ss *SettingsScreen) Update() (*ScreenTransition, error) {
 
 	if enter {
 		item := ss.focusedItem()
-		if item.MultiLang {
+		if item.Action != nil {
+			item.Action()
+		} else if item.KeyCapture {
+			ss.openKeyCapture(item)
+		} else if item.MultiLang {
 			ss.openLangEditor(item)
 		} else if item.Options != nil {
 			// Cycle forward on Enter for option items
@@ -426,6 +492,27 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 					display = "(none)"
 				}
 				DrawText(dst, display, valueX, y+8, FontSizeBody, ColorTextSecondary)
+			} else if item.Action != nil {
+				hint := "[Enter]"
+				color := ColorTextSecondary
+				if isFocused {
+					color = ColorPrimary
+				}
+				DrawText(dst, hint, valueX, y+8, FontSizeBody, color)
+			} else if item.KeyCapture {
+				display := value
+				if display == "" {
+					display = "(unbound)"
+				}
+				valueColor := ColorTextSecondary
+				if isFocused {
+					valueColor = ColorText
+				}
+				DrawText(dst, display, valueX, y+8, FontSizeBody, valueColor)
+				if isFocused {
+					w, _ := MeasureText(display, FontSizeBody)
+					DrawText(dst, "[Enter to rebind]", valueX+w+16, y+8, FontSizeSmall, ColorPrimary)
+				}
 			} else if item.Options != nil && isFocused && !isEditing {
 				// Draw arrows around value for cycle-able items
 				DrawText(dst, "◀", valueX-28, y+8, FontSizeBody, ColorPrimary)
@@ -453,5 +540,8 @@ func (ss *SettingsScreen) Draw(dst *ebiten.Image) {
 	// Draw lang editor overlay on top
 	if ss.langEditor != nil {
 		ss.langEditor.Draw(dst)
+	}
+	if ss.keyCapture != nil {
+		ss.keyCapture.Draw(dst)
 	}
 }

@@ -2,7 +2,7 @@ package ui
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -119,7 +119,7 @@ func (ds *DetailScreen) loadBackdrop() {
 func (ds *DetailScreen) loadSeasons() {
 	seasons, err := ds.client.GetSeasons(ds.item.ID)
 	if err != nil {
-		log.Printf("Failed to load seasons: %v", err)
+		slog.Warn("detail load seasons", "err", err)
 		return
 	}
 	ds.mu.Lock()
@@ -139,7 +139,7 @@ func (ds *DetailScreen) loadEpisodes(seasonID string) {
 
 	episodes, err := ds.client.GetEpisodes(ds.item.ID, seasonID)
 	if err != nil {
-		log.Printf("Failed to load episodes: %v", err)
+		slog.Warn("detail load episodes", "err", err)
 		ds.mu.Lock()
 		ds.episodesLoading = false
 		ds.mu.Unlock()

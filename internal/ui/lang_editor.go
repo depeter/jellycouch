@@ -166,13 +166,13 @@ func (le *LangEditor) Update() {
 
 func (le *LangEditor) Draw(dst *ebiten.Image) {
 	// Semi-transparent overlay
-	vector.DrawFilledRect(dst, 0, 0, ScreenWidth, ScreenHeight, ColorOverlay, false)
+	vector.DrawFilledRect(dst, 0, 0, float32(ScreenWidth), float32(ScreenHeight), ColorOverlay, false)
 
 	// Centered panel
 	panelW := float32(1100)
 	panelH := float32(700)
-	panelX := float32(ScreenWidth-panelW) / 2
-	panelY := float32(ScreenHeight-panelH) / 2
+	panelX := (float32(ScreenWidth) - panelW) / 2
+	panelY := (float32(ScreenHeight) - panelH) / 2
 
 	vector.DrawFilledRect(dst, panelX, panelY, panelW, panelH, ColorBackground, false)
 	vector.StrokeRect(dst, panelX, panelY, panelW, panelH, 2, ColorPrimary, false)

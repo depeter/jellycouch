@@ -2,12 +2,15 @@ package jellyseerr
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/depeter/jellycouch/internal/httpx"
 )
 
 // API endpoint paths.
@@ -48,14 +51,17 @@ func NewClient(baseURL, apiKey string) *Client {
 
 // get performs an authenticated GET request and decodes the JSON response into dst.
 func (c *Client) get(path string, dst interface{}) error {
-	req, err := http.NewRequest("GET", c.baseURL+path, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+path, nil)
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("X-Api-Key", c.apiKey)
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := httpx.Do(ctx, c.httpClient, req, httpx.RetryPolicy{})
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -76,7 +82,10 @@ func (c *Client) post(path string, body interface{}, dst interface{}) error {
 		return fmt.Errorf("marshal body: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", c.baseURL+path, bytes.NewReader(jsonBody))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+path, bytes.NewReader(jsonBody))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
@@ -84,7 +93,8 @@ func (c *Client) post(path string, body interface{}, dst interface{}) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	// POSTs are not automatically safe to retry (side effects); disable retry here.
+	resp, err := httpx.Do(ctx, c.httpClient, req, httpx.RetryPolicy{MaxAttempts: 1})
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}

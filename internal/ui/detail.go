@@ -152,26 +152,10 @@ func (dp *DetailPanel) Draw(dst *ebiten.Image) {
 		y += h + 20
 	}
 
-	// Action buttons — measure properly
-	dp.ButtonRects = make([]ButtonRect, len(dp.Buttons))
-	btnX := float64(SectionPadding)
+	// Action buttons
+	dp.ButtonRects, _ = LayoutButtonRow(dp.Buttons, float64(SectionPadding), y, float64(ButtonHeight), 28, 16, FontSizeBody)
 	for i, label := range dp.Buttons {
-		tw, _ := MeasureText(label, FontSizeBody)
-		w := tw + 56
-		h := float64(ButtonHeight)
-		bx := float32(btnX)
-		by := float32(y)
-
-		dp.ButtonRects[i] = ButtonRect{X: btnX, Y: y, W: w, H: h}
-
-		if i == dp.ButtonIndex {
-			vector.DrawFilledRect(dst, bx, by, float32(w), float32(h), ColorPrimary, false)
-			DrawTextCentered(dst, label, btnX+w/2, float64(by)+h/2, FontSizeBody, ColorText)
-		} else {
-			vector.DrawFilledRect(dst, bx, by, float32(w), float32(h), ColorSurface, false)
-			DrawTextCentered(dst, label, btnX+w/2, float64(by)+h/2, FontSizeBody, ColorTextSecondary)
-		}
-		btnX += w + 16
+		DrawButton(dst, dp.ButtonRects[i], label, i == dp.ButtonIndex, FontSizeBody)
 	}
 }
 

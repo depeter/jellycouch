@@ -3,7 +3,7 @@ package ui
 import (
 	"fmt"
 	"image/color"
-	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -116,7 +116,7 @@ func (ds *JellyseerrDiscoverScreen) loadData() {
 
 	for _, r := range ordered {
 		if r.err != nil {
-			log.Printf("Discover: failed to load %s: %v", fetchers[r.index].label, r.err)
+			slog.Warn("discover load", "category", fetchers[r.index].label, "err", r.err)
 			continue
 		}
 		if len(r.data.results) == 0 {
