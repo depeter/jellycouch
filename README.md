@@ -103,6 +103,18 @@ height = 1080
 | F | Toggle fullscreen |
 | Esc | Stop / Go back |
 
+## Windows installer
+
+An Inno Setup installer can be built from the repo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File installer\build.ps1
+```
+
+The script generates `installer\jellycouch.ico` from the in-app icon code, builds `jellycouch.exe` if missing, and emits `dist\JellyCouch-Setup-<version>.exe`. Pass `-Version 0.2.0` to override the version, or `-Rebuild` to force a fresh `go build`.
+
+Requirements: Go 1.24+, [Inno Setup 6](https://jrsoftware.org/isdl.php) (the script offers to install it via `winget` if missing).
+
 ## License
 
 MIT
