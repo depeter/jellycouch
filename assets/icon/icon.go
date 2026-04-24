@@ -24,6 +24,12 @@ func Generate() []image.Image {
 	}
 }
 
+// GenerateSize renders the icon at an arbitrary square size. Used by the
+// installer's .ico generator to produce multiple resolutions.
+func GenerateSize(size int) image.Image {
+	return generate(size)
+}
+
 func generate(size int) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
 	s := float64(size)
