@@ -107,6 +107,9 @@ func (sf *screenFactory) pushSettings() {
 		// Re-resolve keybindings so changes from the Keybindings section
 		// take effect without requiring a restart.
 		sf.game.Keybinds = keymap.Resolve(sf.cfg.Keybindings)
+		// Rebuild subtitle provider manager so enable/disable + credential
+		// changes take effect immediately.
+		sf.game.BuildSubsManager()
 		sf.loadNavBarViews()
 	})
 	settings.OnSignOut = func() {

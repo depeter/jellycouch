@@ -13,6 +13,7 @@ const (
 	OverlayBar                     // Control bar visible at bottom
 	OverlayTrackSelect             // Track selection panel (modal)
 	OverlayNextUp                  // "Up Next" countdown banner (top-left)
+	OverlaySubSearch               // Online subtitle search panel (modal)
 )
 
 // OSD overlay slot ID for the main overlay (bar, tracks, next-up, paused).
@@ -92,6 +93,13 @@ type PlaybackOverlay struct {
 	OnStop        func()
 	OnNextEpisode func()
 	OnStartNextUp func()
+	// OnSubSearchRequest is invoked when the user triggers "Find online subs"
+	// from the subtitle track panel. The receiver is expected to kick off
+	// the actual search and feed results back via SetSubSearchResults.
+	OnSubSearchRequest func()
+	// OnSubSearchDownload is invoked when the user picks a search result.
+	// The receiver downloads the subtitle and loads it into mpv.
+	OnSubSearchDownload func(index int)
 
 	// Next-up state
 	nextUpName   string
@@ -112,6 +120,26 @@ type PlaybackOverlay struct {
 	trackType     TrackType
 	tracks        []Track
 	selectedIndex int
+
+	// Online subtitle search state. subSearchMu guards the fields below
+	// because results come in asynchronously from a background goroutine.
+	subSearchMu      sync.Mutex
+	subSearchLoading bool
+	subSearchMsg     string // error or status ("No results", "Downloading…")
+	subSearchResults []SubSearchEntry
+	subSearchIndex   int
+}
+
+// SubSearchEntry is a display-friendly subtitle search result for the overlay.
+// The app layer owns the full result (with provider-specific data) and passes
+// in just this subset for rendering.
+type SubSearchEntry struct {
+	Provider        string
+	Language        string
+	ReleaseName     string
+	Title           string
+	Downloads       int
+	HearingImpaired bool
 }
 
 // NewPlaybackOverlay creates a new overlay for the given player.

@@ -96,7 +96,7 @@ func (o *PlaybackOverlay) HandleTrackInput(dir Direction, enter, back bool) bool
 
 	totalItems := len(o.tracks)
 	if o.trackType == TrackSub {
-		totalItems++ // "Off" option
+		totalItems += 2 // "Off" option + "Find online…"
 	}
 
 	if dir == DirUp {
@@ -127,11 +127,26 @@ func (o *PlaybackOverlay) HandleTrackInput(dir Direction, enter, back bool) bool
 // selectTrack applies the selected track and closes the panel.
 func (o *PlaybackOverlay) selectTrack() {
 	if o.trackType == TrackSub {
-		// Last item is "Off"
-		if o.selectedIndex >= len(o.tracks) {
-			o.player.SetSubTrack(0)
-		} else {
+		n := len(o.tracks)
+		switch {
+		case o.selectedIndex < n:
 			o.player.SetSubTrack(o.tracks[o.selectedIndex].ID)
+		case o.selectedIndex == n:
+			// "Off" — disable subtitles
+			o.player.SetSubTrack(0)
+		case o.selectedIndex == n+1:
+			// "Find online…" — hand off to the app layer. Always open the
+			// panel so the user gets feedback; if no providers are wired,
+			// show an explanatory message instead of leaving them stuck on
+			// a spinner.
+			o.OpenSubSearch()
+			if o.OnSubSearchRequest != nil {
+				o.OnSubSearchRequest()
+			} else {
+				o.SetSubSearchResults(nil)
+				o.SetSubSearchMessage("No subtitle providers configured — see Settings")
+			}
+			return
 		}
 	} else {
 		if o.selectedIndex < len(o.tracks) {
@@ -157,14 +172,14 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 
 	totalItems := len(o.tracks)
 	if o.trackType == TrackSub {
-		totalItems++ // "Off" option at the end
+		totalItems += 2 // "Off" + "Find online…"
 	}
 
 	for i := 0; i < totalItems; i++ {
 		var label string
 		var isCurrentlyActive bool
 
-		if o.trackType == TrackSub && i >= len(o.tracks) {
+		if o.trackType == TrackSub && i == len(o.tracks) {
 			label = "Off"
 			isCurrentlyActive = true
 			for _, t := range o.tracks {
@@ -173,6 +188,9 @@ func (o *PlaybackOverlay) renderTrackPanel() {
 					break
 				}
 			}
+		} else if o.trackType == TrackSub && i == len(o.tracks)+1 {
+			label = "Find online…"
+			isCurrentlyActive = false
 		} else {
 			t := o.tracks[i]
 			label = t.DisplayName()

@@ -83,14 +83,35 @@ type Config struct {
 	// SchemaVersion tracks format version so future migrations know where to start.
 	SchemaVersion int `toml:"schema_version"`
 
-	Server     ServerConfig     `toml:"server"`
-	Jellyseerr JellyseerrConfig `toml:"jellyseerr"`
-	Subtitles  SubtitleConfig   `toml:"subtitles"`
-	Playback   PlaybackConfig   `toml:"playback"`
-	Cache       CacheConfig    `toml:"cache"`
-	Logging     LoggingConfig  `toml:"logging"`
-	Display     DisplayConfig  `toml:"display"`
-	Keybindings keymap.Config  `toml:"keybindings"`
+	Server            ServerConfig            `toml:"server"`
+	Jellyseerr        JellyseerrConfig        `toml:"jellyseerr"`
+	Subtitles         SubtitleConfig          `toml:"subtitles"`
+	SubtitleProviders SubtitleProvidersConfig `toml:"subtitle_providers"`
+	Playback          PlaybackConfig          `toml:"playback"`
+	Cache             CacheConfig             `toml:"cache"`
+	Logging           LoggingConfig           `toml:"logging"`
+	Display           DisplayConfig           `toml:"display"`
+	Keybindings       keymap.Config           `toml:"keybindings"`
+}
+
+// SubtitleProvidersConfig holds credentials for each supported online
+// subtitle source. A provider is only used when Enabled is true AND the
+// required credentials for that provider are non-empty.
+type SubtitleProvidersConfig struct {
+	OpenSubtitles OpenSubtitlesConfig `toml:"opensubtitles"`
+	Subdl         SubdlConfig         `toml:"subdl"`
+}
+
+type OpenSubtitlesConfig struct {
+	Enabled  bool   `toml:"enabled"`
+	APIKey   string `toml:"api_key"`
+	Username string `toml:"username"`
+	Password string `toml:"password"`
+}
+
+type SubdlConfig struct {
+	Enabled bool   `toml:"enabled"`
+	APIKey  string `toml:"api_key"`
 }
 
 type CacheConfig struct {

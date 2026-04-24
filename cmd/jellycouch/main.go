@@ -69,6 +69,9 @@ func main() {
 		game.Jellyseerr = jellyseerr.NewClient(cfg.Jellyseerr.URL, cfg.Jellyseerr.APIKey)
 	}
 
+	// Init subtitle provider manager from config.
+	game.BuildSubsManager()
+
 	sf := &screenFactory{game: game, cfg: cfg, imgCache: imgCache}
 
 	// Create and wire the global navbar

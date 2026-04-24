@@ -2,6 +2,7 @@ package player
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/gen2brain/go-mpv"
 
@@ -39,5 +40,26 @@ func (p *Player) SetSubDelay(seconds float64) error {
 func (p *Player) SetSecondarySubtitle(trackID int) error {
 	return p.do(func(m *mpv.Mpv) error {
 		return m.SetPropertyString("secondary-sid", fmt.Sprintf("%d", trackID))
+	})
+}
+
+// AddSubtitle loads an external subtitle file via mpv's sub-add command,
+// selects it immediately, and labels it with title/lang so the track panel
+// shows a recognizable entry.
+func (p *Player) AddSubtitle(filePath, title, lang string) error {
+	// mpv expects forward slashes on all platforms, even Windows.
+	filePath = filepath.ToSlash(filePath)
+	return p.do(func(m *mpv.Mpv) error {
+		// "select" tells mpv to load AND switch to this track.
+		args := []string{"sub-add", filePath, "select"}
+		if title != "" {
+			args = append(args, title)
+		} else {
+			args = append(args, "")
+		}
+		if lang != "" {
+			args = append(args, lang)
+		}
+		return m.CommandString(mpvCmd(args...))
 	})
 }

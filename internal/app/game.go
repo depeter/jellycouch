@@ -18,6 +18,7 @@ import (
 	"github.com/depeter/jellycouch/internal/jellyseerr"
 	"github.com/depeter/jellycouch/internal/keymap"
 	"github.com/depeter/jellycouch/internal/player"
+	"github.com/depeter/jellycouch/internal/subs"
 	"github.com/depeter/jellycouch/internal/ui"
 	"github.com/depeter/jellycouch/internal/webview"
 )
@@ -66,6 +67,13 @@ type Game struct {
 
 	// Keybindings resolved from config at NewGame time.
 	Keybinds keymap.Keybindings
+
+	// Subs is the online subtitle search manager. Non-nil when at least one
+	// provider is enabled and configured.
+	Subs *subs.Manager
+	// subSearchResults caches the last search so Enter on the overlay knows
+	// which provider-specific payload to hand to Download.
+	subSearchResults []subs.Result
 }
 
 // RunOnMain schedules fn to execute on the main (Ebitengine) thread at the
@@ -113,6 +121,166 @@ func (g *Game) InitPlayer() error {
 	return nil
 }
 
+// BuildSubsManager (re)builds g.Subs from current config. Called at startup
+// and after the Settings screen saves — so toggling a provider takes effect
+// without a restart.
+func (g *Game) BuildSubsManager() {
+	sp := g.Config.SubtitleProviders
+	var providers []subs.Provider
+	if sp.OpenSubtitles.Enabled && sp.OpenSubtitles.APIKey != "" {
+		providers = append(providers, subs.NewOpenSubtitles(
+			sp.OpenSubtitles.APIKey, sp.OpenSubtitles.Username, sp.OpenSubtitles.Password))
+	}
+	if sp.Subdl.Enabled && sp.Subdl.APIKey != "" {
+		providers = append(providers, subs.NewSubdl(sp.Subdl.APIKey))
+	}
+	if len(providers) == 0 {
+		g.Subs = nil
+		return
+	}
+	// Cache downloaded subs alongside the image cache so disk layout stays predictable.
+	dir, err := config.ConfigDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	cacheDir := filepath.Join(dir, "cache", "subtitles")
+	g.Subs = subs.NewManager(cacheDir, providers...)
+}
+
+// subQueryForItem builds a subs.Query from the currently playing item.
+// Returns the zero query (with HasLanguages false) if item is nil.
+func (g *Game) subQueryForItem(item *jellyfin.MediaItem) subs.Query {
+	q := subs.Query{}
+	if item == nil {
+		return q
+	}
+	if item.Type == "Episode" {
+		q.Title = item.SeriesName
+		q.Season = item.ParentIndexNumber
+		q.Episode = item.IndexNumber
+	} else {
+		q.Title = item.Name
+	}
+	q.Year = item.Year
+	// Use configured sub language preferences as a filter. Empty = any.
+	if lang := g.Config.Playback.SubLanguage; lang != "" {
+		for _, l := range splitCSV(lang) {
+			q.Languages = append(q.Languages, l)
+		}
+	}
+	return q
+}
+
+func splitCSV(s string) []string {
+	var out []string
+	for _, part := range splitComma(s) {
+		p := trimSpace(part)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func splitComma(s string) []string {
+	var out []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == ',' {
+			out = append(out, s[start:i])
+			start = i + 1
+		}
+	}
+	out = append(out, s[start:])
+	return out
+}
+
+func trimSpace(s string) string {
+	for len(s) > 0 && (s[0] == ' ' || s[0] == '\t') {
+		s = s[1:]
+	}
+	for len(s) > 0 && (s[len(s)-1] == ' ' || s[len(s)-1] == '\t') {
+		s = s[:len(s)-1]
+	}
+	return s
+}
+
+// startSubSearch runs a search off the main thread and pipes results back
+// via MainActions to update the overlay safely.
+func (g *Game) startSubSearch() {
+	if g.Subs == nil || g.overlay == nil {
+		return
+	}
+	q := g.subQueryForItem(g.currentItem)
+	go func() {
+		results := g.Subs.Search(q)
+		g.RunOnMain(func() {
+			g.subSearchResults = results
+			if g.overlay == nil {
+				return
+			}
+			entries := make([]player.SubSearchEntry, 0, len(results))
+			for _, r := range results {
+				entries = append(entries, player.SubSearchEntry{
+					Provider:        r.Provider,
+					Language:        r.Language,
+					ReleaseName:     r.ReleaseName,
+					Title:           r.Title,
+					Downloads:       r.Downloads,
+					HearingImpaired: r.HearingImpaired,
+				})
+			}
+			g.overlay.SetSubSearchResults(entries)
+		})
+	}()
+}
+
+// downloadSelectedSub downloads result[index] and adds it to mpv.
+func (g *Game) downloadSelectedSub(index int) {
+	if g.Subs == nil {
+		return
+	}
+	if index < 0 || index >= len(g.subSearchResults) {
+		return
+	}
+	r := g.subSearchResults[index]
+	if g.overlay != nil {
+		g.overlay.SetSubSearchLoading(true)
+		g.overlay.SetSubSearchMessage("Downloading…")
+	}
+	go func() {
+		path, err := g.Subs.Download(r)
+		g.RunOnMain(func() {
+			if err != nil {
+				slog.Warn("subtitle download", "err", err)
+				if g.overlay != nil {
+					g.overlay.SetSubSearchLoading(false)
+					g.overlay.SetSubSearchMessage("Download failed: " + err.Error())
+				}
+				return
+			}
+			title := r.ReleaseName
+			if title == "" {
+				title = r.Title
+			}
+			if g.Player != nil {
+				if err := g.Player.AddSubtitle(path, title+" ("+r.Provider+")", r.Language); err != nil {
+					slog.Warn("sub-add", "err", err)
+					if g.overlay != nil {
+						g.overlay.SetSubSearchLoading(false)
+						g.overlay.SetSubSearchMessage("Load failed: " + err.Error())
+					}
+					return
+				}
+			}
+			if g.overlay != nil {
+				g.overlay.SetSubSearchLoading(false)
+				g.overlay.CloseSubSearch()
+			}
+		})
+	}()
+}
+
 // StartPlayback transitions to play mode.
 func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.MediaItem) {
 	if g.Player == nil {
@@ -153,6 +321,7 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 
 	g.overlay = player.NewPlaybackOverlay(g.Player, g.Width, g.Height)
 	g.overlay.OnStop = func() { g.StopPlayback() }
+	g.wireSubSearchCallbacks()
 	if item != nil && item.Type == "Episode" {
 		g.overlay.SetShowNextButton(true)
 		g.overlay.OnNextEpisode = func() { g.playNextEpisode() }
@@ -163,6 +332,23 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 
 	g.setState(StatePlay)
 	g.playbackEnded.Store(false)
+}
+
+// wireSubSearchCallbacks connects the overlay's sub search hooks to the game.
+// Only wires callbacks if at least one provider is configured; otherwise the
+// "Find online…" option in the track panel is a no-op.
+func (g *Game) wireSubSearchCallbacks() {
+	if g.overlay == nil || g.Subs == nil {
+		return
+	}
+	g.overlay.OnSubSearchRequest = func() {
+		g.startSubSearch()
+	}
+	g.overlay.OnSubSearchDownload = func(index int) {
+		// Called from overlay on a goroutine; hop to the main thread so we
+		// don't race with other overlay mutations.
+		g.RunOnMain(func() { g.downloadSelectedSub(index) })
+	}
 }
 
 // PlayURL plays an arbitrary URL (e.g. YouTube trailer) via mpv without Jellyfin progress reporting.
@@ -194,6 +380,7 @@ func (g *Game) PlayURL(url string) {
 
 	g.overlay = player.NewPlaybackOverlay(g.Player, g.Width, g.Height)
 	g.overlay.OnStop = func() { g.StopPlayback() }
+	g.wireSubSearchCallbacks()
 	g.overlay.Show()
 
 	g.setState(StatePlay)
@@ -550,6 +737,9 @@ actionsDrained:
 			case player.OverlayTrackSelect:
 				g.overlay.HandleTrackInput(player.DirNone, false, true)
 				return nil
+			case player.OverlaySubSearch:
+				g.overlay.HandleSubSearchInput(player.DirNone, false, true)
+				return nil
 			case player.OverlayBar:
 				g.overlay.Hide()
 				return nil
@@ -658,6 +848,8 @@ func (g *Game) handlePlaybackInput() {
 	switch g.overlay.Mode {
 	case player.OverlayTrackSelect:
 		g.handleInputTrackSelect(dir, enterPressed)
+	case player.OverlaySubSearch:
+		g.overlay.HandleSubSearchInput(dir, enterPressed, false)
 	case player.OverlayNextUp:
 		g.handleInputNextUp(dir, enterPressed)
 	case player.OverlayBar:

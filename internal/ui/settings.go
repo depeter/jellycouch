@@ -62,6 +62,21 @@ type settingsItem struct {
 
 var hwAccelOptions = []string{"auto-safe", "auto", "no", "vaapi", "vdpau", "cuda", "videotoolbox", "d3d11va", "dxva2"}
 
+// boolOptions drives toggle-style settings items. The stored string is the
+// user-visible value; Yes maps to true, No maps to false.
+var boolOptions = []string{"Yes", "No"}
+
+func boolToYN(b bool) string {
+	if b {
+		return "Yes"
+	}
+	return "No"
+}
+
+func ynToBool(s string) bool {
+	return s == "Yes"
+}
+
 // uiScaleOptions are the presets surfaced in Settings. Keep in sync with
 // config.DisplayConfig clamp range (0.5–2.0).
 var uiScaleOptions = []string{"0.75", "1.00", "1.25", "1.50", "1.75", "2.00"}
@@ -121,6 +136,17 @@ func NewSettingsScreen(cfg *config.Config, onSave func()) *SettingsScreen {
 					cfg.Subtitles.Position = n
 					return nil
 				}},
+			},
+		},
+		{
+			Label: "Subtitle Providers",
+			Items: []settingsItem{
+				{Label: "OpenSubtitles: Enabled", Value: func() string { return boolToYN(cfg.SubtitleProviders.OpenSubtitles.Enabled) }, OnChange: func(v string) error { cfg.SubtitleProviders.OpenSubtitles.Enabled = ynToBool(v); return nil }, Options: boolOptions},
+				{Label: "OpenSubtitles: API Key", Value: func() string { return cfg.SubtitleProviders.OpenSubtitles.APIKey }, OnChange: func(v string) error { cfg.SubtitleProviders.OpenSubtitles.APIKey = v; return nil }},
+				{Label: "OpenSubtitles: Username", Value: func() string { return cfg.SubtitleProviders.OpenSubtitles.Username }, OnChange: func(v string) error { cfg.SubtitleProviders.OpenSubtitles.Username = v; return nil }},
+				{Label: "OpenSubtitles: Password", Value: func() string { return cfg.SubtitleProviders.OpenSubtitles.Password }, OnChange: func(v string) error { cfg.SubtitleProviders.OpenSubtitles.Password = v; return nil }},
+				{Label: "Subdl: Enabled", Value: func() string { return boolToYN(cfg.SubtitleProviders.Subdl.Enabled) }, OnChange: func(v string) error { cfg.SubtitleProviders.Subdl.Enabled = ynToBool(v); return nil }, Options: boolOptions},
+				{Label: "Subdl: API Key", Value: func() string { return cfg.SubtitleProviders.Subdl.APIKey }, OnChange: func(v string) error { cfg.SubtitleProviders.Subdl.APIKey = v; return nil }},
 			},
 		},
 		{
