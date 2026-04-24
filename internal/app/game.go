@@ -2,7 +2,7 @@ package app
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +16,7 @@ import (
 	"github.com/depeter/jellycouch/internal/constants"
 	"github.com/depeter/jellycouch/internal/jellyfin"
 	"github.com/depeter/jellycouch/internal/jellyseerr"
+	"github.com/depeter/jellycouch/internal/keymap"
 	"github.com/depeter/jellycouch/internal/player"
 	"github.com/depeter/jellycouch/internal/ui"
 	"github.com/depeter/jellycouch/internal/webview"
@@ -51,13 +52,29 @@ type Game struct {
 	nextEpBGRAPath string              // temp file for thumbnail overlay
 	prefetchDone   chan *prefetchResult // goroutine sends result here for main-thread application
 
-	// Cursor auto-hide during playback
+	// Cursor auto-hide (applies to browse + playback)
 	lastMouseX, lastMouseY int
 	cursorIdleFrames       int
 	cursorHidden           bool
 
+	// True when playback was paused automatically on window focus loss,
+	// so we know to resume on refocus without overriding a user-initiated pause.
+	pausedByFocus bool
+
 	webCmd    *exec.Cmd
 	webExited chan struct{}
+
+	// Keybindings resolved from config at NewGame time.
+	Keybinds keymap.Keybindings
+}
+
+// RunOnMain schedules fn to execute on the main (Ebitengine) thread at the
+// start of the next Update tick. Safe to call from any goroutine.
+// Prefer this over direct channel sends so call sites stay readable and
+// future changes (e.g. capacity tuning or typed events) have a single
+// chokepoint.
+func (g *Game) RunOnMain(fn func()) {
+	g.MainActions <- fn
 }
 
 // prefetchResult carries the outcome of prefetchNextEpisode back to the main thread.
@@ -70,14 +87,15 @@ type prefetchResult struct {
 // NewGame creates the Game with all dependencies.
 func NewGame(cfg *config.Config, client *jellyfin.Client, imgCache *cache.ImageCache) *Game {
 	g := &Game{
-		Config:          cfg,
-		Client:          client,
-		Cache:           imgCache,
-		Screens:         ui.NewScreenManager(),
-		State:           StateBrowse,
-		Width:           1920,
-		Height:          1080,
+		Config:      cfg,
+		Client:      client,
+		Cache:       imgCache,
+		Screens:     ui.NewScreenManager(),
+		State:       StateBrowse,
+		Width:       1920,
+		Height:      1080,
 		MainActions: make(chan func(), 16),
+		Keybinds:    keymap.Resolve(cfg.Keybindings),
 	}
 	return g
 }
@@ -99,7 +117,7 @@ func (g *Game) InitPlayer() error {
 func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.MediaItem) {
 	if g.Player == nil {
 		if err := g.InitPlayer(); err != nil {
-			log.Printf("Failed to init player: %v", err)
+			slog.Error("init player", "err", err)
 			return
 		}
 	}
@@ -107,11 +125,11 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 	// Get window handle and set on mpv
 	wid, err := player.GetWindowHandle()
 	if err != nil {
-		log.Printf("Failed to get window handle: %v", err)
+		slog.Error("get window handle", "err", err)
 		return
 	}
 	if err := g.Player.SetWindowID(wid); err != nil {
-		log.Printf("Failed to set window ID: %v", err)
+		slog.Error("set window ID", "err", err)
 	}
 
 	streamURL := g.Client.GetStreamURL(itemID)
@@ -120,7 +138,7 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 		startSec = float64(resumeTicks) / constants.TicksPerSecond
 	}
 	if err := g.Player.LoadFile(streamURL, itemID, startSec); err != nil {
-		log.Printf("Failed to load file: %v", err)
+		slog.Error("load file", "err", err)
 		return
 	}
 
@@ -143,33 +161,31 @@ func (g *Game) StartPlayback(itemID string, resumeTicks int64, item *jellyfin.Me
 	}
 	g.overlay.Show()
 
-	g.State = StatePlay
+	g.setState(StatePlay)
 	g.playbackEnded.Store(false)
-	g.cursorIdleFrames = 0
-	g.cursorHidden = false
 }
 
 // PlayURL plays an arbitrary URL (e.g. YouTube trailer) via mpv without Jellyfin progress reporting.
 func (g *Game) PlayURL(url string) {
 	if g.Player == nil {
 		if err := g.InitPlayer(); err != nil {
-			log.Printf("Failed to init player: %v", err)
+			slog.Error("init player", "err", err)
 			return
 		}
 	}
 
 	wid, err := player.GetWindowHandle()
 	if err != nil {
-		log.Printf("Failed to get window handle: %v", err)
+		slog.Error("get window handle", "err", err)
 		return
 	}
 	if err := g.Player.SetWindowID(wid); err != nil {
-		log.Printf("Failed to set window ID: %v", err)
+		slog.Error("set window ID", "err", err)
 	}
 
-	log.Printf("PlayURL: loading %s", url)
+	slog.Info("PlayURL loading", "url", url)
 	if err := g.Player.LoadFile(url, "", 0); err != nil {
-		log.Printf("Failed to load URL: %v", err)
+		slog.Error("load URL", "err", err)
 		return
 	}
 
@@ -180,10 +196,8 @@ func (g *Game) PlayURL(url string) {
 	g.overlay.OnStop = func() { g.StopPlayback() }
 	g.overlay.Show()
 
-	g.State = StatePlay
+	g.setState(StatePlay)
 	g.playbackEnded.Store(false)
-	g.cursorIdleFrames = 0
-	g.cursorHidden = false
 }
 
 // StopPlayback transitions back to browse mode.
@@ -223,11 +237,8 @@ func (g *Game) StopPlayback() {
 	}
 	g.nextEpItem = nil
 	g.currentItem = nil
-	g.State = StateBrowse
-	if g.cursorHidden {
-		ebiten.SetCursorMode(ebiten.CursorModeVisible)
-		g.cursorHidden = false
-	}
+	g.pausedByFocus = false
+	g.setState(StateBrowse)
 }
 
 // prefetchNextEpisode looks up the next episode and pre-fetches its metadata
@@ -250,7 +261,7 @@ func (g *Game) prefetchNextEpisode(item *jellyfin.MediaItem) {
 	// Fetch full item details
 	full, err := g.Client.GetItem(next.ID)
 	if err != nil {
-		log.Printf("Failed to fetch next episode: %v", err)
+		slog.Warn("fetch next episode", "err", err)
 		ch <- &prefetchResult{}
 		return
 	}
@@ -286,10 +297,10 @@ func (g *Game) prefetchNextEpisode(item *jellyfin.MediaItem) {
 				info.ImageH = h
 				result.bgraPath = bgraPath
 			} else {
-				log.Printf("Failed to prepare overlay image: %v", err)
+				slog.Warn("prepare overlay image", "err", err)
 			}
 		} else {
-			log.Printf("Failed to load next episode thumbnail: %v", err)
+			slog.Warn("load next episode thumbnail", "err", err)
 		}
 	}
 
@@ -313,12 +324,12 @@ func (g *Game) playNextEpisode() {
 func (g *Game) StartWebApp(url string) {
 	cmd, err := webview.StartWebApp(url)
 	if err != nil {
-		log.Printf("Failed to start web app: %v", err)
+		slog.Error("start web app", "err", err)
 		return
 	}
 	g.webCmd = cmd
 	g.webExited = make(chan struct{})
-	g.State = StateWeb
+	g.setState(StateWeb)
 
 	go func() {
 		cmd.Wait()
@@ -340,7 +351,7 @@ func (g *Game) StopWebApp() {
 	}
 	g.webCmd = nil
 	g.webExited = nil
-	g.State = StateBrowse
+	g.setState(StateBrowse)
 }
 
 // findAndQueueNextEpisode looks up the next episode and sends it on nextEpCh.
@@ -358,7 +369,7 @@ func (g *Game) findAndQueueNextEpisode() {
 		}
 		full, err := g.Client.GetItem(next.ID)
 		if err != nil {
-			log.Printf("Failed to fetch next episode: %v", err)
+			slog.Warn("fetch next episode", "err", err)
 			ch <- nil
 			return
 		}
@@ -400,6 +411,48 @@ func (g *Game) lookupNextEpisode(item *jellyfin.MediaItem) *jellyfin.MediaItem {
 	return nil
 }
 
+// updateCursorAutoHide hides the cursor after ~3s of no mouse movement and
+// restores it the moment the user moves the mouse. Applies to all UI states.
+func (g *Game) updateCursorAutoHide() {
+	const cursorHideDelay = 180 // ~3s at 60fps
+	mx, my := ebiten.CursorPosition()
+	if mx != g.lastMouseX || my != g.lastMouseY {
+		g.lastMouseX, g.lastMouseY = mx, my
+		g.cursorIdleFrames = 0
+		if g.cursorHidden {
+			ebiten.SetCursorMode(ebiten.CursorModeVisible)
+			g.cursorHidden = false
+		}
+		return
+	}
+	g.cursorIdleFrames++
+	if !g.cursorHidden && g.cursorIdleFrames >= cursorHideDelay {
+		ebiten.SetCursorMode(ebiten.CursorModeHidden)
+		g.cursorHidden = true
+	}
+}
+
+// updateFocusPause pauses playback when the window loses focus and resumes
+// when it regains focus, but only if we were the one who paused (so a
+// user-initiated pause is not overridden).
+func (g *Game) updateFocusPause() {
+	if g.Player == nil {
+		return
+	}
+	focused := ebiten.IsFocused()
+	if !focused && g.Player.Playing() && !g.Player.Paused() {
+		if err := g.Player.TogglePause(); err == nil {
+			g.pausedByFocus = true
+		}
+		return
+	}
+	if focused && g.pausedByFocus {
+		if err := g.Player.TogglePause(); err == nil {
+			g.pausedByFocus = false
+		}
+	}
+}
+
 func (g *Game) Update() error {
 	if g.QuitRequested {
 		return ebiten.Termination
@@ -419,6 +472,8 @@ actionsDrained:
 	// F12 toggles debug overlay (works in all modes)
 	ui.ToggleDebugOverlay()
 
+	g.updateCursorAutoHide()
+
 	switch g.State {
 	case StateBrowse:
 		if err := g.Screens.Update(); err != nil {
@@ -426,6 +481,8 @@ actionsDrained:
 		}
 
 	case StatePlay:
+		g.updateFocusPause()
+
 		if g.playbackEnded.Swap(false) {
 			if g.nextEpItem != nil {
 				next := g.nextEpItem
@@ -440,24 +497,6 @@ actionsDrained:
 		// Update overlay auto-hide timer and next-up trigger
 		if g.overlay != nil {
 			g.overlay.Update()
-		}
-
-		// Auto-hide cursor after 3 seconds of no mouse movement
-		const cursorHideDelay = 180 // ~3s at 60fps
-		mx, my := ebiten.CursorPosition()
-		if mx != g.lastMouseX || my != g.lastMouseY {
-			g.lastMouseX, g.lastMouseY = mx, my
-			g.cursorIdleFrames = 0
-			if g.cursorHidden {
-				ebiten.SetCursorMode(ebiten.CursorModeVisible)
-				g.cursorHidden = false
-			}
-		} else {
-			g.cursorIdleFrames++
-			if !g.cursorHidden && g.cursorIdleFrames >= cursorHideDelay {
-				ebiten.SetCursorMode(ebiten.CursorModeHidden)
-				g.cursorHidden = true
-			}
 		}
 
 		// Apply prefetched next-episode result from goroutine (race-free)
@@ -535,7 +574,7 @@ actionsDrained:
 		case <-g.webExited:
 			g.webCmd = nil
 			g.webExited = nil
-			g.State = StateBrowse
+			g.setState(StateBrowse)
 		default:
 		}
 	}
@@ -565,7 +604,31 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
-	return g.Width, g.Height
+	// Preserve logical 1080 height (keeping text/posters readable on 4K via
+	// ebiten's upscaling) but grow the logical width so ultrawide displays
+	// use the extra horizontal room instead of being letterboxed. UIScale
+	// shrinks the logical canvas by the scale factor so Ebitengine upscales
+	// more — text/posters keep their constant pixel sizes but appear
+	// physically larger on screen.
+	scale := g.Config.Display.UIScale
+	if scale < 0.5 {
+		scale = 1.0
+	}
+	logicalH := int(float64(ui.LogicalScreenHeight) / scale)
+	minW := int(float64(ui.LogicalScreenWidth) / scale)
+	w, h := outsideWidth, outsideHeight
+	if h <= 0 || w <= 0 {
+		return minW, logicalH
+	}
+	logicalW := w * logicalH / h
+	if logicalW < minW {
+		// Narrower than 16:9 — letterbox rather than stretch layout below
+		// the design width.
+		logicalW = minW
+	}
+	g.Width, g.Height = logicalW, logicalH
+	ui.SetScreenSize(logicalW, logicalH)
+	return logicalW, logicalH
 }
 
 // handlePlaybackInput forwards keybinds, media keys, and mouse input to mpv.
@@ -615,7 +678,7 @@ func (g *Game) handleInputNextUp(dir player.Direction, enter bool) {
 		g.overlay.OnStartNextUp()
 		return
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyI) || dir != player.DirNone {
+	if keybindJustPressed(g.Keybinds.ShowInfo) || dir != player.DirNone {
 		g.overlay.Show()
 	}
 }
@@ -629,31 +692,39 @@ func (g *Game) handleInputBar(dir player.Direction, enter bool) {
 		return
 	}
 	g.handleCommonPlaybackKeys(true)
-	if inpututil.IsKeyJustPressed(ebiten.KeyI) {
+	if keybindJustPressed(g.Keybinds.ShowInfo) {
 		g.overlay.Show()
 	}
 	g.handlePlaybackMouse()
 }
 
+// keybindJustPressed returns true if k is bound and was just pressed.
+// Safe to call with the Unbound sentinel — returns false instead of
+// matching ebiten.KeyA (which has value 0).
+func keybindJustPressed(k ebiten.Key) bool {
+	return keymap.IsBound(k) && inpututil.IsKeyJustPressed(k)
+}
+
 // handleInputHidden handles input when the overlay is hidden.
 func (g *Game) handleInputHidden(enter bool) {
-	if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
+	kb := g.Keybinds
+	if keybindJustPressed(kb.PlayPause) {
 		g.Player.TogglePause()
 		g.overlay.Show()
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
+	if keybindJustPressed(kb.SeekSmallForward) {
 		g.Player.Seek(player.SeekSmall)
 		g.Player.ShowProgress()
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
+	if keybindJustPressed(kb.SeekSmallBack) {
 		g.Player.Seek(-player.SeekSmall)
 		g.Player.ShowProgress()
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
+	if keybindJustPressed(kb.SeekLargeForward) {
 		g.Player.Seek(player.SeekLarge)
 		g.Player.ShowProgress()
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
+	if keybindJustPressed(kb.SeekLargeBack) {
 		g.Player.Seek(-player.SeekLarge)
 		g.Player.ShowProgress()
 	}
@@ -661,7 +732,7 @@ func (g *Game) handleInputHidden(enter bool) {
 	if enter {
 		g.overlay.Show()
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyI) {
+	if keybindJustPressed(kb.ShowInfo) {
 		g.overlay.Show()
 	}
 	g.handlePlaybackMouse()
@@ -671,6 +742,7 @@ func (g *Game) handleInputHidden(enter bool) {
 // between bar-visible and hidden modes. When barVisible is true, actions
 // re-show the overlay bar; otherwise they show a brief progress indicator.
 func (g *Game) handleCommonPlaybackKeys(barVisible bool) {
+	kb := g.Keybinds
 	show := func() {
 		if barVisible {
 			g.overlay.Show()
@@ -678,25 +750,25 @@ func (g *Game) handleCommonPlaybackKeys(barVisible bool) {
 			g.Player.ShowProgress()
 		}
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyDigit0) {
+	if keybindJustPressed(kb.VolumeUp) {
 		g.Player.AdjustVolume(player.VolumeStep)
 		show()
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyDigit9) {
+	if keybindJustPressed(kb.VolumeDown) {
 		g.Player.AdjustVolume(-player.VolumeStep)
 		show()
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyM) {
+	if keybindJustPressed(kb.Mute) {
 		g.Player.ToggleMute()
 		show()
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyS) && g.overlay != nil {
+	if keybindJustPressed(kb.CycleSubtitles) && g.overlay != nil {
 		if !barVisible {
 			g.overlay.Show()
 		}
 		g.overlay.OpenTrackPanel(player.TrackSub)
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyA) && g.overlay != nil {
+	if keybindJustPressed(kb.CycleAudio) && g.overlay != nil {
 		if !barVisible {
 			g.overlay.Show()
 		}

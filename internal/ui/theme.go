@@ -22,20 +22,20 @@ var (
 
 // Layout constants
 const (
-	PosterWidth     = 220
-	PosterHeight    = 330
-	PosterGap       = 32
-	PosterFocusPad  = 10
+	PosterWidth    = 220
+	PosterHeight   = 330
+	PosterGap      = 32
+	PosterFocusPad = 10
 
-	BackdropHeight  = 440
+	BackdropHeight = 440
 
-	SectionPadding  = 52
-	SectionGap      = 40
-	SectionTitleH   = 56
+	SectionPadding = 52
+	SectionGap     = 40
+	SectionTitleH  = 56
 
-	NavBarHeight    = 68
-	NavBarPadding   = 20
-	ButtonHeight    = 68
+	NavBarHeight  = 68
+	NavBarPadding = 20
+	ButtonHeight  = 68
 
 	FontSizeTitle   = 54
 	FontSizeHeading = 42
@@ -45,9 +45,6 @@ const (
 
 	FocusAnimSpeed  = 0.15
 	ScrollAnimSpeed = 0.12
-
-	ScreenWidth     = 1920
-	ScreenHeight    = 1080
 
 	// Computed grid layout constants
 	// GridRowHeight is the height of a single row in a FocusGrid (poster + gap + labels).
@@ -59,4 +56,27 @@ const (
 
 	// ScrollWheelSpeed is pixels per mouse wheel scroll unit.
 	ScrollWheelSpeed = 60
+
+	// LogicalScreenWidth/Height are the baseline design size. Actual
+	// ScreenWidth/Height (below) may be larger on ultrawide or 4K displays
+	// since Layout now returns the native outside dimensions.
+	LogicalScreenWidth  = 1920
+	LogicalScreenHeight = 1080
 )
+
+// ScreenWidth and ScreenHeight reflect the current window size in logical
+// pixels. SetScreenSize is called from Game.Layout each frame.
+var (
+	ScreenWidth  = LogicalScreenWidth
+	ScreenHeight = LogicalScreenHeight
+)
+
+// SetScreenSize updates the logical screen dimensions. Call from Layout.
+func SetScreenSize(w, h int) {
+	if w > 0 {
+		ScreenWidth = w
+	}
+	if h > 0 {
+		ScreenHeight = h
+	}
+}

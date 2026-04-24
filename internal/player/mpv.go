@@ -2,16 +2,16 @@ package player
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/gen2brain/go-mpv"
 
 	"github.com/depeter/jellycouch/internal/config"
+	"github.com/depeter/jellycouch/internal/player/mpvcmd"
 )
 
 // playerCmd is a function to execute on the mpv thread, with a channel for the result.
@@ -57,30 +57,13 @@ func New(cfg *config.Config) (*Player, error) {
 
 func must(err error) {
 	if err != nil {
-		log.Printf("mpv option warning: %v", err)
+		slog.Warn("mpv option", "err", err)
 	}
 }
 
-// mpvCmd builds a quoted command string for mpv_command_string.
-// This avoids go-mpv's Command() which has a missing NULL terminator
-// in its nocgo char** array on Windows.
-func mpvCmd(args ...string) string {
-	var b strings.Builder
-	for i, arg := range args {
-		if i > 0 {
-			b.WriteByte(' ')
-		}
-		b.WriteByte('"')
-		for _, c := range arg {
-			if c == '"' || c == '\\' {
-				b.WriteByte('\\')
-			}
-			b.WriteRune(c)
-		}
-		b.WriteByte('"')
-	}
-	return b.String()
-}
+// mpvCmd delegates to mpvcmd.Build; kept as a file-local alias to keep call
+// sites in this file readable.
+func mpvCmd(args ...string) string { return mpvcmd.Build(args...) }
 
 // mpvThread runs on a locked OS thread. All mpv API calls happen here.
 func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
@@ -214,7 +197,7 @@ func (p *Player) mpvThread(cfg *config.Config, initErr chan<- error) {
 			wasPlaying := p.playing
 			p.playing = false
 			p.mu.Unlock()
-			log.Printf("mpv end-file: reason=%s wasPlaying=%v", ef.Reason, wasPlaying)
+			slog.Info("mpv end-file", "reason", ef.Reason, "was_playing", wasPlaying)
 			if wasPlaying && (ef.Reason == mpv.EndFileEOF || ef.Reason == mpv.EndFileError) && p.OnPlaybackEnd != nil {
 				p.OnPlaybackEnd()
 			}
@@ -314,9 +297,11 @@ func (p *Player) AdjustVolume(delta int) error {
 
 // ShowProgress flashes the OSD progress bar.
 func (p *Player) ShowProgress() {
-	p.do(func(m *mpv.Mpv) error {
+	if err := p.do(func(m *mpv.Mpv) error {
 		return m.CommandString(mpvCmd("show-progress"))
-	})
+	}); err != nil {
+		slog.Warn("mpv show-progress", "err", err)
+	}
 }
 
 // OverlayAdd displays a raw BGRA image overlay on the mpv window.
@@ -326,7 +311,7 @@ func (p *Player) OverlayAdd(id, x, y int, filePath string, w, h int) {
 	stride := w * 4
 	// mpv expects forward slashes in file paths, even on Windows.
 	filePath = filepath.ToSlash(filePath)
-	p.do(func(m *mpv.Mpv) error {
+	if err := p.do(func(m *mpv.Mpv) error {
 		return m.CommandString(mpvCmd("overlay-add",
 			fmt.Sprintf("%d", id),
 			fmt.Sprintf("%d", x),
@@ -338,14 +323,18 @@ func (p *Player) OverlayAdd(id, x, y int, filePath string, w, h int) {
 			fmt.Sprintf("%d", h),
 			fmt.Sprintf("%d", stride),
 		))
-	})
+	}); err != nil {
+		slog.Warn("mpv overlay-add", "id", id, "err", err)
+	}
 }
 
 // OverlayRemove removes a previously added image overlay by slot id.
 func (p *Player) OverlayRemove(id int) {
-	p.do(func(m *mpv.Mpv) error {
+	if err := p.do(func(m *mpv.Mpv) error {
 		return m.CommandString(mpvCmd("overlay-remove", fmt.Sprintf("%d", id)))
-	})
+	}); err != nil {
+		slog.Warn("mpv overlay-remove", "id", id, "err", err)
+	}
 }
 
 // OsdOverlay sends an osd-overlay command to display persistent ASS content.
@@ -355,7 +344,7 @@ func (p *Player) OsdOverlay(id int, assData string, resX, resY int) {
 		return osdOverlaySet(m, id, assData, resX, resY)
 	})
 	if err != nil {
-		log.Printf("OsdOverlay(%d): %v", id, err)
+		slog.Warn("mpv osd-overlay", "id", id, "err", err)
 	}
 }
 
@@ -365,15 +354,17 @@ func (p *Player) OsdOverlayRemove(id int) {
 		return osdOverlayRemove(m, id)
 	})
 	if err != nil {
-		log.Printf("OsdOverlayRemove(%d): %v", id, err)
+		slog.Warn("mpv osd-overlay-remove", "id", id, "err", err)
 	}
 }
 
 // ShowText displays a text message on mpv's OSD for the given duration (ms).
 func (p *Player) ShowText(text string, durationMS int) {
-	p.do(func(m *mpv.Mpv) error {
+	if err := p.do(func(m *mpv.Mpv) error {
 		return m.CommandString(mpvCmd("show-text", text, fmt.Sprintf("%d", durationMS)))
-	})
+	}); err != nil {
+		slog.Warn("mpv show-text", "err", err)
+	}
 }
 
 // ShowOSD displays a status overlay with playback info and key hints.
@@ -386,9 +377,11 @@ func (p *Player) ShowOSD() {
 		"${time-pos} / ${duration}   Vol: ${volume}%\\N" +
 		"{\\fs22\\alpha&H40&}" +
 		"Left/Right Seek   Space Pause   S Subs   A Audio   Esc Back"
-	p.do(func(m *mpv.Mpv) error {
+	if err := p.do(func(m *mpv.Mpv) error {
 		return m.CommandString(mpvCmd("show-text", osd, "4000"))
-	})
+	}); err != nil {
+		slog.Warn("mpv show-osd", "err", err)
+	}
 }
 
 // CycleSubtitles cycles through subtitle tracks.

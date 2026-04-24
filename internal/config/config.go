@@ -1,17 +1,116 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/depeter/jellycouch/internal/keymap"
 )
 
+var hexColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$`)
+
+// clampInt returns v clamped to [lo, hi]. Logs a warning with the given field
+// name when v is adjusted so users can spot silently-corrected config values.
+func clampInt(field string, v, lo, hi int) int {
+	if v < lo {
+		slog.Warn("config value clamped", "field", field, "value", v, "min", lo, "max", hi, "clamped_to", lo)
+		return lo
+	}
+	if v > hi {
+		slog.Warn("config value clamped", "field", field, "value", v, "min", lo, "max", hi, "clamped_to", hi)
+		return hi
+	}
+	return v
+}
+
+func clampFloat(field string, v, lo, hi float64) float64 {
+	if v < lo {
+		slog.Warn("config value clamped", "field", field, "value", v, "min", lo, "max", hi, "clamped_to", lo)
+		return lo
+	}
+	if v > hi {
+		slog.Warn("config value clamped", "field", field, "value", v, "min", lo, "max", hi, "clamped_to", hi)
+		return hi
+	}
+	return v
+}
+
+func validateColor(field, v, fallback string) string {
+	if v == "" {
+		return fallback
+	}
+	if hexColorPattern.MatchString(v) {
+		return v
+	}
+	slog.Warn("config color invalid, using fallback", "field", field, "value", v, "fallback", fallback)
+	return fallback
+}
+
+// validate clamps out-of-range values and rejects malformed colors, logging
+// warnings so misconfigured files are visible without blocking startup.
+func (c *Config) validate() {
+	defaults := DefaultConfig()
+	c.Subtitles.FontSize = clampInt("subtitles.font_size", c.Subtitles.FontSize, 8, 200)
+	c.Subtitles.Position = clampInt("subtitles.position", c.Subtitles.Position, 0, 100)
+	c.Subtitles.BorderSize = clampFloat("subtitles.border_size", c.Subtitles.BorderSize, 0, 20)
+	c.Subtitles.ShadowOffset = clampFloat("subtitles.shadow_offset", c.Subtitles.ShadowOffset, 0, 20)
+	c.Subtitles.Delay = clampFloat("subtitles.delay", c.Subtitles.Delay, -120, 120)
+	c.Subtitles.Color = validateColor("subtitles.color", c.Subtitles.Color, defaults.Subtitles.Color)
+	c.Subtitles.BorderColor = validateColor("subtitles.border_color", c.Subtitles.BorderColor, defaults.Subtitles.BorderColor)
+	c.Playback.Volume = clampInt("playback.volume", c.Playback.Volume, 0, 150)
+	if c.Cache.MaxImageMB < 0 {
+		slog.Warn("config cache.max_image_mb invalid, using 0 (unbounded)", "value", c.Cache.MaxImageMB)
+		c.Cache.MaxImageMB = 0
+	}
+	// Treat zero as "unset" (e.g. missing from older configs) rather than a
+	// literal 0.0 which would produce a divide-by-zero in Layout.
+	if c.Display.UIScale == 0 {
+		c.Display.UIScale = 1.0
+	}
+	c.Display.UIScale = clampFloat("display.ui_scale", c.Display.UIScale, 0.5, 2.0)
+}
+
+// CurrentSchemaVersion is the config format this binary writes. Migrations
+// run on older values during Load. Bump when a semantic change requires a
+// rewrite of user configs.
+const CurrentSchemaVersion = 1
+
 type Config struct {
+	// SchemaVersion tracks format version so future migrations know where to start.
+	SchemaVersion int `toml:"schema_version"`
+
 	Server     ServerConfig     `toml:"server"`
 	Jellyseerr JellyseerrConfig `toml:"jellyseerr"`
 	Subtitles  SubtitleConfig   `toml:"subtitles"`
 	Playback   PlaybackConfig   `toml:"playback"`
+	Cache       CacheConfig    `toml:"cache"`
+	Logging     LoggingConfig  `toml:"logging"`
+	Display     DisplayConfig  `toml:"display"`
+	Keybindings keymap.Config  `toml:"keybindings"`
+}
+
+type CacheConfig struct {
+	// MaxImageMB caps the on-disk poster/thumbnail cache. 0 means unbounded.
+	MaxImageMB int `toml:"max_image_mb"`
+}
+
+// DisplayConfig holds user-controlled rendering tweaks. Currently just UIScale,
+// which divides the logical canvas so Ebitengine has to upscale more — making
+// fonts and posters physically larger without changing any layout math.
+type DisplayConfig struct {
+	// UIScale multiplies the apparent size of everything on screen. 1.0 is
+	// the design baseline; values above 1 make text bigger (useful from the
+	// couch on a 4K TV), below 1 packs more on screen.
+	UIScale float64 `toml:"ui_scale"`
+}
+
+type LoggingConfig struct {
+	// Level is one of "debug", "info", "warn", "error".
+	Level string `toml:"level"`
 }
 
 type WebApp struct {
@@ -58,7 +157,8 @@ var BuiltinWebApps = []WebApp{
 
 func DefaultConfig() *Config {
 	return &Config{
-		Server: ServerConfig{},
+		SchemaVersion: CurrentSchemaVersion,
+		Server:        ServerConfig{},
 		Subtitles: SubtitleConfig{
 			Font:         "Liberation Sans",
 			FontSize:     48,
@@ -76,6 +176,16 @@ func DefaultConfig() *Config {
 			SubLanguage:   "eng",
 			Volume:        100,
 		},
+		Cache: CacheConfig{
+			MaxImageMB: 500,
+		},
+		Logging: LoggingConfig{
+			Level: "info",
+		},
+		Display: DisplayConfig{
+			UIScale: 1.0,
+		},
+		Keybindings: keymap.Default(),
 	}
 }
 
@@ -122,7 +232,66 @@ func Load() (*Config, error) {
 	if err := toml.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
+	cfg.migrate()
+	cfg.validate()
 	return cfg, nil
+}
+
+// migrate upgrades older config formats to CurrentSchemaVersion. Each step
+// should be small and idempotent — running migrate() twice must be a no-op.
+func (c *Config) migrate() {
+	// Fill in any absent keybinding fields with defaults, regardless of
+	// schema version — this handles both brand-new and older configs that
+	// predate the keybindings section.
+	defaults := keymap.Default()
+	if c.Keybindings.PlayPause == "" {
+		c.Keybindings.PlayPause = defaults.PlayPause
+	}
+	if c.Keybindings.SeekSmallForward == "" {
+		c.Keybindings.SeekSmallForward = defaults.SeekSmallForward
+	}
+	if c.Keybindings.SeekSmallBack == "" {
+		c.Keybindings.SeekSmallBack = defaults.SeekSmallBack
+	}
+	if c.Keybindings.SeekLargeForward == "" {
+		c.Keybindings.SeekLargeForward = defaults.SeekLargeForward
+	}
+	if c.Keybindings.SeekLargeBack == "" {
+		c.Keybindings.SeekLargeBack = defaults.SeekLargeBack
+	}
+	if c.Keybindings.VolumeUp == "" {
+		c.Keybindings.VolumeUp = defaults.VolumeUp
+	}
+	if c.Keybindings.VolumeDown == "" {
+		c.Keybindings.VolumeDown = defaults.VolumeDown
+	}
+	if c.Keybindings.Mute == "" {
+		c.Keybindings.Mute = defaults.Mute
+	}
+	if c.Keybindings.CycleSubtitles == "" {
+		c.Keybindings.CycleSubtitles = defaults.CycleSubtitles
+	}
+	if c.Keybindings.CycleAudio == "" {
+		c.Keybindings.CycleAudio = defaults.CycleAudio
+	}
+	if c.Keybindings.ShowInfo == "" {
+		c.Keybindings.ShowInfo = defaults.ShowInfo
+	}
+
+	if c.SchemaVersion == CurrentSchemaVersion {
+		return
+	}
+	if c.SchemaVersion == 0 {
+		// v0 → v1: configs written before versioning; no field renames yet,
+		// so upgrading is just stamping the version.
+		slog.Info("config migrating", "from", 0, "to", 1)
+		c.SchemaVersion = 1
+	}
+	// Future migrations append here as `if c.SchemaVersion == 1 { ... c.SchemaVersion = 2 }`.
+	if c.SchemaVersion != CurrentSchemaVersion {
+		slog.Warn("config schema newer than this binary understands; leaving as-is",
+			"config_version", c.SchemaVersion, "binary_version", CurrentSchemaVersion)
+	}
 }
 
 func (c *Config) Save() error {

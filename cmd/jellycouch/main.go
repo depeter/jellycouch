@@ -15,6 +15,7 @@ import (
 	"github.com/depeter/jellycouch/internal/config"
 	"github.com/depeter/jellycouch/internal/jellyfin"
 	"github.com/depeter/jellycouch/internal/jellyseerr"
+	"github.com/depeter/jellycouch/internal/logging"
 	"github.com/depeter/jellycouch/internal/ui"
 	"github.com/depeter/jellycouch/internal/webview"
 )
@@ -26,11 +27,16 @@ func main() {
 		return
 	}
 
-	// Load config
+	// Initialize logging first so config validation warnings emit through a
+	// configured handler. Re-apply after Load once the user's level is known.
+	logging.Setup("info")
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	logging.Setup(cfg.Logging.Level)
 
 	// Init fonts
 	if err := ui.InitFonts(fonts.LiberationSans); err != nil {
@@ -42,7 +48,7 @@ func main() {
 	if configDir, err := config.ConfigDir(); err == nil {
 		cacheDir = filepath.Join(configDir, "cache", "images")
 	}
-	imgCache, err := cache.NewImageCache(cacheDir)
+	imgCache, err := cache.NewImageCache(cacheDir, cfg.Cache.MaxImageMB)
 	if err != nil {
 		log.Fatalf("Failed to init image cache: %v", err)
 	}

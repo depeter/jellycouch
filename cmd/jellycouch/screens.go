@@ -1,13 +1,14 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/depeter/jellycouch/internal/app"
 	"github.com/depeter/jellycouch/internal/cache"
 	"github.com/depeter/jellycouch/internal/config"
 	"github.com/depeter/jellycouch/internal/jellyfin"
 	"github.com/depeter/jellycouch/internal/jellyseerr"
+	"github.com/depeter/jellycouch/internal/keymap"
 	"github.com/depeter/jellycouch/internal/ui"
 )
 
@@ -25,13 +26,13 @@ func (sf *screenFactory) pushLogin(navbar *ui.NavBar) {
 		go func() {
 			c := jellyfin.NewClient(server)
 			if err := c.Authenticate(user, pass); err != nil {
-				sf.game.MainActions <- func() {
+				sf.game.RunOnMain(func() {
 					screen.Error = "Login failed: " + err.Error()
 					screen.Busy = false
-				}
+				})
 				return
 			}
-			sf.game.MainActions <- func() {
+			sf.game.RunOnMain(func() {
 				sf.cfg.Server.URL = server
 				sf.cfg.Server.Username = user
 				sf.cfg.Server.Token = c.Token()
@@ -42,7 +43,7 @@ func (sf *screenFactory) pushLogin(navbar *ui.NavBar) {
 				screen.Busy = false
 				sf.pushHome()
 				sf.loadNavBarViews()
-			}
+			})
 		}()
 	})
 	sf.game.Screens.Replace(loginScreen)
@@ -103,8 +104,19 @@ func (sf *screenFactory) pushSettings() {
 		} else {
 			sf.game.Jellyseerr = nil
 		}
+		// Re-resolve keybindings so changes from the Keybindings section
+		// take effect without requiring a restart.
+		sf.game.Keybinds = keymap.Resolve(sf.cfg.Keybindings)
 		sf.loadNavBarViews()
 	})
+	settings.OnSignOut = func() {
+		sf.cfg.Server.Token = ""
+		sf.cfg.Server.UserID = ""
+		sf.cfg.Save()
+		sf.game.Client = nil
+		sf.game.Screens.ClearStack()
+		sf.pushLogin(sf.game.Screens.NavBar)
+	}
 	sf.game.Screens.Push(settings)
 }
 
@@ -170,21 +182,25 @@ func (sf *screenFactory) pushWebApps() {
 }
 
 func (sf *screenFactory) loadNavBarViews() {
-	if sf.game.Client == nil {
+	// Capture the client into a local variable so a concurrent sign-out
+	// (which nils out sf.game.Client) can't cause this goroutine to
+	// nil-deref mid-flight.
+	client := sf.game.Client
+	if client == nil {
 		return
 	}
 	go func() {
-		views, err := sf.game.Client.GetViews()
+		views, err := client.GetViews()
 		if err != nil {
-			log.Printf("NavBar: failed to load views: %v", err)
+			slog.Warn("navbar load views", "err", err)
 			return
 		}
 		var libViews []struct{ ID, Name string }
 		for _, v := range views {
 			libViews = append(libViews, struct{ ID, Name string }{v.ID, v.Name})
 		}
-		sf.game.MainActions <- func() {
+		sf.game.RunOnMain(func() {
 			sf.game.Screens.NavBar.LibraryViews = libViews
-		}
+		})
 	}()
 }

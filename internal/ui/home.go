@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"log"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -130,7 +130,7 @@ func (hs *HomeScreen) loadData() {
 	// Libraries — first get views, then load latest for each in parallel
 	views, err := hs.client.GetViews()
 	if err != nil {
-		log.Printf("Failed to load views: %v", err)
+		slog.Warn("home load views", "err", err)
 		setError(err)
 	} else {
 		var libViews []struct{ ID, Name string }
@@ -147,7 +147,7 @@ func (hs *HomeScreen) loadData() {
 				defer wg.Done()
 				items, err := hs.client.GetLatestMedia(view.ID, 20)
 				if err != nil {
-					log.Printf("Failed to load latest for %s: %v", view.Name, err)
+					slog.Warn("home load latest", "view", view.Name, "err", err)
 					return
 				}
 				if len(items) == 0 {
